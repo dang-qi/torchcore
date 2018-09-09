@@ -36,13 +36,13 @@ class CropAndResizeFunction(Function):
 
 	def backward( self, grad_outputs ):
 		boxes, box_indices = self.saved_tensors
-		device = grad_ouputs.device
+		device = grad_outputs.device
 		image_grad = torch.zeros( self.im_size, dtype=torch.float32, device=device )
 
 		if grad_ouputs.is_cuda :
-			crop_and_resize_gpu.backward( grad_ouputs, boxes, box_indices, image_grad )
+			crop_and_resize_gpu.backward( grad_outputs, boxes, box_indices, image_grad )
 		else :
-			crop_and_resize_cpu.backward( grad_ouputs, boxes, box_indices, image_grad )
+			crop_and_resize_cpu.backward( grad_outputs, boxes, box_indices, image_grad )
 
 		return image_grad, None, None
 

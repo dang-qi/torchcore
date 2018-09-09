@@ -1,11 +1,11 @@
 import numpy as np
 from tools import bbox_tools
-from .blobs import data_blobs
+from .blobs import blobs
 
 from tools import pil_tools
 from PIL.ImageDraw import Draw
 
-class pose_blobs( data_blobs ):
+class pose_blobs( blobs ):
     def __init__( self, dnn_cfg, deploy ):
         super().__init__( dnn_cfg )
         self._detector_deploy = deploy

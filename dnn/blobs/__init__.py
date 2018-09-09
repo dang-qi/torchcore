@@ -8,4 +8,4 @@ from .pose import pose_blobs
 from .person import person_blobs
 from .objects import objects_blobs
 
-from .blobs import data_blobs
+from .blobs import blobs

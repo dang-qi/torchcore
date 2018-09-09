@@ -2,7 +2,7 @@
 import numpy as np
 #from config import dnn_cfg
 #from proposal_module import proposal
-from .blobs import data_blobs
+from .blobs import blobs
 
 
 # Images in the dataset are labeled accourding to the object that is present in them.
@@ -17,7 +17,7 @@ from .blobs import data_blobs
 # This enables using softmax for multiclass classification, when we want to decide
 # to which class a certain box blongs
 
-class proposal_blobs( data_blobs ):
+class proposal_blobs( blobs ):
     def __init__( self, cfg ):
         super().__init__( cfg.dnn )
         #self._proposal = proposal()

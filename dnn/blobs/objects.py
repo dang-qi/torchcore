@@ -1,7 +1,7 @@
 import numpy as np
-from .blobs import data_blobs
+from .blobs import blobs
 
-class objects_blobs( data_blobs ):
+class objects_blobs( blobs ):
     def __init__( self, cfg ):
         super().__init__( cfg.dnn )
         #self._proposal = proposal()

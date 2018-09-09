@@ -2,9 +2,9 @@
 import numpy as np
 #from config import dnn_cfg
 from tools import bbox_tools
-from .blobs import data_blobs
+from .blobs import blobs
 
-class frcnn_blobs( data_blobs ):
+class frcnn_blobs( blobs ):
     def _build_category_labels( self, labels ):
         labels = labels.ravel()
         n = len( labels )

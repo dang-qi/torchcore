@@ -1,11 +1,13 @@
 import numpy as np
+import torch
 #from config import dnn_cfg
 from tools import image_tools
 from PIL import Image
 
-class data_blobs :
+class blobs :
     def __init__( self, dnn_cfg ):
         self._dnn_cfg = dnn_cfg
+        self._transforms = []
 
     def _remove_small_boxes( self, boxes, min_size ):
         if len( boxes ) == 0 :
@@ -39,21 +41,28 @@ class data_blobs :
 
             image.scale *= scale
             im = image.im
-
-            d = np.zeros( [ max_size, max_size, 3 ] ).astype( np.float32 )
+            d = np.zeros( [ max_size, max_size, 3 ], dtype=im.dtype )
             h,w = im.shape[:2]
-
             d[:h,:w,:] = im
+            im = Image.fromarray( d )
 
-            data.append( d )
+            for t in self._transforms :
+                im = t(im)
+
+            #d = np.zeros( [ max_size, max_size, 3 ] ).astype( np.float32 )
+            #h,w = im.shape[:2]
+
+            #d[:h,:w,:] = im
+
+            data.append( im )
             shapes.append( image.shape )
             scales.append( image.scale )
             batch_labels.append( image.label )
 
-        blobs['data'] = np.array( data, dtype=np.float32 )
-        blobs['shapes'] = np.array( shapes, dtype=np.float32 )
-        blobs['scales'] = np.array( scales, dtype=np.float32 )
-        blobs['batch_labels'] = np.array( batch_labels, dtype=np.float32 ).reshape( [-1,1] )
+        blobs['data'] = torch.stack( data )
+        blobs['shapes'] = torch.from_numpy( np.array( shapes, dtype=np.float32 ) )
+        blobs['scales'] = torch.from_numpy( np.array( scales, dtype=np.float32 ) )
+        blobs['batch_labels'] = torch.from_numpy( np.array( batch_labels, dtype=np.int32 ) )
 
     def _add_data_deploy( self, image, blobs ):
         data = []
@@ -142,22 +151,12 @@ class data_blobs :
             boxes = image.gtboxes
             labels = image.gtlabels.reshape((-1,1))
 
-            # Removing Small Boxes
-            #boxes = self._remove_small_boxes( boxes, min_obj_side )
-            #difficult = image.difficult
-
             if len( boxes ) > 0 :
-
-                #if remove_difficults :
-                #    inds = np.where( difficult == 1.0 )[0]
-                #    labels[ inds ] = -1
-
                 indices = np.ones((len(boxes),1)) * i
 
                 gtboxes.append( boxes )
                 gtbatches.append( indices )
                 gtlabels.append( labels )
-
 
         if len( gtboxes ) > 0 :
             gtboxes = np.concatenate( gtboxes )
@@ -168,9 +167,9 @@ class data_blobs :
             gtbatches = np.zeros([0,1])
             gtlabels = np.zeros([0,1])
 
-        blobs['gtboxes'] = gtboxes.astype( np.float32 )
-        blobs['gtbatches'] = gtbatches.astype( np.int32 )
-        blobs['gtlabels'] = gtlabels.astype( np.float32 )
+        blobs['gtboxes'] = torch.from_numpy( gtboxes.astype( np.float32 ) )
+        blobs['gtbatches'] = torch.from_numpy( gtbatches.astype( np.int32 ) )
+        blobs['gtlabels'] = torch.from_numpy( gtlabels.astype( np.float32 ) )
 
     def get_blobs( self, images ):
         blobs = {}

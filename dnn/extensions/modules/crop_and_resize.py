@@ -27,9 +27,8 @@ class CropAndResizeFunction(Function):
                                                      crops )
 		else :
 			crop_and_resize_cpu.forward( image, boxes, box_indices,
-			                             self._extrapolation_value, self._crop_height, 
-                                                     self._crop_width,
-						     crops )
+			                             self._extrapolation_value, self._crop_height,
+                                                     self._crop_widt, crops )
 		self.im_size = image.size()
 		self.save_for_backward( boxes, box_indices )
 		return crops

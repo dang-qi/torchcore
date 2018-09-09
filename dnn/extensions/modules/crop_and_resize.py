@@ -17,8 +17,10 @@ class CropAndResizeFunction(Function):
 
     def forward( self, image, boxes, box_indices ):
         device = image.device
-        crops = torch.zeros( [ boxes.size()[0], image.size()[1], self._crop_height, self._crop_width ],
-                                dtype=torch.float32, device=device )
+        crops = torch.zeros_like( image ).resize_( boxes.size()[0],
+                                                   image.size()[1],
+                                                   self._crop_height,
+                                                   self._crop_width )
 
         if image.is_cuda :
             crop_and_resize_gpu.forward( image, boxes, box_indices,

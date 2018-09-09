@@ -9,50 +9,50 @@ if torch.cuda.is_available() :
     import crop_and_resize_gpu
 
 class CropAndResizeFunction(Function):
-	def __init__( self, crop_height, crop_width, extrapolation_value=0 ):
-		super().__init__()
-		self._crop_height = crop_height
-		self._crop_width = crop_width
-		self._extrapolation_value = extrapolation_value
+    def __init__( self, crop_height, crop_width, extrapolation_value=0 ):
+        super().__init__()
+        self._crop_height = crop_height
+        self._crop_width = crop_width
+        self._extrapolation_value = extrapolation_value
 
-	def forward( self, image, boxes, box_indices ):
-		device = image.device
-		crops = torch.zeros( [ boxes.size()[0], image.size()[1], self._crop_height, self._crop_width ],
-							  dtype=torch.float32, device=device )
+    def forward( self, image, boxes, box_indices ):
+        device = image.device
+        crops = torch.zeros( [ boxes.size()[0], image.size()[1], self._crop_height, self._crop_width ],
+                                dtype=torch.float32, device=device )
 
-		if image.is_cuda :
-			crop_and_resize_gpu.forward( image, boxes, box_indices,
+        if image.is_cuda :
+            crop_and_resize_gpu.forward( image, boxes, box_indices,
                                                      self._extrapolation_value, self._crop_height,
                                                      self._crop_width,
                                                      crops )
-		else :
-			crop_and_resize_cpu.forward( image, boxes, box_indices,
-			                             self._extrapolation_value, self._crop_height,
-                                                     self._crop_width, crops )
-		self.im_size = image.size()
-		self.save_for_backward( boxes, box_indices )
-		return crops
+        else :
+            crop_and_resize_cpu.forward( image, boxes, box_indices,
+                                         self._extrapolation_value, self._crop_height,
+                                        self._crop_width, crops )
+        self.im_size = image.size()
+        self.save_for_backward( boxes, box_indices )
+        return crops
 
-	def backward( self, grad_outputs ):
-		boxes, box_indices = self.saved_tensors
+    def backward( self, grad_outputs ):
+        boxes, box_indices = self.saved_tensors
 
         grad_outputs = grad_outputs.contiguous()
         image_grad = torch.zeros_like(grad_outputs).resize_(*self.im_size)
 
-		if grad_outputs.is_cuda :
-			crop_and_resize_gpu.backward( grad_outputs, boxes, box_indices, image_grad )
-		else :
-			crop_and_resize_cpu.backward( grad_outputs, boxes, box_indices, image_grad )
+        if grad_outputs.is_cuda :
+            crop_and_resize_gpu.backward( grad_outputs, boxes, box_indices, image_grad )
+        else :
+            crop_and_resize_cpu.backward( grad_outputs, boxes, box_indices, image_grad )
 
-		return image_grad, None, None
+        return image_grad, None, None
 
 class CropAndResize(nn.Module):
-	def __init__( self, crop_height, crop_width, extrapolation_value=0 ):
-		super().__init__()
-		self._crop_height = crop_height
-		self._crop_width = crop_width
-		self._extrapolation_value = extrapolation_value
+    def __init__( self, crop_height, crop_width, extrapolation_value=0 ):
+        super().__init__()
+        self._crop_height = crop_height
+        self._crop_width = crop_width
+        self._extrapolation_value = extrapolation_value
 
-	def forward( self, image, boxes, box_indices ):
-		return CropAndResizeFunction( self._crop_height, self._crop_width,
-				              self._extrapolation_value )( image, boxes, box_indices )
+    def forward( self, image, boxes, box_indices ):
+        return CropAndResizeFunction( self._crop_height, self._crop_width,
+                                      self._extrapolation_value )( image, boxes, box_indices )

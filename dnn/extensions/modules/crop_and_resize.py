@@ -35,10 +35,9 @@ class CropAndResizeFunction(Function):
 
 	def backward( self, grad_outputs ):
 		boxes, box_indices = self.saved_tensors
-		device = grad_outputs.device
 
-                grad_outputs = grad_outputs.contiguous()
-                image_grad = torch.zeros_like(grad_outputs).resize_(*self.im_size)
+        grad_outputs = grad_outputs.contiguous()
+        image_grad = torch.zeros_like(grad_outputs).resize_(*self.im_size)
 
 		if grad_outputs.is_cuda :
 			crop_and_resize_gpu.backward( grad_outputs, boxes, box_indices, image_grad )

@@ -21,12 +21,12 @@ class CropAndResizeFunction(Function):
 							  dtype=torch.float32, device=device )
 
 		if image.is_cuda :
-			crop_and_resize_gpu.forward( image, boxes, box_indices,
+		    crop_and_resize_gpu.forward( image, boxes, box_indices,
                                                      self._extrapolation_value, self._crop_height,
                                                      self._crop_width,
                                                      crops )
 		else :
-			crop_and_resize_cpu.forward( image, boxes, box_indices,
+		    crop_and_resize_cpu.forward( image, boxes, box_indices,
 			                             self._extrapolation_value, self._crop_height, 
                                                      self._crop_width,
 						     crops )

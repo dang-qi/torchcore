@@ -22,17 +22,17 @@ class CropAndResizeFunction(Function):
                                                    self._crop_height,
                                                    self._crop_width )
 
-        #if image.is_cuda :
-        #    crop_and_resize_gpu.forward( image, boxes, box_indices,
-        #                                             self._extrapolation_value, self._crop_height,
-        #                                             self._crop_width,
-        #                                             crops )
-        #else :
-        #    crop_and_resize_cpu.forward( image, boxes, box_indices,
-        #                                 self._extrapolation_value, self._crop_height,
-        #                                self._crop_width, crops )
-        #self.im_size = image.size()
-        #self.save_for_backward( boxes, box_indices )
+        if image.is_cuda :
+            crop_and_resize_gpu.forward( image, boxes, box_indices,
+                                                     self._extrapolation_value, self._crop_height,
+                                                     self._crop_width,
+                                                     crops )
+        else :
+            crop_and_resize_cpu.forward( image, boxes, box_indices,
+                                         self._extrapolation_value, self._crop_height,
+                                        self._crop_width, crops )
+        self.im_size = image.size()
+        self.save_for_backward( boxes, box_indices )
         return crops
 
     def backward( self, grad_outputs ):
@@ -41,10 +41,10 @@ class CropAndResizeFunction(Function):
         grad_outputs = grad_outputs.contiguous()
         image_grad = torch.zeros_like(grad_outputs).resize_(*self.im_size)
 
-        #if grad_outputs.is_cuda :
-        #    crop_and_resize_gpu.backward( grad_outputs, boxes, box_indices, image_grad )
-        #else :
-        #    crop_and_resize_cpu.backward( grad_outputs, boxes, box_indices, image_grad )
+        if grad_outputs.is_cuda :
+            crop_and_resize_gpu.backward( grad_outputs, boxes, box_indices, image_grad )
+        else :
+            crop_and_resize_cpu.backward( grad_outputs, boxes, box_indices, image_grad )
 
         return image_grad, None, None
 

@@ -1,6 +1,6 @@
 import argparse
 from tests import TestRoiAlign
-from tests import TestNMS
+#from tests import TestNMS
 import torch
 
 def parse_commandline():
@@ -17,8 +17,5 @@ if __name__=="__main__" :
 
     print( args.device )
 
-    #tester = TestRoiAlign()
-    #tester.perform_test( device=args.device )
-
-    tester = TestNMS()
+    tester = TestRoiAlign()
     tester.perform_test( device=args.device )

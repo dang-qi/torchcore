@@ -77,7 +77,6 @@ class trainer :
                 inputs, targets = self._testset_feeder.next()
                 inputs = self._set_device( inputs )
                 output = self._model['net']( inputs )
-                output = output.to("cpu")
                 bench.update( targets, output )
 
         bench.summary()

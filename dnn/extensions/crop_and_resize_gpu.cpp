@@ -5,7 +5,7 @@
 
 using namespace std;
 
-void crop_and_resize_forward_cpu( at::Tensor image, at::Tensor boxes_data, at::Tensor box_index,
+void crop_and_resize_forward_gpu( at::Tensor image, at::Tensor boxes_data, at::Tensor box_index,
                                   const float extrapolation_value, const int crop_height, const int crop_width,
                                   at::Tensor crops )
 {
@@ -25,7 +25,7 @@ void crop_and_resize_forward_cpu( at::Tensor image, at::Tensor boxes_data, at::T
                                     crop_height, crop_width, depth, extrapolation_value, crops_ptr );
 }
 
-void crop_and_resize_backward_cpu( at::Tensor grads, at::Tensor boxes, at::Tensor box_index,
+void crop_and_resize_backward_gpu( at::Tensor grads, at::Tensor boxes, at::Tensor box_index,
                                    at::Tensor grads_image )
 {
     const int batch = grads_image.size(0);
@@ -49,6 +49,6 @@ void crop_and_resize_backward_cpu( at::Tensor grads, at::Tensor boxes, at::Tenso
 
 PYBIND11_MODULE( TORCH_EXTENSION_NAME, m )
 {
-    m.def("forward", &crop_and_resize_forward_cpu, "Crop and Resize forward");
-    m.def("backward", &crop_and_resize_backward_cpu, "Crop and Resize backward");
+    m.def("forward", &crop_and_resize_forward_gpu, "Crop and Resize forward");
+    m.def("backward", &crop_and_resize_backward_gpu, "Crop and Resize backward");
 }

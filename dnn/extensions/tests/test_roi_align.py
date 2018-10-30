@@ -6,6 +6,7 @@ from PIL import Image
 
 import torch
 import torchvision.transforms as transforms
+import torch.nn as nn
 import tensorflow as tf
 
 from modules import RoiAlign
@@ -101,10 +102,16 @@ class TestRoiAlign :
     def _pytorch_out( self, device ):
         blobs = self._pytorch_blobs( device )
         pooling = RoiAlign(7,7,transform_fpcoor=False)
+        linear = nn.Linear(147,2)
         out = pooling( blobs['data'], blobs['boxes'], blobs['box_indices'] )
-        out = out.cpu().numpy()
+        out = out.view(-1,147)
+        out = linear(out)
 
-        grads_out = torch.from_numpy(np.random.rand( *out.shape ).astype(np.float32))
+
+
+        out = out.detach().cpu().numpy()
+
+        #grads_out = torch.from_numpy(np.random.rand( *out.shape ).astype(np.float32))
         #back = pooling.backward( grads_out )
 
         print( out.shape )
@@ -126,15 +133,16 @@ class TestRoiAlign :
         inputs['grad'] = tf.placeholder(tf.float32, shape=[20,7,7,3])
 
         crops = tf.image.crop_and_resize( inputs['data'], inputs['boxes'], inputs['box_indices'], [7,7] )
-        grad = tf.gradients( crops, inputs['grad'] )
+        crops = tf.reshape(crops,[-1,147])
+        #grad = tf.gradients( crops, [inputs['grad']] )[0]
 
         with tf.Session() as sess :
-            res = sess.run( [ crops, grad ], feed_dict=feed_dict( inputs, blobs ) )
+            res = sess.run( crops, feed_dict=feed_dict( inputs, blobs ) )
 
-        res_crops = res[0]
-        res_grad = res[1]
+        #res_crops = res[0]
+        #res_grad = res[1]
 
-        return res_crops
+        return res
 
     def __init__( self ):
         self._load_data()
@@ -142,7 +150,10 @@ class TestRoiAlign :
     def perform_test( self, device='cpu' ):
         device = torch.device( device )
 
-        pt_crops = self._pytorch_out( device=device ).transpose((0,2,3,1))
+        pt_crops = self._pytorch_out( device=device )#.transpose((0,2,3,1))
         tf_crops = self._tf_out()
 
-        print(np.sum(np.abs(pt_crops - tf_crops)))
+        print( pt_crops.shape )
+        print( tf_crops.shape )
+
+        #print(np.sum(np.abs(pt_crops - tf_crops)))

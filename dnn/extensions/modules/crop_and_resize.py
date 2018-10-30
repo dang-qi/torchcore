@@ -16,6 +16,10 @@ class CropAndResizeFunction(Function):
         self._extrapolation_value = extrapolation_value
 
     def forward( self, image, boxes, box_indices ):
+        assert( image.dtype == torch.float32 )
+        assert( boxes.dtype == torch.float32 )
+        assert( box_indices.dtype == torch.int32 )
+
         device = image.device
         crops = torch.zeros_like( image ).resize_( boxes.size()[0],
                                                    image.size()[1],
@@ -36,6 +40,7 @@ class CropAndResizeFunction(Function):
         return crops
 
     def backward( self, grad_outputs ):
+        assert( grad_outputs.dtype == torch.float32 )
         boxes, box_indices = self.saved_tensors
 
         grad_outputs = grad_outputs.contiguous()

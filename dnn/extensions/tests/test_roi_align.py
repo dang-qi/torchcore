@@ -95,6 +95,7 @@ class TestRoiAlign :
         blobs['data'] = np.array( data, dtype=np.float32 )
         blobs['boxes'] = prepare_rois( np.array( boxes, dtype=np.float32 ), [500,500] )
         blobs['box_indices'] = np.array( box_indices, dtype=np.int32 )
+        blobs['grad'] = np.random.rand(20,7,7,3).astype(np.float32)
         return blobs
 
     def _pytorch_out( self, device ):
@@ -122,14 +123,23 @@ class TestRoiAlign :
         inputs['data'] = tf.placeholder( tf.float32, shape=[2,500,500,3] )
         inputs['boxes'] = tf.placeholder( tf.float32, shape=[20,4] )
         inputs['box_indices'] = tf.placeholder( tf.int32, shape=[20] )
+        inputs['grad'] = tf.placeholder(tf.float32, shape=[20,7,7,3])
 
         crops = tf.image.crop_and_resize( inputs['data'], inputs['boxes'], inputs['box_indices'], [7,7] )
+        grad = tf.gradients( crops, inputs['grad'] )
 
         with tf.Session() as sess :
-            res = sess.run( crops, feed_dict=feed_dict( inputs, blobs ) )
+            res = sess.run( [ crops, grad ], feed_dict=feed_dict( inputs, blobs ) )
 
+<<<<<<< HEAD
         print( res.shape )
         return res
+=======
+        res_crops = res[0]
+        res_grad = res[1]
+
+        return res_crops
+>>>>>>> 746bd536e5420b3d429b215dea3dc4b1879e85d0
 
     def __init__( self ):
         self._load_data()

@@ -131,15 +131,10 @@ class TestRoiAlign :
         with tf.Session() as sess :
             res = sess.run( [ crops, grad ], feed_dict=feed_dict( inputs, blobs ) )
 
-<<<<<<< HEAD
-        print( res.shape )
-        return res
-=======
         res_crops = res[0]
         res_grad = res[1]
 
         return res_crops
->>>>>>> 746bd536e5420b3d429b215dea3dc4b1879e85d0
 
     def __init__( self ):
         self._load_data()

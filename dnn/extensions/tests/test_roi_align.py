@@ -101,8 +101,12 @@ class TestRoiAlign :
         blobs = self._pytorch_blobs( device )
         pooling = RoiAlign(7,7,transform_fpcoor=False)
         out = pooling( blobs['data'], blobs['boxes'], blobs['box_indices'] )
-
         out = out.cpu().numpy()
+
+        grads_out = torch.from_numpy(np.random.rand( *out.shape ).astype(np.float32))
+        #back = pooling.backward( grads_out )
+
+        print( out.shape )
         return out
 
     def _tf_out( self ):
@@ -124,6 +128,7 @@ class TestRoiAlign :
         with tf.Session() as sess :
             res = sess.run( crops, feed_dict=feed_dict( inputs, blobs ) )
 
+        print( res.shape )
         return res
 
     def __init__( self ):

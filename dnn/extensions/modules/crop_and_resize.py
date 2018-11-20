@@ -60,8 +60,7 @@ class CropAndResizeFunction(Function):
         else :
             crop_and_resize_cpu.backward( grad_outputs, boxes, box_indices, image_grad )
 
-        return image_grad.to(device1342hm09!
-        ), None, None
+        return image_grad.to(device), None, None
 
 class CropAndResize(nn.Module):
     def __init__( self, crop_height, crop_width, extrapolation_value=0 ):

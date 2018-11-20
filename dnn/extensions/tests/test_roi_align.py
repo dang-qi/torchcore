@@ -96,18 +96,13 @@ class TestRoiAlign :
         blobs['data'] = np.array( data, dtype=np.float32 )
         blobs['boxes'] = prepare_rois( np.array( boxes, dtype=np.float32 ), [500,500] )
         blobs['box_indices'] = np.array( box_indices, dtype=np.int32 )
-        blobs['grad'] = np.random.rand(20,7,7,3).astype(np.float32)
         return blobs
 
     def _pytorch_out( self, device ):
         blobs = self._pytorch_blobs( device )
         pooling = RoiAlign(7,7,transform_fpcoor=False)
         linear = nn.Linear(147,2)
-        out = pooling( blobs['data'], blobs['boxes'], blobs['box_indices'] )
-        out = out.view(-1,147)
-        out = linear(out)
-
-
+        out = pooling( blobs['data'], blobs['boxes'], blobs['box_indices'], spatial_scale=0.5 )
 
         out = out.detach().cpu().numpy()
 
@@ -130,10 +125,8 @@ class TestRoiAlign :
         inputs['data'] = tf.placeholder( tf.float32, shape=[2,500,500,3] )
         inputs['boxes'] = tf.placeholder( tf.float32, shape=[20,4] )
         inputs['box_indices'] = tf.placeholder( tf.int32, shape=[20] )
-        inputs['grad'] = tf.placeholder(tf.float32, shape=[20,7,7,3])
 
         crops = tf.image.crop_and_resize( inputs['data'], inputs['boxes'], inputs['box_indices'], [7,7] )
-        crops = tf.reshape(crops,[-1,147])
         #grad = tf.gradients( crops, [inputs['grad']] )[0]
 
         with tf.Session() as sess :
@@ -150,10 +143,10 @@ class TestRoiAlign :
     def perform_test( self, device='cpu' ):
         device = torch.device( device )
 
-        pt_crops = self._pytorch_out( device=device )#.transpose((0,2,3,1))
+        pt_crops = self._pytorch_out( device=device ).transpose((0,2,3,1))
         tf_crops = self._tf_out()
 
         print( pt_crops.shape )
         print( tf_crops.shape )
 
-        #print(np.sum(np.abs(pt_crops - tf_crops)))
+        print(np.sum(np.abs(pt_crops - tf_crops)))

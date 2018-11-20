@@ -102,7 +102,7 @@ class TestRoiAlign :
         blobs = self._pytorch_blobs( device )
         pooling = RoiAlign(7,7,transform_fpcoor=False)
         linear = nn.Linear(147,2)
-        out = pooling( blobs['data'], blobs['boxes'], blobs['box_indices'], spatial_scale=0.5 )
+        out = pooling( blobs['data'], blobs['boxes'], blobs['box_indices'], spatial_scale=1.0 )
 
         out = out.detach().cpu().numpy()
 

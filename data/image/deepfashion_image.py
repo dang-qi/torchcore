@@ -5,6 +5,24 @@ from pprint import pprint
 from .image import image
 from tools import annot_tools
 
+# For landmarks
+# Types :
+#       1 : upper-body clothes, 6 Landmarks
+#               ["left collar", "right collar", "left sleeve", "right sleeve", "left hem", "right hem"]
+#               mirror_mapping = [1,0,3,2,5,4]
+#       2 : lower-body clothes, 4 Landmarks
+#               ["left waistline", "right waistline", "left hem", "right hem"]
+#               mirror_mapping = [1,0,3,2]
+#       3 : full-body clothes, 8 Landmarks
+#               ["left collar", "right collar", "left sleeve", "right sleeve", "left waistline", "right waistline", "left hem", "right hem"]
+#               mirror_mapping = [1,0,3,2,5,4,7,6]
+#
+
+mirror_mapping = {}
+mirror_mapping[1] = np.array([1,0,3,2,5,4])
+mirror_mapping[2] = np.array([1,0,3,2])
+mirror_mapping[3] = np.array([1,0,3,2,5,4,7,6])
+
 class deepfashion_image( image ):
     def __init__( self, cfg, image_info, mirrored=False ):
         super().__init__( cfg, image_info, mirrored )
@@ -52,7 +70,7 @@ class deepfashion_image( image ):
     def landmarks_points( self ):
         if 'landmarks_points' in self._data :
             keypoints = copy.deepcopy( self._data['landmarks_points'] )
-            if self._mirrored :
+            if self.is_mirrored :
                 width = self._imshape[1]
                 keypoints[:,:,0] = width - keypoints[:,:,0]
             keypoints = keypoints * self.scale + self.padding
@@ -63,7 +81,15 @@ class deepfashion_image( image ):
     @property
     def landmarks_labels( self ):
         if 'landmarks_labels' in self._data :
-            return copy.deepcopy( self._data['landmarks_labels'] )
+            labels = copy.deepcopy( self._data['landmarks_labels'] )
+            type = copy.deepcopy( self._data['landmarks_type'] )
+
+            print( type )
+
+            if self.is_mirrored :
+                pass
+
+            return labels
         else :
             return np.array([])
 

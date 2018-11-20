@@ -12,7 +12,7 @@ class RoiAlign(nn.Module):
         self._extrapolation_value = extrapolation_value
         self._transform_fpcoor = transform_fpcoor
 
-    def forward( self, featuremap, boxes, box_ind ):
+    def forward( self, featuremap, boxes, box_ind, spatial_scale ):
         """
         RoIAlign based on crop_and_resize.
         :param featuremap: NxCxHxW
@@ -21,6 +21,7 @@ class RoiAlign(nn.Module):
         :return: MxCxoHxoW
         """
 
+        boxes = boxes * spatial_scale
         x1, y1, x2, y2 = torch.split(boxes, 1, dim=1)
         image_height, image_width = featuremap.size()[2:4]
         if self._transform_fpcoor:

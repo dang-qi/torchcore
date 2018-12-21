@@ -1,6 +1,6 @@
 #include "roipool_gpu.hpp"
 
-__global__ void RoipoolForwardKernel( int64_t nthreads, const float* data, const int batch_size, const int nchannels, const int height, const int width,
+__global__ void RoipoolForwardKernel( int64_t nthreads, const float* data, const int batch_size, const int channels, const int height, const int width,
                         const float* rois, const int* roibatches, const int nrois, const float spatial_scale,
                         float* crop, int* argmax, const int pooled_height, const int pooled_width )
 {

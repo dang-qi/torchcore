@@ -15,8 +15,8 @@ class trainer :
 
         self._trainset = trainset
         self._testset = testset
-        self._trainset_feeder = data_feeder( trainset )
-        self._testset_feeder = data_feeder( testset )
+        #self._trainset_feeder = data_feeder( trainset )
+        #self._testset_feeder = data_feeder( testset )
 
         self._set_optimizer()
 
@@ -38,6 +38,21 @@ class trainer :
             blobs[n] = d.to( self._device )
         return blobs
 
+    def trainstep( self ):
+        inputs, targets = self._trainset.next()
+        inputs = self._set_device( inputs )
+        targets = self._set_device( targets )
+
+        outputs = self._model['net']( inputs )
+        loss = self._model['loss']( outputs, targets )
+
+        print( loss )
+        self._optimizer.zero_grad()
+        #loss.backward()
+        #self._optimizer.step()
+
+        return loss
+
     def test( self ):
         self._model['net'].test()
         images = self._batch_gen.next()
@@ -47,25 +62,29 @@ class trainer :
     def _train( self ):
         self._model['net'].train()
 
-        widgets = [ progressbar.Percentage(), ' ', progressbar.ETA(), ' ',
-                    '(',progressbar.DynamicMessage('loss'),')' ]
-        bar = progressbar.ProgressBar(widgets=widgets,max_value=len(self._trainset)).start()
+        #widgets = [ progressbar.Percentage(), ' ', progressbar.ETA(), ' ',
+        #            '(',progressbar.DynamicMessage('loss'),')' ]
+        #bar = progressbar.ProgressBar(widgets=widgets,max_value=len(self._trainset)).start()
 
         for idx in range( len(self._trainset) ):
-            inputs, targets = self._trainset_feeder.next()
+            inputs, targets = self._trainset.next()
             inputs = self._set_device( inputs )
             targets = self._set_device( targets )
 
+            print( inputs.keys() )
+
             outputs = self._model['net']( inputs )
             loss = self._model['loss']( outputs, targets )
+
+            print( loss )
 
             # Computing gradient and do SGD step
             self._optimizer.zero_grad()
             loss.backward()
             self._optimizer.step()
 
-            bar.update(idx+1,loss=loss.item())
-        bar.finish()
+        #    bar.update(idx+1,loss=loss.item())
+        #bar.finish()
 
     def _validate( self ):
         self._model['net'].eval()

@@ -37,6 +37,13 @@ setup(
 )
 
 setup(
+        name='roipool_cpu',
+        version=version,
+        ext_modules=[ cpu_module('roipool_cpu') ],
+        cmdclass={'build_ext': BuildExtension}
+)
+
+setup(
         name='crop_and_resize_cpu',
         version=version,
         ext_modules=[ cpu_module('crop_and_resize_cpu') ],
@@ -56,6 +63,13 @@ if torch.cuda.is_available() :
         version=version,
         ext_modules=[ gpu_module('overlaps_gpu') ],
         cmdclass={'build_ext': BuildExtension}
+    )
+
+    setup(
+            name='roipool_gpu',
+            version=version,
+            ext_modules=[ cpu_module('roipool_gpu') ],
+            cmdclass={'build_ext': BuildExtension}
     )
 
     setup(

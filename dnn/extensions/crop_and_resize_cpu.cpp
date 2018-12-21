@@ -1,4 +1,4 @@
-#include<torch/torch.h>
+#include<torch/extension.h>
 #include<vector>
 #include<iostream>
 #include"crop_and_resize_cpu.hpp"

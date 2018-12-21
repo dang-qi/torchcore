@@ -4,6 +4,8 @@ import torch.nn.functional as F
 from torch.autograd import Function
 
 import roipool_cpu
+if torch.cuda.is_available() :
+    import roipool_gpu
 
 class RoiPoolFunction(Function):
     def __init__( self, crop_height, crop_width, spatial_scale ):
@@ -25,7 +27,10 @@ class RoiPoolFunction(Function):
         argmaxes = torch.zeros( [nrois, channels, self._crop_height, self._crop_width ],
                              dtype=torch.int32, device=device )
 
-        roipool_cpu.forward( data, rois, roibatches, self._spatial_scale, crops, argmaxes )
+        if data.is_cuda :
+            roipool_gpu.forward( data, rois, roibatches, self._spatial_scale, crops, argmaxes )
+        else :
+            roipool_cpu.forward( data, rois, roibatches, self._spatial_scale, crops, argmaxes )
 
         self.data_size = data.size()
         self.save_for_backward( argmaxes, rois, roibatches )
@@ -43,8 +48,12 @@ class RoiPoolFunction(Function):
         data_grad = torch.zeros( data_size, dtype=crops_grad.dtype,
                                             device=device )
 
-        roipool_cpu.backward( crops_grad, argmaxes, rois, roibatches,
-                              self._spatial_scale, data_grad )
+        if crops_grad.is_cuda :
+            roipool_gpu.backward( crops_grad, argmaxes, rois, roibatches,
+                                self._spatial_scale, data_grad )
+        else :
+            roipool_cpu.backward( crops_grad, argmaxes, rois, roibatches,
+                                self._spatial_scale, data_grad )
 
         return data_grad.to(device), None, None
 

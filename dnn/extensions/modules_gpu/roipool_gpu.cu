@@ -2,7 +2,7 @@
 
 __global__ void RoipoolForwardKernel( int64_t nthreads, const float* data, const int batch_size, const int nchannels, const int height, const int width,
                         const float* rois, const int* roibatches, const int nrois, const float spatial_scale,
-                        float* crop, int* argmax, const int crop_height, const int crop_width )
+                        float* crop, int* argmax, const int pooled_height, const int pooled_width )
 {
   CUDA_1D_KERNEL_LOOP( index, nthreads )
   {
@@ -18,8 +18,8 @@ __global__ void RoipoolForwardKernel( int64_t nthreads, const float* data, const
     int x1 = round( roi[2] * spatial_scale );
     int y1 = round( roi[3] * spatial_scale );
 
-    int roi_width = std::max( x1-x0+1, 1 );
-    int roi_height = std::max( y1-y0+1, 1 );
+    int roi_width = max( x1-x0+1, 1 );
+    int roi_height = max( y1-y0+1, 1 );
 
     float bin_size_h = static_cast<float>(roi_height) / static_cast<float>(pooled_height);
     float bin_size_w = static_cast<float>(roi_width) / static_cast<float>(pooled_width);
@@ -30,10 +30,10 @@ __global__ void RoipoolForwardKernel( int64_t nthreads, const float* data, const
     int wstart = static_cast<int>(floor(static_cast<float>(pw)*bin_size_w));
     int wend = static_cast<int>(ceil(static_cast<float>(pw+1)*bin_size_w));
 
-    hstart = std::min( std::max(hstart + y0, 0), height );
-    hend = std::min( std::max(hend + y0, 0), height );
-    wstart = std::min( std::max(wstart + x0, 0), width );
-    wend = std::min( std::max(wend + x0, 0), width );
+    hstart = min( max(hstart + y0, 0), height );
+    hend = min( max(hend + y0, 0), height );
+    wstart = min( max(wstart + x0, 0), width );
+    wend = min( max(wend + x0, 0), width );
 
     bool is_empty = (hend <= hstart) || (wend <= wstart);
     float maxval = is_empty ? 0 : -FLT_MAX;

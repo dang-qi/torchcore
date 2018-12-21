@@ -105,8 +105,8 @@ __global__ void RoipoolBackwardKernel( int64_t nthreads, const float* crop_diff,
       int phstart = floor(static_cast<float>(h-y0)/bin_size_h);
       int phend = ceil(static_cast<float>(h-y0+1)/bin_size_h);
 
-      int pwstart = floor(static_cast<float>(w-x0)/bin_size_h);
-      int pwend = ceil(static_cast<float>(w-x0+1)/bin_size_h);
+      int pwstart = floor(static_cast<float>(w-x0)/bin_size_w);
+      int pwend = ceil(static_cast<float>(w-x0+1)/bin_size_w);
 
       phstart = min(max(phstart, 0), crop_height);
       phend = min(max(phend, 0), crop_height);
@@ -128,16 +128,16 @@ __global__ void RoipoolBackwardKernel( int64_t nthreads, const float* crop_diff,
   }
 }
 
-void RoiPoolForwardGpu( const float* data, const int batch_size, const int nchannels, const int height, const int width,
+void RoiPoolForwardGpu( const float* data, const int batch_size, const int channels, const int height, const int width,
                         const float* rois, const int* roibatches, const int nrois, const float spatial_scale,
                         float* crop, int* argmax, const int crop_height, const int crop_width )
 {
-  int total = nrois * channels * pooled_height * pooled_width; //crop_count
+  int total = nrois * channels * crop_height * crop_width; //crop_count
   cudaError_t err;
   int total_blocks = (total+kThreadsPerBlock-1)/kThreadsPerBlock;
 
   RoipoolForwardKernel<<<total_blocks,kThreadsPerBlock>>>( total,
-                          data, batch_size, nchannels, height, width,
+                          data, batch_size, channels, height, width,
                           rois, roibatches, nrois, spatial_scale,
                           crop, argmax, crop_height, crop_width );
 

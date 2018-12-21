@@ -96,8 +96,8 @@ __global__ void RoipoolBackwardKernel( int64_t nthreads, const float* crop_diff,
       const float* offset_crop_diff = crop_diff + offset;
       const int* offset_argmax = argmax + offset;
 
-      int roi_width = std::max( x1-x0+1, 1 );
-      int roi_height = std::max( y1-y0+1, 1 );
+      int roi_width = max( x1-x0+1, 1 );
+      int roi_height = max( y1-y0+1, 1 );
 
       float bin_size_h = static_cast<float>(roi_height) / static_cast<float>(crop_height);
       float bin_size_w = static_cast<float>(roi_width) / static_cast<float>(crop_width);

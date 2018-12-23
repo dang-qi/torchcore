@@ -29,7 +29,7 @@ void roi_pool_backward(const at::Tensor &rois, const at::Tensor &grad_out, int64
     CHECK_INPUT(grad_out);
     CHECK_INPUT(rois);
     CHECK_INPUT(memory);
-    roi_pool_backward_cuda(rois, grad_out, b_size, channel, h, w, pool_h, pool_w, memory);
+    roi_pool_backward_cuda(rois, grad_out, b_size, channel, h, w, pool_h, pool_w, memory, grad_in);
 }
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {

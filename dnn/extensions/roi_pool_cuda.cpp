@@ -1,5 +1,4 @@
-//#include <torch/extension.h>
-#include<torch/torch.h>
+#include <torch/extension.h>
 
 // CUDA forward declarations
 void roi_pool_forward_cuda(const at::Tensor &input, const at::Tensor &rois, int64_t pool_h, int64_t pool_w,

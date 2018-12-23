@@ -23,7 +23,7 @@ class ROIPoolFunction(Function):
         if feat.is_cuda:
             pass
             ctx.memory = ctx.memory.cuda()
-            #roi_pool_cuda.forward_cuda(feat, rois, pool_h, pool_w, scale, ctx.memory, output)
+            roi_pool_cuda.forward_cuda(feat, rois, pool_h, pool_w, scale, ctx.memory, output)
         else:
             roi_pool_cpu.forward_cpu(feat, rois, pool_h, pool_w, scale, ctx.memory, output)
         return output

@@ -21,9 +21,8 @@ class ROIPoolFunction(Function):
         output = torch.zeros((rois.size(0), feat.size(1), pool_h, pool_w), dtype=feat.dtype).contiguous()
 
         if feat.is_cuda:
-            pass
-        #    ctx.memory = ctx.memory.cuda()
-        #    output = roi_pool_cuda.forward_cuda(feat, rois, pool_h, pool_w, scale, ctx.memory)
+            ctx.memory = ctx.memory.cuda()
+            roi_pool_cuda.forward_cuda(feat, rois, pool_h, pool_w, scale, ctx.memory, output)
         else:
             roi_pool_cpu.forward_cpu(feat, rois, pool_h, pool_w, scale, ctx.memory, output)
         return output
@@ -39,9 +38,8 @@ class ROIPoolFunction(Function):
         grad_in = torch.zeros(feat_size, dtype=grad_out.dtype).contiguous()
 
         if grad_out.is_cuda:
-            pass
-        #    grad_in = roi_pool_cuda.backward_cuda(rois, grad_out, feat_size[0], feat_size[1], feat_size[2],
-        #                                          feat_size[3], pool_h, pool_w, memory)
+            roi_pool_cuda.backward_cuda(rois, grad_out, feat_size[0], feat_size[1], feat_size[2],
+                                                  feat_size[3], pool_h, pool_w, memory, grad_in)
         else:
             roi_pool_cpu.backward_cpu(rois, grad_out, feat_size[0], feat_size[1], feat_size[2],
                                                 feat_size[3], pool_h, pool_w, memory, grad_in)

@@ -1,5 +1,5 @@
 #include <ATen/ATen.h>
-#include <ATen/cuda/CUDAContext.h>
+//#include <ATen/cuda/CUDAContext.h>
 #include <cfloat>
 #include <cuda.h>
 #include <cuda_runtime.h>

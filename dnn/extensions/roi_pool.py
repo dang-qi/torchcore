@@ -18,7 +18,7 @@ class ROIPoolFunction(Function):
         else:
             ctx.memory = torch.zeros(0)
 
-        output = torch.zeros((rois.size(0), feat.size(1), pool_h, pool_w), dtype=feat.dtype, device=grad_out.device).contiguous()
+        output = torch.zeros((rois.size(0), feat.size(1), pool_h, pool_w), dtype=feat.dtype, device=feat.device).contiguous()
 
         if feat.is_cuda:
             pass

@@ -1,4 +1,5 @@
 #include <ATen/ATen.h>
+#include <ATen/cuda/CUDAContext.h>
 #include <cfloat>
 #include <cuda.h>
 #include <cuda_runtime.h>
@@ -79,7 +80,7 @@ at::Tensor roi_pool_forward_cuda(const at::Tensor &input, const at::Tensor &rois
     auto rois_num = rois.size(0);
     auto channel = input.size(1), h = input.size(2), w = input.size(3);
 
-    auto output = at::Zeros({rois_num, channel, pool_h, pool_w}, input.type());
+    auto output = at::zeros({rois_num, channel, pool_h, pool_w}, input.type());
 
     int64_t total = output.numel();
     const int threads = 1024;
@@ -126,14 +127,14 @@ at::Tensor roi_pool_backward_cuda(const at::Tensor &rois, const at::Tensor &grad
     AT_CHECK(rois.ndimension() == 2 && rois.size(1) == 5, "ROIs should be Kx5 forms");
     AT_CHECK(rois.is_contiguous(), "ROIs should be contiguous");
 
-    auto grad_in = at::Zeros({b_size, channel, h, w}, rois.type() );
+    auto grad_in = at::zeros({b_size, channel, h, w}, rois.type() );
     //grad_in.zero_();
 
     int64_t total = grad_out.numel();
     const int threads = 1024;
     const int64_t blocks = (total + threads - 1) / threads > 65535 ? 65535 : (total + threads - 1) / threads;
 
-    roi_pool_backward_kernel << < blocks, threads, 0, at::globalContext().getCurrentCUDAStream() >> > (total,
+    roi_pool_backward_kernel << < blocks, threads, 0, at::cuda::getCurrentCUDAStream() >> > (total,
             grad_out.data<float>(), rois.data<float>(), channel, h, w, pool_h, pool_w, grad_in.data<float>(),
             memory.data<int>());
 

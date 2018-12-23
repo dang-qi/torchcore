@@ -77,7 +77,7 @@ if __name__ == '__main__':
         feat = feat.detach().cuda()
         rois = rois.cuda()
         feat.requires_grad = True
-        out = roi_pool(feat, rois)
+        out = roi_pool(feat, rois, roibatches, 0.5 )
         print(out)
         temp = out.sum()
         temp.backward()

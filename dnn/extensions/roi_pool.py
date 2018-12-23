@@ -17,11 +17,15 @@ class ROIPoolFunction(Function):
             ctx.memory = torch.zeros((rois.size(0), feat.size(1), pool_h, pool_w), dtype=torch.int)
         else:
             ctx.memory = torch.zeros(0)
+
+        output = torch.zeros((rois.size(0), feat.size(1), pool_h, pool_w), dtype=feat.dtype).contiguous()
+
         if feat.is_cuda:
-            ctx.memory = ctx.memory.cuda()
-            output = roi_pool_cuda.forward_cuda(feat, rois, pool_h, pool_w, scale, ctx.memory)
+            pass
+        #    ctx.memory = ctx.memory.cuda()
+        #    output = roi_pool_cuda.forward_cuda(feat, rois, pool_h, pool_w, scale, ctx.memory)
         else:
-            output = roi_pool_cpu.forward_cpu(feat, rois, pool_h, pool_w, scale, ctx.memory)
+            roi_pool_cpu.forward_cpu(feat, rois, pool_h, pool_w, scale, ctx.memory, output)
         return output
 
     @staticmethod
@@ -32,12 +36,15 @@ class ROIPoolFunction(Function):
         pool_w = ctx.pool_w
         memory = ctx.memory
         grad_out = grad_out.contiguous() if not grad_out.is_contiguous() else grad_out
+        grad_in = torch.zeros(feat_size, dtype=grad_out.dtype).contiguous()
+
         if grad_out.is_cuda:
-            grad_in = roi_pool_cuda.backward_cuda(rois, grad_out, feat_size[0], feat_size[1], feat_size[2],
-                                                  feat_size[3], pool_h, pool_w, memory)
+            pass
+        #    grad_in = roi_pool_cuda.backward_cuda(rois, grad_out, feat_size[0], feat_size[1], feat_size[2],
+        #                                          feat_size[3], pool_h, pool_w, memory)
         else:
-            grad_in = roi_pool_cpu.backward_cpu(rois, grad_out, feat_size[0], feat_size[1], feat_size[2],
-                                                feat_size[3], pool_h, pool_w, memory)
+            roi_pool_cpu.backward_cpu(rois, grad_out, feat_size[0], feat_size[1], feat_size[2],
+                                                feat_size[3], pool_h, pool_w, memory, grad_in)
         # Note: the backward return number is corresponding to the ctx variable
         return grad_in, None, None, None, None, None
 

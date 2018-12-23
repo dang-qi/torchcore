@@ -74,8 +74,8 @@ void roi_pool_forward(const T *input, const T *rois, vector<int64_t> in_size, ve
     }
 }
 
-at::Tensor roi_pool_forward_cpu(const at::Tensor &input, const at::Tensor &rois, int64_t pool_h, int64_t pool_w,
-                                double scale, at::Tensor &memory) {
+void roi_pool_forward_cpu(const at::Tensor &input, const at::Tensor &rois, int64_t pool_h, int64_t pool_w,
+                                double scale, at::Tensor &memory, at::Tensor &output) {
     AT_CHECK(input.ndimension() == 4, "Feature should be BxCxHxW forms");
     AT_CHECK(input.is_contiguous(), "Feature should be contiguous");
     AT_CHECK(rois.ndimension() == 2, "ROI Proposals should be Kx5 forms");
@@ -85,13 +85,13 @@ at::Tensor roi_pool_forward_cpu(const at::Tensor &input, const at::Tensor &rois,
     const vector<int64_t> rois_size = {rois.size(0), rois.size(1), pool_h, pool_w};
     const vector<int64_t> input_size = {input.size(0), input.size(1), input.size(2), input.size(3)};
 
-    auto output = at::zeros({rois_size[0], input_size[1], pool_h, pool_w}, input.type() );
+    //auto output = at::zeros({rois_size[0], input_size[1], pool_h, pool_w}, input.type() );
+
     if (memory.data<int>())
         memory.zero_();
 
     roi_pool_forward(input.data<float>(), rois.data<float>(), input_size, rois_size, static_cast<float>(scale),
                      output.data<float>(), memory.data<int>());
-    return output;
 }
 /* -----------------------------end of the forward---------------------------------  */
 
@@ -124,8 +124,9 @@ void roi_pool_backward(const int total, const T *grad_out, const T *rois, const 
 }
 
 
-at::Tensor roi_pool_backward_cpu(const at::Tensor &rois, const at::Tensor &grad_out, int64_t b_size, int64_t channel,
-                                 int64_t h, int64_t w, int64_t pool_h, int64_t pool_w, at::Tensor &memory) {
+void roi_pool_backward_cpu(const at::Tensor &rois, const at::Tensor &grad_out, int64_t b_size, int64_t channel,
+                                 int64_t h, int64_t w, int64_t pool_h, int64_t pool_w, at::Tensor &memory,
+                                 at::Tensor &grad_in) {
     AT_CHECK(grad_out.ndimension() == 4, "Feature should be BxCxHxW forms");
     AT_CHECK(grad_out.is_contiguous(), "Feature should be contiguous");
     AT_CHECK(rois.ndimension() == 2, "ROI Proposals should be Kx5 forms");
@@ -133,10 +134,9 @@ at::Tensor roi_pool_backward_cpu(const at::Tensor &rois, const at::Tensor &grad_
     AT_CHECK(memory.is_contiguous(), "Memory should be contiguous.");
 
 
-    auto grad_in = at::zeros({b_size, channel, h, w}, grad_out.type() );
+    //auto grad_in = at::zeros({b_size, channel, h, w}, grad_out.type() );
     //grad_in.zero_();
 
     roi_pool_backward(grad_out.numel(), grad_out.data<float>(), rois.data<float>(), channel, h, w, pool_h, pool_w,
                       grad_in.data<float>(), memory.data<int>());
-    return grad_in;
 }

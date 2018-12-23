@@ -73,14 +73,14 @@ roi_pool_forward_kernel(const int total, const T *input, const T *rois, const T 
 
 // TODO: there may be a bug
 at::Tensor roi_pool_forward_cuda(const at::Tensor &input, const at::Tensor &rois, int64_t pool_h, int64_t pool_w,
-                                 double scale, at::Tensor &memory) {
+                                 double scale, at::Tensor &memory, at::Tensor& output) {
     AT_CHECK(input.ndimension() == 4, "Input features should be BxCxHxW");
     AT_CHECK(rois.ndimension() == 2 && rois.size(1) == 5, "ROIs should be Kx5 forms");
 
     auto rois_num = rois.size(0);
     auto channel = input.size(1), h = input.size(2), w = input.size(3);
 
-    auto output = at::zeros({rois_num, channel, pool_h, pool_w}, input.type());
+    //auto output = at::zeros({rois_num, channel, pool_h, pool_w}, input.type());
 
     int64_t total = output.numel();
     const int threads = 1024;
@@ -123,11 +123,12 @@ __global__ void roi_pool_backward_kernel(const int total, const T *grad_out, con
 } // RoIPoolBackward
 
 at::Tensor roi_pool_backward_cuda(const at::Tensor &rois, const at::Tensor &grad_out, int64_t b_size, int64_t channel,
-                                  int64_t h, int64_t w, int64_t pool_h, int64_t pool_w, const at::Tensor &memory) {
+                                  int64_t h, int64_t w, int64_t pool_h, int64_t pool_w, const at::Tensor &memory,
+                                  at::Tensor &grad_in) {
     AT_CHECK(rois.ndimension() == 2 && rois.size(1) == 5, "ROIs should be Kx5 forms");
     AT_CHECK(rois.is_contiguous(), "ROIs should be contiguous");
 
-    auto grad_in = at::zeros({b_size, channel, h, w}, rois.type() );
+    //auto grad_in = at::zeros({b_size, channel, h, w}, rois.type() );
     //grad_in.zero_();
 
     int64_t total = grad_out.numel();

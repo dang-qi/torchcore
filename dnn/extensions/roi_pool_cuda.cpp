@@ -3,10 +3,11 @@
 
 // CUDA forward declarations
 at::Tensor roi_pool_forward_cuda(const at::Tensor &input, const at::Tensor &rois, int64_t pool_h, int64_t pool_w,
-                                 double scale, at::Tensor &memory);
+                                 double scale, at::Tensor &memory, at::Tensor &output);
 
 at::Tensor roi_pool_backward_cuda(const at::Tensor &rois, const at::Tensor &grad_out, int64_t b_size, int64_t channel,
-                                  int64_t h, int64_t w, int64_t pool_h, int64_t pool_w, const at::Tensor &memory);
+                                  int64_t h, int64_t w, int64_t pool_h, int64_t pool_w, const at::Tensor &memory,
+                                  at::Tensor &grad_in);
 
 
 // C++ interface
@@ -14,16 +15,17 @@ at::Tensor roi_pool_backward_cuda(const at::Tensor &rois, const at::Tensor &grad
 #define CHECK_CONTIGUOUS(x) AT_CHECK(x.is_contiguous(), #x " must be contiguous")
 #define CHECK_INPUT(x) CHECK_CUDA(x); CHECK_CONTIGUOUS(x)
 
-at::Tensor roi_pool_forward(const at::Tensor &input, const at::Tensor &rois, int64_t pool_h, int64_t pool_w,
-                            double scale, at::Tensor &memory) {
+void roi_pool_forward(const at::Tensor &input, const at::Tensor &rois, int64_t pool_h, int64_t pool_w,
+                            double scale, at::Tensor &memory, at::Tensor &output) {
     CHECK_INPUT(input);
     CHECK_INPUT(rois);
     CHECK_INPUT(memory);
-    return roi_pool_forward_cuda(input, rois, pool_h, pool_w, scale, memory);
+    return roi_pool_forward_cuda(input, rois, pool_h, pool_w, scale, memory, output);
 }
 
 at::Tensor roi_pool_backward(const at::Tensor &rois, const at::Tensor &grad_out, int64_t b_size, int64_t channel,
-                             int64_t h, int64_t w, int64_t pool_h, int64_t pool_w, const at::Tensor &memory) {
+                             int64_t h, int64_t w, int64_t pool_h, int64_t pool_w, const at::Tensor &memory,
+                             at::Tensor &grad_in) {
     CHECK_INPUT(grad_out);
     CHECK_INPUT(rois);
     CHECK_INPUT(memory);

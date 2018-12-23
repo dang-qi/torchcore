@@ -134,7 +134,8 @@ at::Tensor roi_pool_backward_cuda(const at::Tensor &rois, const at::Tensor &grad
     const int threads = 1024;
     const int64_t blocks = (total + threads - 1) / threads > 65535 ? 65535 : (total + threads - 1) / threads;
 
-    roi_pool_backward_kernel << < blocks, threads, 0, at::cuda::getCurrentCUDAStream() >> > (total,
+    // , 0, at::cuda::getCurrentCUDAStream()
+    roi_pool_backward_kernel << < blocks, threads >> > (total,
             grad_out.data<float>(), rois.data<float>(), channel, h, w, pool_h, pool_w, grad_in.data<float>(),
             memory.data<int>());
 

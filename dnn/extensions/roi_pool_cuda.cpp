@@ -2,10 +2,10 @@
 #include<torch/torch.h>
 
 // CUDA forward declarations
-at::Tensor roi_pool_forward_cuda(const at::Tensor &input, const at::Tensor &rois, int64_t pool_h, int64_t pool_w,
+void roi_pool_forward_cuda(const at::Tensor &input, const at::Tensor &rois, int64_t pool_h, int64_t pool_w,
                                  double scale, at::Tensor &memory, at::Tensor &output);
 
-at::Tensor roi_pool_backward_cuda(const at::Tensor &rois, const at::Tensor &grad_out, int64_t b_size, int64_t channel,
+void roi_pool_backward_cuda(const at::Tensor &rois, const at::Tensor &grad_out, int64_t b_size, int64_t channel,
                                   int64_t h, int64_t w, int64_t pool_h, int64_t pool_w, const at::Tensor &memory,
                                   at::Tensor &grad_in);
 
@@ -20,16 +20,16 @@ void roi_pool_forward(const at::Tensor &input, const at::Tensor &rois, int64_t p
     CHECK_INPUT(input);
     CHECK_INPUT(rois);
     CHECK_INPUT(memory);
-    return roi_pool_forward_cuda(input, rois, pool_h, pool_w, scale, memory, output);
+    roi_pool_forward_cuda(input, rois, pool_h, pool_w, scale, memory, output);
 }
 
-at::Tensor roi_pool_backward(const at::Tensor &rois, const at::Tensor &grad_out, int64_t b_size, int64_t channel,
+void roi_pool_backward(const at::Tensor &rois, const at::Tensor &grad_out, int64_t b_size, int64_t channel,
                              int64_t h, int64_t w, int64_t pool_h, int64_t pool_w, const at::Tensor &memory,
                              at::Tensor &grad_in) {
     CHECK_INPUT(grad_out);
     CHECK_INPUT(rois);
     CHECK_INPUT(memory);
-    return roi_pool_backward_cuda(rois, grad_out, b_size, channel, h, w, pool_h, pool_w, memory);
+    roi_pool_backward_cuda(rois, grad_out, b_size, channel, h, w, pool_h, pool_w, memory);
 }
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {

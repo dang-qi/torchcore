@@ -25,7 +25,8 @@ class ROIPoolFunction(Function):
 
         if feat.is_cuda:
             ctx.memory = ctx.memory.cuda()
-            roi_pool_cuda.forward_cuda(feat, rois, roibatches, pool_h, pool_w, scale, output, ctx.memory)
+            output = output.cuda()
+            roi_pool_cuda.forward_gpu(feat, rois, roibatches, pool_h, pool_w, scale, output, ctx.memory)
         else:
             roi_pool_cpu.forward_cpu(feat, rois, roibatches, pool_h, pool_w, scale, output, ctx.memory)
         return output
@@ -43,7 +44,7 @@ class ROIPoolFunction(Function):
         grad_in = torch.zeros(feat_size, dtype=grad_out.dtype, device=grad_out.device)
 
         if grad_out.is_cuda:
-            roi_pool_cuda.backward_cuda(rois, roibatches, grad_out, pool_h, pool_w, grad_in, memory)
+            roi_pool_cuda.backward_gpu(rois, roibatches, grad_out, pool_h, pool_w, grad_in, memory)
         else:
             roi_pool_cpu.backward_cpu(rois, roibatches, grad_out, pool_h, pool_w, grad_in, memory)
 

@@ -3,16 +3,16 @@
 #include <cfloat>
 #include <vector>
 
-#include "roi_pool_kernel.hpp"
+#include "roi_align_kernel.hpp"
 
 using namespace std;
 
-void roi_pool_forward_gpu(const at::Tensor &input, const at::Tensor &rois, const at::Tensor &roibatches,
+void roi_align_forward_gpu(const at::Tensor &input, const at::Tensor &rois, const at::Tensor &roibatches,
                                 int64_t pool_h, int64_t pool_w,
-                                double scale, at::Tensor output, at::Tensor &memory) {
+                                double scale, int sampling, at::Tensor &output) {
     AT_CHECK(input.ndimension() == 4, "Feature should be BxCxHxW forms");
     AT_CHECK(input.is_contiguous(), "Feature should be contiguous");
-    AT_CHECK(rois.ndimension() == 2, "ROI Proposals should be Kx5 forms");
+    AT_CHECK(rois.ndimension() == 2, "ROI Proposals should be Kx4 forms");
     AT_CHECK(rois.size(1) == 4, "ROI proposals should be Kx4 forms");
     AT_CHECK(roibatches.size(0) == rois.size(0), "Number of rois and roibatches should be equal");
     AT_CHECK(rois.is_contiguous(), "ROI proposals should be contiguous.");
@@ -32,22 +32,19 @@ void roi_pool_forward_gpu(const at::Tensor &input, const at::Tensor &rois, const
     int nrois = rois.size(0);
     int rois_dim = rois.size(1);
 
-    if (memory.data<int>())
-        memory.zero_();
-
-    roi_pool_forward(input.data<float>(), rois.data<float>(), roibatches.data<int>(), batch_size, nchannels, height, width,
+    roi_align_forward(input.data<float>(), rois.data<float>(), roibatches.data<int>(), batch_size, nchannels, height, width,
                      nrois, rois_dim, pool_h, pool_w,
-                     static_cast<float>(scale), output.data<float>(), memory.data<int>());
+                     static_cast<float>(scale), sampling, output.data<float>());
+
 }
 
-void roi_pool_backward_gpu(const at::Tensor &rois, const at::Tensor &roibatches, const at::Tensor &grad_out,
-                                 int64_t pool_h, int64_t pool_w, at::Tensor grad_in, at::Tensor &memory) {
+void roi_align_backward_gpu(const at::Tensor &rois, const at::Tensor &roibatches, const at::Tensor &grad_out,
+                                 int64_t pool_h, int64_t pool_w, float scale, int sampling, at::Tensor grad_in) {
     AT_CHECK(grad_out.ndimension() == 4, "Feature should be BxCxHxW forms");
     AT_CHECK(grad_out.is_contiguous(), "Feature should be contiguous");
-    AT_CHECK(rois.ndimension() == 2, "ROI Proposals should be Kx5 forms");
+    AT_CHECK(rois.ndimension() == 2, "ROI Proposals should be Kx4 forms");
     AT_CHECK(rois.size(1) == 4 && rois.is_contiguous(), "ROI proposals should be Kx5 forms and contiguous");
     AT_CHECK(roibatches.size(0) == rois.size(0), "Number of rois and roibatches should be equal");
-    AT_CHECK(memory.is_contiguous(), "Memory should be contiguous.");
 
     //auto grad_in = grad_out.type().tensor({b_size, channel, h, w});
     //auto grad_in = at::zeros({b_size, channel, h, w}, grad_out.type());
@@ -61,12 +58,12 @@ void roi_pool_backward_gpu(const at::Tensor &rois, const at::Tensor &roibatches,
     int nrois = rois.size(0);
     int rois_dim = rois.size(1);
 
-    roi_pool_backward( grad_out.data<float>(), rois.data<float>(), roibatches.data<int>(),
+    roi_align_backward( grad_out.data<float>(), rois.data<float>(), roibatches.data<int>(),
                        batch_size, nchannels, height, width, nrois, rois_dim, pool_h, pool_w,
-                       grad_in.data<float>(), memory.data<int>() );
+                       scale, sampling, grad_in.data<float>() );
 }
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
-    m.def("forward_gpu", &roi_pool_forward_gpu, "roi_pool_forward_gpu");
-    m.def("backward_gpu", &roi_pool_backward_gpu, "roi_pool_backward_gpu");
+    m.def("forward_gpu", &roi_align_forward_gpu, "roi_align_forward_gpu");
+    m.def("backward_gpu", &roi_align_backward_gpu, "roi_align_backward_gpu");
 }

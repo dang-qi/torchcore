@@ -3,11 +3,6 @@
 #include <ATen/ATen.h>
 #include "cuda_headers.hpp"
 
-float gpu_atomic_add(const float val, float *address) {
-    return atomicAdd(address, val);
-}
-
-
 __global__ void roi_pool_forward_kernel( int total, const float* data, const float* rois, const int* roibatches, int batch_size, int nchannels,
 	   									 int height, int width, int nrois, int rois_dim, int pool_h, int pool_w, float scale, float* output,
 										 int* memory )
@@ -105,7 +100,7 @@ __global__ void roi_pool_backward_kernel( int total, const float* grad_out, cons
 
         int argmax = offset_memory[ ph * pool_w + pw ];
         if( argmax != -1 )
-            gpu_atomic_add( static_cast<float>(offset_grad_out[ ph * pool_w + pw ]), offset_grad_in + argmax );
+			atomicAdd( offset_grad_in + argmax,  static_cast<float>(offset_grad_out[ ph * pool_w + pw ]) );
 	}
 }
 

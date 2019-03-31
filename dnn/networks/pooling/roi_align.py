@@ -3,8 +3,8 @@ from torch.nn import Module
 from torch.autograd import Function
 import roi_align_cpu
 
-#if torch.cuda.is_available() :
-#    import roi_pool_cuda
+if torch.cuda.is_available() :
+    import roi_align_cuda
 
 
 class ROIAlignFunction(Function):
@@ -21,7 +21,7 @@ class ROIAlignFunction(Function):
         output = torch.zeros((rois.size(0), feat.size(1), pool_h, pool_w), dtype=feat.dtype, device=feat.device)
 
         if feat.is_cuda:
-            roi_pool_cuda.forward_cuda(feat, rois, roibatches, pool_h, pool_w, scale, sampling, output)
+            roi_align_cuda.forward_gpu(feat, rois, roibatches, pool_h, pool_w, scale, sampling, output)
         else:
             roi_align_cpu.forward_cpu(feat, rois, roibatches, pool_h, pool_w, scale, sampling, output)
 
@@ -41,10 +41,9 @@ class ROIAlignFunction(Function):
         grad_in = torch.zeros(feat_size, dtype=grad_out.dtype, device=grad_out.device)
 
         if grad_out.is_cuda:
-            roi_pool_cuda.backward_cuda(rois, grad_out, feat_size[0], feat_size[1], feat_size[2],
-        #                                          feat_size[3], pool_h, pool_w, grad_in, memory)
-        #else:
-        roi_align_cpu.backward_cpu(rois, roibatches, grad_out, pool_h, pool_w, scale, sampling, grad_in)
+            roi_align_cuda.backward_gpu(rois, roibatches, grad_out, pool_h, pool_w, scale, sampling, grad_in )
+        else:
+            roi_align_cpu.backward_cpu(rois, roibatches, grad_out, pool_h, pool_w, scale, sampling, grad_in)
 
         # Note: the backward return number is corresponding to the ctx variable
         return grad_in, None, None, None, None, None, None

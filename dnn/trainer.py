@@ -16,7 +16,9 @@ class trainer :
         self._trainset = trainset
         self._testset = testset
         self._trainset_feeder = data_feeder( trainset )
-        self._testset_feeder = data_feeder( testset )
+
+        if testset is not None :
+            self._testset_feeder = data_feeder( testset )
 
         self._set_optimizer()
 
@@ -68,6 +70,7 @@ class trainer :
 
         for idx in range( len(self._trainset) ):
             inputs, targets = self._trainset_feeder.next()
+            
             inputs = self._set_device( inputs )
             targets = self._set_device( targets )
 

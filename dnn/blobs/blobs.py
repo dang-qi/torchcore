@@ -3,7 +3,6 @@ import numpy as np
 from tools import image_tools
 from PIL import Image
 
-from .preprocess import identity
  # { R, G, B }
 
 def load_data( image, max_size ):
@@ -37,7 +36,7 @@ class data_blobs :
         inds = np.where( ( w >= min_size ) & ( h >= min_size ) )
         return boxes[ inds ]
 
-    def _add_data( self, images, blobs, preprocess=identity, max_size=None ):
+    def _add_data( self, images, blobs, preprocess=[], max_size=None ):
         data = []
         shapes = []
         scales = []

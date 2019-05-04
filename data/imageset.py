@@ -7,7 +7,8 @@ class imageset :
     def _size_prune( self, size ):
         raise NotImplementedError
 
-    def __init__( self, cfg, dataset, blobs_gen, randomize=False, is_training=True, size_prune=None ):
+    def __init__( self, cfg, dataset, blobs_gen, randomize=False, is_training=True, size_prune=None, benchmark=None ):
+
         self._cfg = cfg
         self._images = dataset.images
         self._blobs_gen = blobs_gen
@@ -15,6 +16,7 @@ class imageset :
         self._randomize = randomize
         self._is_training = is_training
         self._cur = -1
+        sekf.benchmark = benchmark
 
         if size_prune is not None :
             self._size_prune( size_prune )

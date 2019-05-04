@@ -111,5 +111,5 @@ class trainer :
             self._scheduler.step()
             self._train()
 
-            #if self._testset is not None :
-            #    self._validate()
+            if self._testset is not None :
+                self._validate()

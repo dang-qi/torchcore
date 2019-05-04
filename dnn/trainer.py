@@ -15,10 +15,10 @@ class trainer :
 
         self._trainset = trainset
         self._testset = testset
-        self._trainset_feeder = data_feeder( trainset )
+        #self._trainset_feeder = data_feeder( trainset )
 
-        if testset is not None :
-            self._testset_feeder = data_feeder( testset )
+        #if testset is not None :
+        #    self._testset_feeder = data_feeder( testset )
 
         self._set_optimizer()
 
@@ -71,7 +71,7 @@ class trainer :
         loss_values = []
 
         for idx in range( len(self._trainset) ):
-            inputs, targets = self._trainset_feeder.next()
+            inputs, targets = self._trainset.next()
 
             inputs = self._set_device( inputs )
             targets = self._set_device( targets )
@@ -98,7 +98,7 @@ class trainer :
 
         with torch.no_grad() :
             for idx in range( len(self._testset) ):
-                inputs, targets = self._testset_feeder.next()
+                inputs, targets = self._testset.next()
                 inputs = self._set_device( inputs )
                 output = self._model['net']( inputs )
                 bench.update( targets, output )

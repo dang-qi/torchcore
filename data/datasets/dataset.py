@@ -10,21 +10,24 @@ class dataset :
         self._image = img_type
         self._workset = None
         self._images = None
+        self._info = None
 
-    def load( self, setting=None ):
-        if setting is None :
-            setting = self._cfg.WORKSET_SETTING
+    def load( self, settings=None ):
+        if settings is None :
+            settings = self._cfg.WORKSET_SETTINGS
 
-        self._workset_setting = setting
+        self._workset_settings = settings
         dset_path = self._cfg.ANNOTS_TMP % ( self._dset_tag )
         with open( dset_path, 'rb' ) as ff :
             dset_data = pickle.load( ff )[0]
 
         if type(dset_data) is dict :
+            if 'info' in dset_data :
+                self._info = dset_data['info']
             dset_data = dset_data[ self._part ]
 
         add_mirrored = False
-        if 'add_mirrored' in setting :
+        if 'add_mirrored' in settings :
             add_mirrored = True
 
         self._original_images = []
@@ -52,6 +55,7 @@ class dataset :
 
         for i,image in enumerate(images) :
             gtboxes = image.gtboxes
+
             if len( gtboxes ) > 0 :
                 widths = gtboxes[:,2] - gtboxes[:,0]
                 heights = gtboxes[:,3] - gtboxes[:,1]
@@ -72,10 +76,10 @@ class dataset :
 
         images = copy.deepcopy( self._original_images )
 
-        if 'randomize_scales' in self._workset_setting :
+        if 'randomize_scales' in self._workset_settings :
             self._randomize_scales( images )
 
-        if 'prune_by_size' in self._workset_setting :
+        if 'prune_by_size' in self._workset_settings :
             inds = self._size_prune( images )
         else :
             inds = np.arange(0,len( images ) )
@@ -84,13 +88,12 @@ class dataset :
         self._selection = inds
 
     @property
+    def info( self ):
+        return self._info
+
+    @property
     def ndata( self ):
         assert self._workset is not None, "workset is not initiated."
-        return len( self._workset )
-
-    def __len__( self ):
-        if self._workset is None :
-            self.create_workset()
         return len( self._workset )
 
     @property

@@ -11,5 +11,5 @@ class deepfashion_dataset( dataset ):
         self._data_name = 'deepfashion_%s' % ( cls )
         self._images = []
 
-    def load( self, setting=None ):
-        super().load( setting=setting )
+    def load( self, settings=None ):
+        super().load( settings=settings )

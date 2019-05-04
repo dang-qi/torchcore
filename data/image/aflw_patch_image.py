@@ -7,7 +7,7 @@ from .image import image
 
 keypoints_mirror_mapping = np.array([5, 4, 3, 2, 1, 0, 11, 10, 9, 8, 7, 6, 16, 15, 14, 13, 12, 19, 18, 17, 20])
 
-class aflw_image( image ):
+class aflw_patch_image( image ):
     def __init__( self, cfg, image_info, mirrored=False ):
         super().__init__( cfg, image_info, mirrored )
 
@@ -22,7 +22,7 @@ class aflw_image( image ):
         self._data['keypoint_labels'] = []
 
         for obj in self._image_info['objects'] :
-            self._data['gtboxes'].append( obj['bbox'] )
+            self._data['gtboxes'].append( obj['expand_roi'] )
             self._data['pose'].append( obj['pose'] )
             self._data['gender'].append( gender_dict[ obj['sex'] ] )
             self._data['glasses'].append( obj['glasses'] )
@@ -44,13 +44,10 @@ class aflw_image( image ):
     def pose( self ):
         if 'pose' in self._data :
             pose = copy.deepcopy( self._data['pose'] )
+            pose = pose.reshape([-1,3])
 
-
-            pose = pose[:,2].reshape([-1,1])
-
-            if self.is_mirrored :
-                pose *= -1
-            # Should do something if the image is mirrored!
+            #if self.is_mirrored :
+            #    pose[:,2] *= -1
             return pose
         else :
             return None

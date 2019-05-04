@@ -23,6 +23,7 @@ class image :
         self.padding = 0.0
         self.label = -1
 
+    @property
     def is_mirrored( self ):
         return self._mirrored
 
@@ -51,11 +52,12 @@ class image :
         if self.padding > 0 :
             img = ImageOps.expand( img, border=self.padding )
 
-        img = np.array( img )
-        if len( img.shape ) == 2 :
-            img = np.repeat(img[:, :, np.newaxis], 3, axis=2)
+        np_img = np.array( img )
+        del img
+        if len( np_img.shape ) == 2 :
+            np_img = np.repeat(np_img[:, :, np.newaxis], 3, axis=2)
 
-        return img
+        return np_img
 
     @property
     def im_PIL( self ):

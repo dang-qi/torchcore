@@ -23,5 +23,5 @@ class cocowider_dataset( dataset ):
         self._data_name = 'cocowider'
         self._images = []
 
-    def load( self, setting=None ):
-        super().load( setting=setting )
+    def load( self, settings=None ):
+        super().load( settings=settings )

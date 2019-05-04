@@ -27,8 +27,8 @@ class coco_dataset( dataset ):
         self._data_name = 'coco_%s' % ( cls )
         self._images = []
 
-    def load( self, setting=None ):
-        super().load( setting=setting )
+    def load( self, settings=None, **kwargs ):
+        super().load( settings=settings )
 
     def reduce_to_pose( self ):
         keep = []

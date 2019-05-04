@@ -20,6 +20,12 @@ class image_deploy :
         self._pil_image = img
         self._imshape = np.array(self._pil_image.size[::-1])
 
+    def set( self, img ):
+        if self._mirrored :
+            img = ImageOps.mirror( img )
+        self._pil_image = img
+        self._imshape = np.array(self._pil_image.size[::-1])
+
     def read( self, image_buf ):
         img = Image.open( io.BytesIO(image_buf) )
         if self._mirrored :

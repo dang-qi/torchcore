@@ -17,13 +17,13 @@ class aflw_dataset( dataset ):
         self._data_name = 'aflw'
         self._images = []
 
-    def load( self, setting=None ):
+    def load( self, setting=None, **kwargs ):
         super().load( setting=setting )
 
         # Updating the ground truth labels
-        cls_labels = self._cfg.CLS_LABELS
-        gt_label = self._cfg.GT_LABEL
-        gt_label = cls_labels[ gt_label ]
+
+        cls_labels = kwargs['CLS_LABELS']
+        gt_label = cls_labels['face']
 
         for image in self._original_images :
             image.label = gt_label

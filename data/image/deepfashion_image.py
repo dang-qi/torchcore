@@ -54,6 +54,7 @@ class deepfashion_image( image ):
         self._data['gtboxes'] = np.array( self._data['gtboxes'], dtype=np.float32 )
         self._data['category'] = np.array( self._data['category'], dtype=np.float32 )
         self._data['category'] = self._data['category'].reshape([-1,1])
+
         self._data['landmarks_points'] = np.array( self._data['landmarks_points'], dtype=np.float32 )
         self._data['landmarks_labels'] = np.array( self._data['landmarks_labels'], dtype=np.float32 )
         self._data['landmarks_type'] = np.array( self._data['landmarks_type'], dtype=np.float32 )
@@ -67,12 +68,28 @@ class deepfashion_image( image ):
             return np.array([])
 
     @property
+    def category( self ):
+        if 'category' in self._data :
+            return copy.deepcopy( self._data['category'] )
+        else :
+            return np.array([])
+
+    @property
     def landmarks_points( self ):
         if 'landmarks_points' in self._data :
             keypoints = copy.deepcopy( self._data['landmarks_points'] )
+            types = copy.deepcopy( self._data['landmarks_type'] )
             if self.is_mirrored :
                 width = self._imshape[1]
                 keypoints[:,:,0] = width - keypoints[:,:,0]
+
+                assert( len(types) == len(keypoints) )
+
+                for i in range(len(types)):
+                    t = int(types[i])
+                    k = keypoints[i][ mirror_mapping[t] ]
+                    keypoints[i] = k
+
             keypoints = keypoints * self.scale + self.padding
             return keypoints
         else :
@@ -82,12 +99,13 @@ class deepfashion_image( image ):
     def landmarks_labels( self ):
         if 'landmarks_labels' in self._data :
             labels = copy.deepcopy( self._data['landmarks_labels'] )
-            type = copy.deepcopy( self._data['landmarks_type'] )
-
-            print( type )
+            types = copy.deepcopy( self._data['landmarks_type'] )
 
             if self.is_mirrored :
-                pass
+                assert( len(types) == len(labels) )
+                for i in range(len(types)) :
+                    t = int(types[i])
+                    labels[i] = labels[i][ mirror_mapping[t] ]
 
             return labels
         else :
@@ -106,6 +124,9 @@ class deepfashion_image( image ):
             return copy.deepcopy( self._data['landmarks_variation'] )
         else :
             return np.array([])
+
+    def show_info( self ):
+        pprint( self._image_info )
 
     def show_info( self ):
         pprint( self._image_info )

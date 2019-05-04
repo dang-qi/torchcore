@@ -2,4 +2,9 @@ from .image import image
 from .image_deploy import image_deploy
 from .coco_image import coco_image
 from .deepfashion_image import deepfashion_image
+from .deepfashionp_image import deepfashionp_image
+from .figuratic_image import figuratic_image
 from .aflw_image import aflw_image
+from .aflw_patch_image import aflw_patch_image
+from .modanet_image import modanet_image
+from .modanetp_image import modanetp_image

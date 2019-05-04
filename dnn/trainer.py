@@ -106,6 +106,9 @@ class trainer :
         bench.summary()
 
     def train( self ):
+        if self._testset is not None :
+            self._validate()
+
         for i in range( self._niter ):
             print("Epoch %d/%d" % (i+1,self._niter))
             self._scheduler.step()

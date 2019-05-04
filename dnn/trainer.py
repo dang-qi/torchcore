@@ -70,7 +70,7 @@ class trainer :
 
         for idx in range( len(self._trainset) ):
             inputs, targets = self._trainset_feeder.next()
-            
+
             inputs = self._set_device( inputs )
             targets = self._set_device( targets )
 
@@ -105,5 +105,5 @@ class trainer :
             self._scheduler.step()
             self._train()
 
-            if self._testset is not None :
-                self._validate()
+            #if self._testset is not None :
+            #    self._validate()

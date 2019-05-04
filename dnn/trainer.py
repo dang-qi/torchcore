@@ -105,5 +105,7 @@ class trainer :
             self._scheduler.step()
             self._train()
 
+            print("Here?")
+
             #if self._testset is not None :
             #    self._validate()

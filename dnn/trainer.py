@@ -68,6 +68,8 @@ class trainer :
                     '(',progressbar.DynamicMessage('loss'),')' ]
         bar = progressbar.ProgressBar(widgets=widgets,max_value=len(self._trainset)).start()
 
+        loss_values = []
+
         for idx in range( len(self._trainset) ):
             inputs, targets = self._trainset_feeder.next()
 
@@ -77,6 +79,8 @@ class trainer :
             outputs = self._model['net']( inputs )
             loss = self._model['loss']( outputs, targets )
 
+            loss_values.append( loss.cpu().detach().numpy() )
+
             # Computing gradient and do SGD step
             self._optimizer.zero_grad()
             loss.backward()
@@ -84,6 +88,8 @@ class trainer :
 
             bar.update(idx+1,loss=loss.item())
         bar.finish()
+
+        print('Average loss : ', np.mean(loss_values))
 
     def _validate( self ):
         self._model['net'].eval()
@@ -104,8 +110,6 @@ class trainer :
             print("Epoch %d/%d" % (i+1,self._niter))
             self._scheduler.step()
             self._train()
-
-            print("Here?")
 
             #if self._testset is not None :
             #    self._validate()

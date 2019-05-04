@@ -16,7 +16,7 @@ class imageset :
         self._randomize = randomize
         self._is_training = is_training
         self._cur = -1
-        sekf.benchmark = benchmark
+        self.benchmark = benchmark
 
         if size_prune is not None :
             self._size_prune( size_prune )

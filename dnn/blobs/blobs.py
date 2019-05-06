@@ -51,15 +51,17 @@ class data_blobs :
             scale = image_tools.image_scale_fit( imsize, max_size )
 
             image.scale *= scale
-            im = image.im
+            im = image.im_PIL
 
             for p in self._preprocess :
                 im = p(im)
 
-            d = np.zeros( [ max_size, max_size, 3 ] ).astype( np.float32 )
-            h,w = im.shape[:2]
+            im = np.array(im)
+            d = np.zeros( [ 3, max_size, max_size ] ).astype( np.float32 )
+            h,w = im.shape[1:]
 
-            d[:h,:w,:] = im
+            print( im.shape )
+            d[:,:h,:w] = im
 
             data.append( d )
             shapes.append( image.shape )

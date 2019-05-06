@@ -60,7 +60,6 @@ class data_blobs :
             d = np.zeros( [ 3, max_size, max_size ] ).astype( np.float32 )
             h,w = im.shape[1:]
 
-            print( im.shape )
             d[:,:h,:w] = im
 
             data.append( d )

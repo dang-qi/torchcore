@@ -36,6 +36,10 @@ class patch :
     def scale( self ):
         return self._scale
 
+    @property
+    def path( self ):
+        return self._path
+
     @scale.setter
     def scale( self, s ):
         assert s>0, "Scale should be greater than 0"

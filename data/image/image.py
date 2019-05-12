@@ -75,6 +75,9 @@ class image :
         if self.padding > 0 :
             img = ImageOps.expand( img, self.padding )
 
+        if img.mode != 'RGB' :
+            img = img.convert('RGB')
+
         return img
 
     @property

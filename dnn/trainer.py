@@ -79,8 +79,6 @@ class trainer :
             nets, outputs = self._model['net']( inputs, targets )
             loss = self._model['loss']( inputs, nets, outputs, targets )
 
-            print( loss )
-
             loss_values.append( loss.cpu().detach().numpy() )
 
             # Computing gradient and do SGD step

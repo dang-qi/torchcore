@@ -53,11 +53,11 @@ class NmsFunction( Function ):
         nms_keep = nms_keep[:max_size]#.astype( np.int64 )
         #nms_keep = torch.from_numpy( nms_keep ).to( device )
 
-        return nms_keep
+        return nms_keep.to( device )
 
     @staticmethod
     def backward( self, outgrad ):
-        return None, None, None
+        return None, None, None, None
 
 class Nms( Module ):
     def __init__( self, threshold, max_size ):

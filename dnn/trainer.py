@@ -76,8 +76,8 @@ class trainer :
             inputs = self._set_device( inputs )
             targets = self._set_device( targets )
 
-            outputs = self._model['net']( inputs )
-            loss = self._model['loss']( inputs, outputs, targets )
+            nets, outputs = self._model['net']( inputs )
+            loss = self._model['loss']( inputs, nets, outputs, targets )
 
             loss_values.append( loss.cpu().detach().numpy() )
 

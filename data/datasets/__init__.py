@@ -9,9 +9,11 @@ from .aflw_patch_dataset import aflw_patch_dataset
 from .coco_person_patch_dataset import coco_person_patch_dataset
 from .modanet_dataset import modanet_dataset
 from .modanetp_dataset import modanetp_dataset
+from .fire_dataset import fire_dataset
 
 selector = {}
 selector['coco'] = coco_dataset
+selector['fire'] = fire_dataset
 selector['cocowider'] = cocowider_dataset
 selector['deepfashion'] = deepfashion_dataset
 selector['deepfashionp'] = deepfashionp_dataset

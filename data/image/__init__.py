@@ -8,3 +8,4 @@ from .aflw_image import aflw_image
 from .aflw_patch_image import aflw_patch_image
 from .modanet_image import modanet_image
 from .modanetp_image import modanetp_image
+from .fire_image import fire_image

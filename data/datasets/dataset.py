@@ -18,6 +18,7 @@ class dataset :
 
         self._workset_settings = settings
         dset_path = self._cfg.ANNOTS_TMP % ( self._dset_tag )
+
         with open( dset_path, 'rb' ) as ff :
             dset_data = pickle.load( ff )[0]
 

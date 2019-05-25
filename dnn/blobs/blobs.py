@@ -36,7 +36,7 @@ class data_blobs :
         inds = np.where( ( w >= min_size ) & ( h >= min_size ) )
         return boxes[ inds ]
 
-    def _add_data( self, images, blobs, preprocess=[], max_size=None ):
+    def _add_data( self, images, blobs, max_size=None ):
         data = []
         shapes = []
         scales = []
@@ -72,7 +72,7 @@ class data_blobs :
         blobs['scales'] = np.array( scales, dtype=np.float32 )
         blobs['batch_labels'] = np.array( batch_labels, dtype=np.float32 ).reshape( [-1,1] )
 
-    def _add_data_pil( self, images, blobs, max_size, scaling='fit' ):
+    def _add_data_pil( self, images, blobs, max_size=None, scaling='fit' ):
         data = []
         shapes = []
         scales = []
@@ -91,16 +91,17 @@ class data_blobs :
             h = int(np.floor( image.size[1]*scale ))
             image = image.resize( [w,h], Image.BILINEAR )
 
-            image = np.array( image )
             for p in self._preprocess :
                 image = p(image)
 
-            d = np.zeros( [ max_size, max_size, 3 ] ).astype( np.float32 )
-            h,w = image.shape[:2]
-            d[:h,:w,:] = image
+            im = np.array(image)
+            d = np.zeros( [ 3, max_size, max_size ] ).astype( np.float32 )
+            h,w = im.shape[1:]
+
+            d[:,:h,:w] = im
 
             data.append( d )
-            shapes.append( image.shape[:2] )
+            shapes.append( [h,w] )
             scales.append( scale )
 
         blobs['data'] = np.array( data, dtype=np.float32 )

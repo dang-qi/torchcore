@@ -1,5 +1,6 @@
 import os
 import torch
+import torch.nn as nn
 
 def layer_init( m ):
     if isinstance(m, nn.Conv2d):

@@ -11,6 +11,8 @@ class Nms( Module ):
 
     def forward( self, rois, scores ):
         keep = nms( rois, scores, self._threshold )
+
+        print( len(keep) )
         print( scores[keep] )
 
         input()

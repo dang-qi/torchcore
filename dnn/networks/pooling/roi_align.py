@@ -9,5 +9,5 @@ class ROIAlign(Module):
 
     # feat: BxCxHxW,  rois: Kx4 (batch_idx, xmin, ymin, xmax, ymax) without normalize
     def forward(self, feat, rois, roibatches):
-        rr = torch.concat([roibatches,rois], dim=1 )
+        rr = torch.concatenate([roibatches,rois], dim=1 )
         return self.op( feat, rr )

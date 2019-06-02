@@ -52,7 +52,8 @@ class Loss( nn.Module ):
     def forward( self, inputs, nets, targets ):
         scores_target, rois_target = BuildTargetsFunction.apply( nets['scores'], inputs['rois'], inputs['roibatches'],
                                                                  targets['gtboxes'], targets['gtlabels'], targets['gtbatches'],
-                                                                 self._nclasses, targets['batch_labels'], True )
+                                                                 self._nclasses, targets['batch_labels'],
+                                                                 self._cfg.dnn.PROPOSAL.EXCLUSIVE )
 
         scores_target, rois_mask = PruneFunction.apply( scores_target,
                                                         self._cfg.dnn.PROPOSAL.SELECTION_BATCH_SIZE,

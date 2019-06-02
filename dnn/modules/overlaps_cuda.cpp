@@ -60,8 +60,8 @@ void overlaps_gpu( const at::Tensor rois0, const at::Tensor roilabels0, const at
     int nrois0 = rois0.size(0);
     int nrois1 = rois1.size(0);
 
-    overlaps_gpu_kernel(rois0.data<float>(), roilabels0.data<float>(), roibatches0.data<int>(), nrois0,
-                        rois1.data<float>(), roilabels0.data<float>(), roibatches1.data<int>(), nrois1,
+    overlaps_gpu_kernel(rois0.data<float>(), roilabels0.data<float>(), roibatches0.data<float>(), nrois0,
+                        rois1.data<float>(), roilabels0.data<float>(), roibatches1.data<float>(), nrois1,
                         overlaps.data<float>() );
 }
 

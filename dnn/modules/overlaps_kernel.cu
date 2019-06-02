@@ -3,8 +3,8 @@
 #include <ATen/ATen.h>
 #include "cuda_headers.hpp"
 
-__global__ void overlaps_forward_kernel( int total, const float* rois0, const float* roilabels0, const int* roibatches0, int nrois0,
-                                         const float* rois1, const float* roilabels1, const int* roibatches1, int nrois1,
+__global__ void overlaps_forward_kernel( int total, const float* rois0, const float* roilabels0, const float* roibatches0, int nrois0,
+                                         const float* rois1, const float* roilabels1, const float* roibatches1, int nrois1,
                                          float* overlaps )
 {
     CUDA_1D_KERNEL_LOOP( index, total )
@@ -36,8 +36,8 @@ __global__ void overlaps_forward_kernel( int total, const float* rois0, const fl
     }
 }
 
-void overlaps_gpu_kernel( const float* rois0, const float* roilabels0, const int* roibatches0, int nrois0,
-                          const float* rois1, const float* roilabels1, const int* roibatches1, int nrois1,
+void overlaps_gpu_kernel( const float* rois0, const float* roilabels0, const float* roibatches0, int nrois0,
+                          const float* rois1, const float* roilabels1, const float* roibatches1, int nrois1,
                           float* overlaps )
 {
     int total = nrois0 * nrois1;

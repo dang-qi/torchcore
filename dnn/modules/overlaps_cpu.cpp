@@ -4,8 +4,8 @@
 #include <cmath>
 #include <vector>
 
-void overlaps_cpu_kernel( const float* rois0, const float* roilabels0, const int* roibatches0, int nrois0,
-                          const float* rois1, const float* roilabels1, const int* roibatches1, int nrois1,
+void overlaps_cpu_kernel( const float* rois0, const float* roilabels0, const float* roibatches0, int nrois0,
+                          const float* rois1, const float* roilabels1, const float* roibatches1, int nrois1,
                           float* overlaps )
 {
     int total = nrois0 * nrois1;
@@ -58,8 +58,8 @@ void overlaps_cpu( const at::Tensor rois0, const at::Tensor roilabels0, const at
     int nrois0 = rois0.size(0);
     int nrois1 = rois1.size(0);
 
-    overlaps_cpu_kernel(rois0.data<float>(), roilabels0.data<float>(), roibatches0.data<int>(), nrois0,
-                        rois1.data<float>(), roilabels0.data<float>(), roibatches1.data<int>(), nrois1,
+    overlaps_cpu_kernel(rois0.data<float>(), roilabels0.data<float>(), roibatches0.data<float>(), nrois0,
+                        rois1.data<float>(), roilabels0.data<float>(), roibatches1.data<float>(), nrois1,
                         overlaps.data<float>() );
 }
 

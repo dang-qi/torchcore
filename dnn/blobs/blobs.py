@@ -146,7 +146,7 @@ class data_blobs :
             gtlabels = np.zeros([0,1])
 
         blobs['gtboxes'] = gtboxes.astype( np.float32 )
-        blobs['gtbatches'] = gtbatches.astype( np.int32 )
+        blobs['gtbatches'] = gtbatches.astype( np.float32 )
         blobs['gtlabels'] = gtlabels.astype( np.float32 )
 
     def get_blobs( self, images ):

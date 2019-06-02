@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 from torch.nn import Module
 from torchvision.ops import RoIPool
@@ -12,6 +13,6 @@ class ROIPool(Module):
         roibatches = roibatches.detach().cpu().numpy()
         roibatches = roibatches.astype( np.float32 )
         roibatches = torch.from_numpy( roibatches ).to( feat.device )
-        
+
         rr = torch.cat([roibatches,rois], dim=1 )
         return self.op( feat, rr )

@@ -5,7 +5,7 @@ from .datasets import selector as dataset_selector
 
 class workbench :
     def __init__( self, cfg, params ):
-        tag = params.get('tag',None)
+        #tag = params.get('tag',None)
         self._cfg = cfg
 
         dset_params = params['dset_params']

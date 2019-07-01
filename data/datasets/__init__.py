@@ -2,6 +2,7 @@ from .dataset import dataset
 from .coco_dataset import coco_dataset
 from .cocowider_dataset import cocowider_dataset
 from .deepfashion_dataset import deepfashion_dataset
+from .deepfashion2_dataset import deepfashion2_dataset
 from .deepfashionp_dataset import deepfashionp_dataset
 from .figuratic_dataset import figuratic_dataset
 from .aflw_dataset import aflw_dataset
@@ -16,6 +17,7 @@ selector['coco'] = coco_dataset
 selector['fire'] = fire_dataset
 selector['cocowider'] = cocowider_dataset
 selector['deepfashion'] = deepfashion_dataset
+selector['deepfashion2'] = deepfashion2_dataset
 selector['deepfashionp'] = deepfashionp_dataset
 selector['figuratic'] = figuratic_dataset
 selector['aflw'] = aflw_dataset

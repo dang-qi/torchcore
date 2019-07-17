@@ -2,8 +2,12 @@ import numpy as np
 import copy
 from pprint import pprint
 
+from PIL import Image
+from PIL import ImageOps
+
 from .image import image
 from tools import annot_tools
+from tools import bbox_tools
 
 # TODO
 # For landmarks this is just from deepfashion1, not deepfashion2
@@ -27,11 +31,13 @@ mirror_mapping = {}
 class deepfashion2_image( image ):
     def __init__( self, cfg, image_info, mirrored=False ):
         super().__init__( cfg, image_info, mirrored )
+        self.padding_x = 0
+        self.padding_y = 0
 
         self.source = image_info['source']
         self.pair_id = image_info['pair_id']
-        self.width = image_info['width']
-        self.height = image_info['height']
+        self._ori_width = image_info['width']
+        self._ori_height = image_info['height']
         self._imshape = [self.height, self.width]
 
         self._data['gtboxes'] = []
@@ -46,9 +52,9 @@ class deepfashion2_image( image ):
         self._data['landmarks_labels'] = [] # for mirror mapping, not available for now
 
         for obj in self._image_info['objects'] :
-            self._data['gtboxes'].append( obj.get('bounding_box') )
+            self._data['gtboxes'].append( obj['bounding_box'] )
             self._data['gtlabels'].append( obj['category_id'] )
-            self._data['style'].append( obj.get('style') )
+            self._data['style'].append( obj['style'] )
 
             landmarks = obj.get('landmarks')
             if landmarks is not None :
@@ -74,12 +80,10 @@ class deepfashion2_image( image ):
     def boxes(self):
         return self._data['gtboxes']
 
+
     @property
-    def category( self ):
-        if 'category' in self._data :
-            return copy.deepcopy( self._data['category'] )
-        else :
-            return np.array([])
+    def categories( self ):
+        return self._data['gtlabels']
 
     @property
     def landmarks_points( self ):
@@ -134,3 +138,84 @@ class deepfashion2_image( image ):
 
     def show_info( self ):
         pprint( self._image_info )
+
+    @property
+    def im( self ):
+        scale = self.scale
+        img = Image.open( self._path )
+
+        if self._mirrored :
+            img = ImageOps.mirror( img )
+
+        if scale != 1.0 :
+            w = int(np.floor( img.size[0]*scale ))
+            h = int(np.floor( img.size[1]*scale ))
+            img = img.resize( [w,h], Image.BILINEAR )
+
+        if self.padding_x > 0 or self.padding_y > 0:
+            img = ImageOps.expand( img, border=(0, 0, self.padding_x, self.padding_y)) # border:(left, top, right bottom)
+
+        np_img = np.array( img )
+        del img
+        if len( np_img.shape ) == 2 :
+            np_img = np.repeat(np_img[:, :, np.newaxis], 3, axis=2)
+
+        return np_img
+
+    @property
+    def im_PIL( self ):
+        scale = self.scale
+        img = Image.open( self._path )
+
+        if self._mirrored :
+            img = ImageOps.mirror( img )
+
+        if scale != 1.0 :
+            w = int(np.floor( img.size[0]*scale ))
+            h = int(np.floor( img.size[1]*scale ))
+            img = img.resize( [w,h], Image.BILINEAR )
+
+        if self.padding_x > 0 or self.padding_y > 0:
+            img = ImageOps.expand( img, border=(0, 0, self.padding_x, self.padding_y)) # border:(left, top, right bottom)
+
+        if img.mode != 'RGB' :
+            img = img.convert('RGB')
+
+        return img
+
+    @property
+    def ori_shape(self):
+        ori_shape = (self._ori_height, self._ori_width)
+        return ori_shape
+
+    @property
+    def width(self):
+        return np.floor(self._ori_width*self.scale + self.padding_x)
+
+    @property
+    def height(self):
+        return np.floor(self._ori_height*self.scale + self.padding_y)
+
+    @property
+    def shape(self):
+        # Output [ height, width ]
+        imshape = (self.height, self.width)
+        return imshape
+
+
+    @property
+    def gtboxes( self ):
+        if 'gtboxes' in self._data :
+            scale = self.scale
+            gtboxes = copy.deepcopy( self._data['gtboxes'] )
+            if self._mirrored and len(gtboxes) > 0 :
+                gtboxes = annot_tools.mirror_boxes( gtboxes, self._imshape )
+            gtboxes *= scale
+
+            if len( gtboxes ) > 0 :
+                bbo = bbox_tools()
+                gtboxes = bbo.clip( gtboxes, self.shape )
+
+            return gtboxes
+        else :
+            return np.array([])

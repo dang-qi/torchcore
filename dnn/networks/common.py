@@ -25,3 +25,5 @@ def init( m ):
     elif isinstance(m, nn.Linear):
         nn.init.normal_(m.weight, 0, 0.01)
         nn.init.constant_(m.bias, 0)
+    else:
+        print('{} is not initialized')

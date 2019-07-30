@@ -3,6 +3,7 @@ import torch.optim as optim
 import numpy as np
 import time
 import progressbar
+import logging
 
 from .data import data_feeder
 
@@ -110,7 +111,7 @@ class trainer :
             self._validate()
 
         for i in range( self._niter ):
-            print("Epoch %d/%d" % (i+1,self._niter))
+            print('epoch {} / {}'.format(i+1, self._niter))
             self._scheduler.step()
             self._train()
 

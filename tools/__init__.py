@@ -3,3 +3,4 @@ from .batch_tools import batch_generator
 from .batch_tools import temp_seed
 from . import pil_tools
 from . import torch_tools
+from .logger import Logger

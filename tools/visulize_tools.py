@@ -1,4 +1,5 @@
 import matplotlib.pyplot as plt
+import numpy as np
 
 def parse_loss_log(log_path, losses_names):
     epoch = 0
@@ -36,13 +37,17 @@ def draw_loss(log_path, out_path, losses_names=['loss']):
     plt.ylabel('loss')
     plt.savefig(out_path)
 
-def parse_bench_log(log_path):
+def parse_bench_log(log_path, type_num=1):
     with open(log_path) as f:
         line = f.readline()
         line = line.split()
-        epochs = list(range(1, len(line)+1))
-        accuracy = [float(x) for x in line]
-    return accuracy, epochs
+        accuracy = np.array([float(x) for x in line]).reshape(-1, type_num)
+        accuracies = []
+        for i in range(type_num):
+            accuracies.append(accuracy[:, i])
+        epochs = list(range(1, len(accuracy)+1))
+    return accuracies, epochs
+
 
 def draw_accuracy(log_path, out_path, interval=1):
     f = plt.figure()
@@ -57,21 +62,24 @@ def draw_accuracy(log_path, out_path, interval=1):
     plt.ylabel('accuracy')
     plt.savefig(out_path)
 
-def draw_accuracy_all(log_paths, names, out_path, interval=1):
+def draw_accuracy_all(log_paths, names, out_path, interval=1, type_num=1, type_names=['']):
     assert len(names) == len(log_paths)
-    f = plt.figure()
-    plt.title('Figure for accuracy vs epochs')
-    plt.xlabel('epochs')
-    plt.ylabel('accuracy')
-    for i, log_path in enumerate(log_paths):
-        accuracy, epochs = parse_bench_log(log_path)
-        plt.plot(epochs, accuracy, label=names[i])
-        plt.scatter(epochs, accuracy)
-        if interval > 0:
-            for x,y in zip(epochs, accuracy):
-                if x%interval==0:
-                    plt.annotate(str(y),xy=(x,y))
-    plt.legend()
+    assert type_num == len(type_names)
+    for i in range(type_num):
+        f = plt.figure(i+1)
+        plt.title('Figure for {} accuracy vs epochs'.format(type_names[i]))
+        plt.xlabel('epochs')
+        plt.ylabel('accuracy')
+        for j, log_path in enumerate(log_paths):
+            accuracies, epochs = parse_bench_log(log_path, type_num=type_num)
+            accuracy = accuracies[i]
+            plt.plot(epochs, accuracy, label=names[j])
+            plt.scatter(epochs, accuracy)
+            if interval > 0:
+                for x,y in zip(epochs, accuracy):
+                    if x%interval==0:
+                        plt.annotate(str(y),xy=(x,y))
+        plt.legend()
 
-    plt.savefig(out_path, dpi=300)
+        plt.savefig(out_path.format(type_names[i]), dpi=300)
 

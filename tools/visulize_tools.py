@@ -48,7 +48,6 @@ def parse_bench_log(log_path, type_num=1):
         epochs = list(range(1, len(accuracy)+1))
     return accuracies, epochs
 
-
 def draw_accuracy(log_path, out_path, interval=1):
     f = plt.figure()
     accuracy, epochs = parse_bench_log(log_path)

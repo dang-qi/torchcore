@@ -61,12 +61,12 @@ def draw_accuracy(log_path, out_path, interval=1):
     plt.ylabel('accuracy')
     plt.savefig(out_path)
 
-def draw_accuracy_all(log_paths, names, out_path, interval=1, type_num=1, type_names=['']):
+def draw_accuracy_all(log_paths, names, out_path, dataset_name, interval=1, type_num=1, type_names=['']):
     assert len(names) == len(log_paths)
     assert type_num == len(type_names)
     for i in range(type_num):
         f = plt.figure(i+1)
-        plt.title('Figure for {} accuracy vs epochs'.format(type_names[i]))
+        plt.title('{}--Figure for {} accuracy vs epochs'.format(dataset_name, type_names[i]))
         plt.xlabel('epochs')
         plt.ylabel('accuracy')
         for j, log_path in enumerate(log_paths):
@@ -81,4 +81,25 @@ def draw_accuracy_all(log_paths, names, out_path, interval=1, type_num=1, type_n
         plt.legend()
 
         plt.savefig(out_path.format(type_names[i]), dpi=300)
+
+def draw_pair_class_accuracy(log_path, name, out_path, dataset_name, interval=0, type_num=1, type_names=[], ignore_names=[]):
+    assert type_num == len(type_names)
+    f=plt.figure()
+    plt.title('{}--Figure for {} vs epochs'.format(dataset_name, name))
+    plt.xlabel('epochs')
+    plt.ylabel('accuracy')
+    for i in range(type_num):
+        if type_names[i] in ignore_names:
+            continue
+        accuracies, epochs = parse_bench_log(log_path, type_num=type_num)
+        accuracy = accuracies[i]
+        plt.plot(epochs, accuracy, label=type_names[i])
+        plt.scatter(epochs, accuracy)
+        if interval > 0:
+            for x,y in zip(epochs, accuracy):
+                if x%interval==0:
+                    plt.annotate(str(y),xy=(x,y))
+    plt.legend()
+
+    plt.savefig(out_path.format('pair_classification'), dpi=300)
 

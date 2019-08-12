@@ -117,3 +117,7 @@ class trainer :
 
             if self._testset is not None :
                 self._validate()
+
+    def load_trained_model(self, model_path):
+        state_dict = torch.load(model_path)['state_dict']
+        self._model['net'].load_state_dict(state_dict)

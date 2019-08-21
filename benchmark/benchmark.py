@@ -33,3 +33,7 @@ class Benchmark :
     def summary( self ):
         for bench in self._bench:
             bench.summary()
+
+    def update_parameters(self, parameters):
+        for bench in self._bench:
+            bench.update_parameters(parameters)

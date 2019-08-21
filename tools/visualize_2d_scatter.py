@@ -3,7 +3,7 @@ import numpy as np
 import pickle
 from sklearn.manifold import TSNE
 
-def visualize_2d_scatter(data_path, out_path, dataset, ori_dim, class_num=10):
+def visualize_2d_scatter(data_path, out_path, dataset, ori_dim, class_num=10, hard_mining=False):
     features = None
     labels = None
     with open(data_path, 'rb') as f:
@@ -14,7 +14,10 @@ def visualize_2d_scatter(data_path, out_path, dataset, ori_dim, class_num=10):
     if features is not None and labels is not None:
         #normalize features
         plt.figure()
-        plt.title('2D visualization of {}d features for {} dataset'.format(ori_dim, dataset))
+        if hard_mining:
+            plt.title('2D visualization of {}d features for {} dataset with hard mining'.format(ori_dim, dataset))
+        else:
+            plt.title('2D visualization of {}d features for {} dataset'.format(ori_dim, dataset))
         #features[:,0] = features[:,0] / np.max(np.abs(features[:,0]))
         #features[:,1] = features[:,1] / np.max(np.abs(features[:,1]))
         # use tsne to reduce the dim of features

@@ -9,3 +9,6 @@ class BenchBase(object):
 
     def summary(self):
         raise NotImplementedError
+
+    def update_parameters(self, parameters={}):
+        pass

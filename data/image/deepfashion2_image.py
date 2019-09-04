@@ -148,8 +148,8 @@ class deepfashion2_image( image ):
             img = ImageOps.mirror( img )
 
         if scale != 1.0 :
-            w = int(np.floor( img.size[0]*scale ))
-            h = int(np.floor( img.size[1]*scale ))
+            w = int(np.round( img.size[0]*scale ))
+            h = int(np.round( img.size[1]*scale ))
             img = img.resize( [w,h], Image.BILINEAR )
 
         if self.padding_x > 0 or self.padding_y > 0:
@@ -171,8 +171,8 @@ class deepfashion2_image( image ):
             img = ImageOps.mirror( img )
 
         if scale != 1.0 :
-            w = int(np.floor( img.size[0]*scale ))
-            h = int(np.floor( img.size[1]*scale ))
+            w = int(np.round( img.size[0]*scale ))
+            h = int(np.round( img.size[1]*scale ))
             img = img.resize( [w,h], Image.BILINEAR )
 
         if self.padding_x > 0 or self.padding_y > 0:
@@ -189,12 +189,20 @@ class deepfashion2_image( image ):
         return ori_shape
 
     @property
+    def ori_width(self):
+        return self._ori_width
+
+    @property
+    def ori_height(self):
+        return self._ori_height
+
+    @property
     def width(self):
-        return np.floor(self._ori_width*self.scale + self.padding_x)
+        return np.round(self._ori_width*self.scale + self.padding_x)
 
     @property
     def height(self):
-        return np.floor(self._ori_height*self.scale + self.padding_y)
+        return np.round(self._ori_height*self.scale + self.padding_y)
 
     @property
     def shape(self):

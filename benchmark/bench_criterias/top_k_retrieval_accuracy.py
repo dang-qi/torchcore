@@ -23,10 +23,17 @@ class TopKRetrievalAccuracy(BenchBase):
         self._total += sorted_ind.shape[0]
         for i, n in enumerate(self._k):
             inds = sorted_ind[:,:n]
-            for j,ind in enumerate(inds):
+            for j,ind in enumerate(inds): # ind is the k indexes with smallest distance 
+                if uid[j] not in self._valid_uids:
+                    continue
                 pre_uid = self._embedding_uids[ind]
                 if uid[j] in pre_uid:
                     self._correct[i] += 1
+        invalid_num = 0
+        for auid in uid:
+            if auid not in self._valid_uids:
+                invalid_num += 1
+        self._total -= invalid_num
 
     def summary(self):
         accuracies = self._correct / float(self._total)
@@ -41,6 +48,8 @@ class TopKRetrievalAccuracy(BenchBase):
             self._k = param['k']
             self._embeddings = param['embeddings']
             self._embedding_uids = param['embedding_uids']
+            if 'valid_uids' in param:
+                self._valid_uids = param['valid_uids']
             self._correct = np.zeros(len(self._k), dtype=int)
             self._total = 0
 

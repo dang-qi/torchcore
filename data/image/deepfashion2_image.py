@@ -36,6 +36,7 @@ class deepfashion2_image( image ):
 
         self.source = image_info['source']
         self.pair_id = image_info['pair_id']
+        self.image_id = image_info['image_id']
         self._ori_width = image_info['width']
         self._ori_height = image_info['height']
         self._imshape = [self.height, self.width]
@@ -169,6 +170,7 @@ class deepfashion2_image( image ):
 
         if self._mirrored :
             img = ImageOps.mirror( img )
+            print('image mirrored')
 
         if scale != 1.0 :
             w = int(np.round( img.size[0]*scale ))

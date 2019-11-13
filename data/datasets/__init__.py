@@ -1,4 +1,5 @@
 from .dataset import dataset
+from .dataset_new import Dataset
 from .coco_dataset import coco_dataset
 from .cocowider_dataset import cocowider_dataset
 from .deepfashion_dataset import deepfashion_dataset
@@ -11,6 +12,7 @@ from .coco_person_patch_dataset import coco_person_patch_dataset
 from .modanet_dataset import modanet_dataset
 from .modanetp_dataset import modanetp_dataset
 from .fire_dataset import fire_dataset
+from .coco_person import COCOPersonDataset
 
 selector = {}
 selector['coco'] = coco_dataset

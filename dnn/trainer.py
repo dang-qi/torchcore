@@ -16,6 +16,7 @@ class trainer :
 
         self._trainset = trainset
         self._testset = testset
+        self._epoch = 0
         #self._trainset_feeder = data_feeder( trainset )
 
         #if testset is not None :
@@ -110,14 +111,32 @@ class trainer :
         if self._testset is not None :
             self._validate()
 
-        for i in range( self._niter ):
+        for i in range( self._epoch, self._niter ):
             print('epoch {} / {}'.format(i+1, self._niter))
             self._scheduler.step()
             self._train()
 
             if self._testset is not None :
                 self._validate()
+            self._epoch = i
 
     def load_trained_model(self, model_path):
         state_dict = torch.load(model_path)['state_dict']
         self._model['net'].load_state_dict(state_dict)
+
+    def save_training(self, path, to_print=True):
+        torch.save({
+            'epoch': self._epoch,
+            'model_state_dict': self._model['net'].state_dict(),
+            'optimizer_state_dict': self._optimizer.state_dict()
+        }, path)
+        if to_print:
+            print('The checkpoint has been saved to {}'.format(path))
+
+    def load_training(self, path, to_print=True):
+        checkpoint = torch.load(path)
+        self._epoch = checkpoint['epoch']
+        self._model['net'] = checkpoint['model_state_dict']
+        self._optimizer = checkpoint['optimizer_state_dict']
+        if to_print:
+            print('Chekpoint has been loaded from {}'.format(path))

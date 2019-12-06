@@ -49,7 +49,7 @@ def resize(img, size, interpolation=Image.BILINEAR, smaller_edge=None):
     if isinstance(size, int):
         if smaller_edge:
             if (w <= h and w == size) or (h <= w and h == size):
-                return img, 1
+                return img, 1.0
             if w < h:
                 ow = size
                 oh = int(size * h / w)
@@ -62,7 +62,7 @@ def resize(img, size, interpolation=Image.BILINEAR, smaller_edge=None):
                 return img.resize((ow, oh), interpolation), scale
         else:
             if (w >= h and w == size) or (h >= w and h == size):
-                return img, 1
+                return img, 1.0
             if w > h:
                 ow = size
                 oh = int(size * h / w)
@@ -84,10 +84,9 @@ def resize_boxes(boxes, scale):
     Args:
         boxes (PIL Image): boxes to be resized.
         size (sequence or int): Desired output size. If size is a sequence like
-            (h, w), the output size will be matched to this. If size is an int,
-            the smaller edge of the image will be matched to this number maintaing
-            the aspect ratio. i.e, if height > width, then image will be rescaled to
-            :math:`\left(\text{size} \times \frac{\text{height}}{\text{width}}, \text{size}\right)`
+            (h, w), the output size will be scaled in both width and height. 
+            If scale is an float, the boxes will be scaled keeping the original
+            width and height ratio.
     Returns:
         Boxes: Resized boxes.
     """
@@ -211,6 +210,17 @@ def resize_and_pad(img, size, interpolation=Image.BILINEAR):
     padding = (pad_left, pad_top, pad_right, pad_bottom)
     img = pad(img, padding)
     return img, scale, padding
+
+def resize_min_max(img, min_size, max_size, interpolation=Image.BILINEAR):
+    w, h =img.size
+    min_side=min(w,h) 
+    max_side=max(w,h) 
+    if min_size / min_side * max_side > max_size:
+        img, scale = resize(img, max_size, smaller_edge=False)
+    else:
+        img, scale = resize(img, min_size, smaller_edge=True)
+    return img, scale
+
 
 def resize_and_pad_boxes(boxes, scale, padding):
     boxes = resize_boxes(boxes, scale)

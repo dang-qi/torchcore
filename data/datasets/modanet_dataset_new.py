@@ -4,8 +4,8 @@ from .dataset_new import Dataset
 from PIL import Image
 import os
 
-class COCOPersonDataset(Dataset):
-    '''COCO dataset only contarin person class'''
+class ModanetDataset(Dataset):
+    '''Modanet dataset'''
     def __init__( self, root, anno, part, transforms=None ):
         super().__init__( root, transforms )
         self._part = part
@@ -21,7 +21,7 @@ class COCOPersonDataset(Dataset):
         image = self._images[idx]
 
         # Load image
-        img_path = os.path.join(self._root, self._part, image['file_name'] )
+        img_path = os.path.join(self._root, 'train', image['file_name'] )
         image_id=image['id']
         img = Image.open(img_path).convert('RGB')
 
@@ -44,9 +44,9 @@ class COCOPersonDataset(Dataset):
 
         targets = {}
         targets["boxes"] = boxes
-        targets["cat_labels"] = labels 
+        targets["cat_labels"] = labels
         #target["masks"] = masks
-        targets["image_id"] = np.array(image_id)
+        targets["image_id"] = image_id
         #target["area"] = area
         #target["iscrowd"] = iscrowd
         if self._transforms is not None:

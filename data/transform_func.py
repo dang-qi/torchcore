@@ -309,3 +309,13 @@ def normalize(tensor, mean, std, inplace=False): # from pytorch
     std = torch.as_tensor(std, dtype=dtype, device=tensor.device)
     tensor.sub_(mean[:, None, None]).div_(std[:, None, None])
     return tensor
+
+def mirror(image):
+    '''morror an image horizontally'''
+    return ImageOps.mirror(image)
+
+def mirror_boxes(boxes, im_width):
+    boxes[:,0], boxes[:,2] = im_width -boxes[:,2], im_width -boxes[:,0]
+    #boxes[:,2] = im_width -boxes[:,2]
+    return boxes
+

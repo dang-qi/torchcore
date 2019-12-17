@@ -1,5 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
+from PIL.ImageDraw import Draw
+import os
 
 def parse_loss_log(log_path, losses_names):
     epoch = 0
@@ -103,3 +105,24 @@ def draw_pair_class_accuracy(log_path, name, out_path, dataset_name, interval=0,
 
     plt.savefig(out_path.format('pair_classification'), dpi=300)
 
+
+def draw_single_image(image, boxes, scores=None): 
+    # (x1, y1, x2, y2, object_conf, class_score, class_pred)
+    if boxes is not None:
+        draw = Draw(image)
+        for i, box in enumerate(boxes):
+            if type(box) == list:
+                return image
+            if type(box) is not np.ndarray:
+                box = box.detach().cpu().numpy()
+            box_rec = list(box[:4])
+            draw.rectangle(box_rec)
+            if scores is not None:
+                draw.text((box[0], box[1]), '{:.2f}'.format(scores[i]))
+    return image
+
+def draw_and_save(images, batch_boxes, path, im_ids):
+    for i, (image, boxes) in enumerate(zip(images, batch_boxes)):
+        image = draw_single_image(image, boxes)
+        im_path = os.path.join(path, '{}.jpg'.format(im_ids[i]))
+        image.save(im_path)

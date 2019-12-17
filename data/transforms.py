@@ -1,6 +1,7 @@
 from PIL import Image
 import collections
 import torch
+import math
 try:
     import accimage
 except ImportError:
@@ -47,7 +48,7 @@ class Resize(object):
         return inputs, targets
         # TODO add mask, keypoints and other things
 
-class Resize_and_Padding(object):
+class ResizeAndPadding(object):
     def __init__(self, size, interplotation=Image.BILINEAR):
         assert isinstance(size, int)
         self.size = size
@@ -62,7 +63,7 @@ class Resize_and_Padding(object):
             targets['boxes'] = F.resize_and_pad_boxes(targets['boxes'], self.scale, self.padding)
         return inputs, targets
 
-class Resize_and_Padding_Min_Max(object):
+class ResizeMinMax(object):
     '''Resize and Pandding function for Rcnn'''
     def __init__(self, min_size, max_size, interplotation=Image.BILINEAR):
         assert isinstance(min_size, int)
@@ -73,6 +74,7 @@ class Resize_and_Padding_Min_Max(object):
 
     def __call__(self, inputs, targets=None):
         inputs['data'], self.scale = F.resize_min_max(inputs['data'], self.min_size, self.max_size)
+        inputs['scale'] = self.scale
         
         if targets is not None:
             if 'boxes' in targets:
@@ -112,3 +114,68 @@ class BatchStack(object):
     def __call__(self, inputs, targets=None):
         '''here inputs is a list of inputs and targets are lists of targets'''
         pass
+
+#class Padding(object):
+#    ''' Pad the image to the given size,
+#        The width and height of the original image shouldn't
+#        be larger than the width and height
+#    '''
+#    def __init__(self, width, height, mode='right_down'):
+#        self.width = width
+#        self.height = height
+#        self.mode = mode
+#
+#    def __call__(inputs, targets=None):
+#        inputs, padding = F.pad
+
+class GroupPadding(object):
+    ''' Padding for group of images tensors
+    '''
+    def __init__(self, max_width, max_height, size_devidable=32):
+        self.width = int(math.ceil(float(max_width) / size_devidable)*size_devidable)
+        self.height = int(math.ceil(float(max_height) / size_devidable)*size_devidable)
+
+    def __call__(self, images):
+        '''
+        Parameters:
+            images(list[tensors]): input images for group padding
+        '''
+        images  = F.group_padding(images, self.width, self.height)
+
+class GeneralRCNNTransform(object):
+    def __init__(self, min_size, max_size, device, image_mean=None, image_std=None):
+        self.min_size = min_size
+        self.max_size = max_size
+        self.image_mean = image_mean
+        self.image_std = image_std
+        self.resize_min_max = ResizeMinMax(min_size, max_size)
+        self.normalize = Normalize(mean=image_mean, std=image_std)
+        self.to_tensor = ToTensor()
+        self.device = device
+        #self.transforms = Compose(self.resize_min_max, self.to_tensor)
+
+    def __call__(self, inputs, targets=None):
+        '''
+        Arguments:
+            inputs(list[dict{'data':PIL.Image,...}])
+            targets(list[dict{'boxes':x1y1x2y2, 'cat_labels':}])
+        '''
+        images = []
+        if targets is None:
+            targets=[None]*len(inputs)
+
+        for ainput, target in zip(inputs, targets):
+            # this is operated in
+            ainput, target = self.resize_min_max(ainput, target)
+
+            # normalize after resize, which might be slower 
+            ainput, target = self.to_tensor(ainput, target)
+            # set the tensor to device before normalize
+            ainput['data'].to(self.device)
+            ainput, target = self.normalize(ainput, target)
+            images.append(ainput['data'])
+        max_size = tuple(max(s) for s in zip(*[img.shape for img in images]))
+        _, height, width = max_size
+
+        self.group_padding = GroupPadding(width, height, size_devidable=32)
+        inputs['data'] = self.group_padding(images)

@@ -319,3 +319,10 @@ def mirror_boxes(boxes, im_width):
     #boxes[:,2] = im_width -boxes[:,2]
     return boxes
 
+def group_padding(images, width, height):
+    im_num = len(images)
+    the_shape = (im_num, images[0].shape[0], height, width)
+    new_ims = images[0].new_zeros(the_shape)
+    for img, pad_img in zip(images, new_ims):
+        pad_img[: img.shape[0], : img.shape[1], : img.shape[2]].copy_(img)
+    return new_ims

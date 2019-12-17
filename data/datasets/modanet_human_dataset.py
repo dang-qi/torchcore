@@ -84,6 +84,7 @@ class ModanetHumanDataset(Dataset):
         targets = {}
         targets['boxes'] = boxes
         targets['im_id'] = image['id']
+        targets['image_path'] = im_path
 
         if self._transforms is not None:
             inputs, targets = self._transforms(inputs, targets)
@@ -94,34 +95,34 @@ class ModanetHumanDataset(Dataset):
 
         return inputs, targets
 
-    def collate_fn(self, batch):
-        inputs, targets = list(zip(*batch))
-        if targets[0] is None:
-            targets = None
-        else:
-            # Remove empty placeholder targets
-            targets = [target for target in targets if target is not None]
-            # Add sample index to targets
-            for i, target in enumerate(targets):
-                boxes = target['origin']
-                boxes[:, 0] = i
-            boxes = torch.cat(tuple([target['origin'] for target in targets]), 0)
-            pads = [target['pad'] for target in targets]
-            scales = [target['scale'] for target in targets]
-            im_ids = [target['im_id'] for target in targets]
+    #def collate_fn(self, batch):
+    #    inputs, targets = list(zip(*batch))
+    #    if targets[0] is None:
+    #        targets = None
+    #    else:
+    #        # Remove empty placeholder targets
+    #        targets = [target for target in targets if target is not None]
+    #        # Add sample index to targets
+    #        for i, target in enumerate(targets):
+    #            boxes = target['origin']
+    #            boxes[:, 0] = i
+    #        boxes = torch.cat(tuple([target['origin'] for target in targets]), 0)
+    #        pads = [target['pad'] for target in targets]
+    #        scales = [target['scale'] for target in targets]
+    #        im_ids = [target['im_id'] for target in targets]
 
-            targets = {}
-            targets['origin'] = boxes
-            targets['pad'] = pads
-            targets['scale'] = scales
-            targets['im_id'] = im_ids
-        ## Selects new image size every tenth batch
-        #if self.multiscale and self.batch_count % 10 == 0:
-        #    self.img_size = random.choice(range(self.min_size, self.max_size + 1, 32))
-        # Resize images to input shape
-        imgs = torch.stack([resize(img, self.img_size) for img in imgs])
-        self.batch_count += 1
-        return paths, imgs, targets
+    #        targets = {}
+    #        targets['origin'] = boxes
+    #        targets['pad'] = pads
+    #        targets['scale'] = scales
+    #        targets['im_id'] = im_ids
+    #    ## Selects new image size every tenth batch
+    #    #if self.multiscale and self.batch_count % 10 == 0:
+    #    #    self.img_size = random.choice(range(self.min_size, self.max_size + 1, 32))
+    #    # Resize images to input shape
+    #    imgs = torch.stack([resize(img, self.img_size) for img in imgs])
+    #    self.batch_count += 1
+    #    return paths, imgs, targets
 
     def __len__(self):
         return len(self.images)
@@ -131,11 +132,12 @@ class ModanetHumanDataset(Dataset):
             remove the boxes out of the human box
         '''
         for image in self.images:
-            for obj in image['objects']:
+            for i in range(len(image['objects'])-1, -1, -1):
+                obj = image['objects'][i]
                 human_box = image['human_box'] if self.use_revised_box else image['human_box_det']
                 obj['bbox'] = _convert_box_cord(human_box, _to_xyxy(obj['bbox']))
                 if obj['bbox'] is None:
-                    image['objects'].remove(obj)
+                    del image['objects'][i]
 
     def _has_bad_human_box(self, image):
             human_box = image['human_box'] if self.use_revised_box else image['human_box_det']

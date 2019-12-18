@@ -2,6 +2,7 @@ from PIL import Image
 import collections
 import torch
 import math
+import numpy as np
 try:
     import accimage
 except ImportError:
@@ -91,12 +92,17 @@ class ToTensor(object):
         if targets is not None:
             if 'boxes' in targets:
                 targets['boxes'] = torch.from_numpy(targets['boxes'])
+            if 'labels' in targets:
+                targets['labels'] = torch.from_numpy(targets['labels'])
+            if 'cat_labels' in targets:
+                targets['labels'] = torch.from_numpy(targets['cat_labels'])
+
         return inputs, targets
 
 class Normalize(object):
     def __init__(self, mean=None, std=None):
         if mean is None:
-            mean=[0.485, 0.456, 0.406],
+            mean=[0.485, 0.456, 0.406]
         if std is None:
             std=[0.229, 0.224, 0.225]
         self.mean = mean
@@ -141,6 +147,7 @@ class GroupPadding(object):
             images(list[tensors]): input images for group padding
         '''
         images  = F.group_padding(images, self.width, self.height)
+        return images
 
 class GeneralRCNNTransform(object):
     def __init__(self, min_size, max_size, device, image_mean=None, image_std=None):
@@ -161,21 +168,30 @@ class GeneralRCNNTransform(object):
             targets(list[dict{'boxes':x1y1x2y2, 'cat_labels':}])
         '''
         images = []
+        scales = np.zeros(len(inputs))
         if targets is None:
             targets=[None]*len(inputs)
 
-        for ainput, target in zip(inputs, targets):
+        for i, (ainput, target) in enumerate(zip(inputs, targets)):
             # this is operated in
             ainput, target = self.resize_min_max(ainput, target)
 
             # normalize after resize, which might be slower 
             ainput, target = self.to_tensor(ainput, target)
             # set the tensor to device before normalize
-            ainput['data'].to(self.device)
+            #ainput['data'].to(self.device)
+            scales[i] = ainput['scale']
             ainput, target = self.normalize(ainput, target)
             images.append(ainput['data'])
         max_size = tuple(max(s) for s in zip(*[img.shape for img in images]))
         _, height, width = max_size
 
+        image_sizes = [img.shape[-2:] for img in images]
         self.group_padding = GroupPadding(width, height, size_devidable=32)
-        inputs['data'] = self.group_padding(images)
+        im_tensor = self.group_padding(images)
+
+        inputs = {}
+        inputs['data'] = im_tensor
+        inputs['scale'] = scales
+        inputs['image_sizes'] = image_sizes
+        return inputs, targets

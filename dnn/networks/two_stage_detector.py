@@ -27,9 +27,9 @@ class TwoStageDetector(nn.Module):
         features = self.backbone(inputs['data'])
         if  self.has_neck():
             features = self.neck(features)
-        proposals, proposal_losses = self.rpn(features, targets)
-        rois = self.roi_extractor(proposals)
-        bbox, bbox_losses = self.bbox_heads(rois, targets)
+        proposals, proposal_losses = self.rpn(inputs, features, targets)
+        #rois = self.roi_extractor(proposals)
+        bbox, bbox_losses = self.bbox_heads(features, proposals, inputs['image_sizes'], targets)
         
         losses = {}
         losses.update(proposal_losses)
@@ -38,7 +38,7 @@ class TwoStageDetector(nn.Module):
         if self.training:
             return losses
 
-        bbox = self.post_process(bbox)
+        bbox = self.post_process(inputs, bbox)
         return bbox
 
 

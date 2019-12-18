@@ -4,10 +4,11 @@ from torchvision.models.detection.rpn import RPNHead
 from torchvision.models.detection.roi_heads import RoIHeads
 from torchvision.ops import MultiScaleRoIAlign
 from .two_stage_detector import TwoStageDetector
-from rpn import MyRegionProposalNetwork,MyAnchorGenerator
+from .rpn import MyRegionProposalNetwork, MyAnchorGenerator
 
 class FasterRCNN(TwoStageDetector):
     def __init__(self, backbone, num_classes, neck = None, rpn=None, roi_extractor=None, bbox_heads=None, cfg=None):
+        super().__init__(backbone, neck=neck, rpn=rpn, roi_extractor=roi_extractor, bbox_heads=bbox_heads, cfg=cfg)
 
         if not hasattr(backbone, "out_channels"):
             raise ValueError(
@@ -19,9 +20,9 @@ class FasterRCNN(TwoStageDetector):
         if rpn is None:
             anchor_generator = MyAnchorGenerator(sizes=cfg.rpn.anchor_sizes, aspect_ratios=cfg.rpn.aspect_ratios)
             rpn_head = RPNHead(self.backbone.out_channels, anchor_generator.num_anchors_per_location()[0])
-            pre_nms_top_n = dict(training=cfg.rpn.train_pre_nums_top_n, testing=cfg.rpn.test_pre_nums_top_n)
-            post_nms_top_n = dict(training=cfg.rpn.train_post_nums_top_n, testing=cfg.rpn.test_post_nums_top_n)
-            self.rpn = MyRegionProposalNetwork(anchor_generator, 
+            pre_nms_top_n = dict(training=cfg.rpn.train_pre_nms_top_n, testing=cfg.rpn.test_pre_nms_top_n)
+            post_nms_top_n = dict(training=cfg.rpn.train_post_nms_top_n, testing=cfg.rpn.test_post_nms_top_n)
+            rpn = MyRegionProposalNetwork(anchor_generator, 
                                              rpn_head, 
                                              cfg.rpn.fg_iou_thresh, 
                                              cfg.rpn.bg_iou_thresh, 
@@ -32,13 +33,13 @@ class FasterRCNN(TwoStageDetector):
                                              cfg.rpn.nms_thresh)
         
         if roi_extractor is None:
-            self.roi_extractor = MultiScaleRoIAlign(
+            roi_extractor = MultiScaleRoIAlign(
                 featmap_names=[0, 1, 2, 3],
                 output_size=7,
                 sampling_ratio=2)                                    
         
         if bbox_heads is None:
-            resolution = self.roi_extractor.output_size[0]
+            resolution = roi_extractor.output_size[0]
             representation_size = 1024
             box_head = TwoMLPHead(
                 self.backbone.out_channels * resolution ** 2,
@@ -49,18 +50,25 @@ class FasterRCNN(TwoStageDetector):
                 representation_size,
                 num_classes)
 
-            roi_heads = RoIHeads(
+            bbox_heads = RoIHeads(
             # Box
-            self.roi_extractor, box_head, box_predictor,
+            roi_extractor, box_head, box_predictor,
             cfg.roi_head.fg_iou_thresh, cfg.roi_head.bg_iou_thresh,
-            cfg.roi_head.batch_size_per_image, cfg.roi_head.ositive_fraction,
+            cfg.roi_head.batch_size_per_image, cfg.roi_head.positive_fraction,
             cfg.roi_head.reg_weights,
-            cfg.roi_head.score_thresh, cfg.roi_head.nms_thresh, cfg.roi_head.detections_per_img)
+            cfg.roi_head.score_thresh, cfg.roi_head.nms_thresh, cfg.roi_head.detections_per_image)
         
         self.neck = neck
         self.rpn = rpn
-        self.roi_extractor = roi_extractor
-        self.roi_heads = roi_heads
+        #self.roi_extractor = roi_extractor
+        self.bbox_heads = bbox_heads
+
+    def post_process(self, inputs, predictions):
+        scales = inputs['scale']
+        for i, (pred, scale) in enumerate(zip(predictions, scales)):
+            if 'boxes' in pred:
+                pred['boxes'] = pred['boxes'] / scale
+        return predictions
 
 
 # from torchvision

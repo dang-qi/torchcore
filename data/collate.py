@@ -1,4 +1,4 @@
-from .transforms import Resize_and_Padding, ToTensor, Compose
+from .transforms import ResizeAndPadding, ToTensor, Compose
 import torch
 
 class rcnn_collate(object):
@@ -20,7 +20,7 @@ class collate_fn(object):
 
     def __call__(self, batch):
         inputs, targets = list(zip(*batch))
-        if batch_transforms is not None:
+        if self.batch_transforms is not None:
             inputs, targets = self.batch_transforms(inputs, targets)
         # stack the images in batch
 
@@ -29,7 +29,7 @@ class yolo_collate(object):
     ''' collate function for yolo, inputs are (inputs, targets)'''
     def __init__(self, size, img_mean=None, img_std=None):
         #self.transforms = Compose(Resize_and_Padding(size), ToTensor())
-        self.transforms = Compose([Resize_and_Padding(size), ToTensor()])
+        self.transforms = Compose([ResizeAndPadding(size), ToTensor()])
 
     def __call__(self, batch):
         imgs = []
@@ -58,7 +58,7 @@ class test_collate(object):
     def __init__(self, size, img_mean=None, img_std=None):
         #self.transforms = Compose(Resize_and_Padding(size), ToTensor())
         # test all the transform here
-        self.transforms = Compose([Resize_and_Padding(size)])
+        self.transforms = Compose([ResizeAndPadding(size)])
 
     def __call__(self, batch):
         imgs = []

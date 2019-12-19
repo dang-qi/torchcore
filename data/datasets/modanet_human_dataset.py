@@ -43,23 +43,22 @@ class ModanetHumanDataset(Dataset):
         with open(anno_root, 'rb') as f:
             self.images = pickle.load(f)[part]
         self.use_revised_box=use_revised_box
-        #self.img_size = image_size
-        #self.multiscale = multiscale
-        #self.min_size = self.img_size - 3 * 32
-        #self.max_size = self.img_size + 3 * 32
-        #self.augment = augment
         self.box_extend = box_extend
+        self._part = part
         self._remove_image_with_bad_box()
         self._convert_human_box(extend=box_extend)
         # convert all the box cordinates to relative cordinate with human box
         self._convert_all_box_cord()
+        # remove the images without valid human
+        #if self._part =='train':
+        self._remove_empty_image()
 
     def __getitem__(self, idx):
         # ---------
         #  Image
         # ---------
         image = self.images[idx]
-        im_path = os.path.join(self._root, image['file_name'])
+        im_path = os.path.join(self._root, 'train', image['file_name'])
 
         # Extract cropped image as PyTorch tensor
         box = image['human_box'] if self.use_revised_box else image['human_box_det']
@@ -70,11 +69,13 @@ class ModanetHumanDataset(Dataset):
         #  Label
         # ---------
 
+        boxes = np.zeros([], dtype=np.float32)
+        categories = np.zeros([], dtype=np.int64)
         if len(image['objects'])>0:
-            boxes = np.zeros((len(image['objects']), 4), dtype=float)
-            categories = np.zeros((len(image['objects']), 1), dtype=float)
+            boxes = np.zeros((len(image['objects']), 4), dtype=np.float32)
+            categories = np.zeros((len(image['objects'])), dtype=np.int64)
             for i, a_object in enumerate(image['objects']):
-                categories[i] = a_object['category_id'] - 1
+                categories[i] = a_object['category_id'] 
                 boxes[i] = a_object['bbox']
 
 
@@ -83,46 +84,14 @@ class ModanetHumanDataset(Dataset):
 
         targets = {}
         targets['boxes'] = boxes
-        targets['im_id'] = image['id']
+        targets['image_id'] = image['id']
         targets['image_path'] = im_path
+        targets['labels'] = categories
 
         if self._transforms is not None:
             inputs, targets = self._transforms(inputs, targets)
-        ## Apply augmentations
-        #if self.augment:
-        #    if np.random.random() < 0.5:
-        #        img, targets['origin'] = horisontal_flip(img, targets['origin'])
 
         return inputs, targets
-
-    #def collate_fn(self, batch):
-    #    inputs, targets = list(zip(*batch))
-    #    if targets[0] is None:
-    #        targets = None
-    #    else:
-    #        # Remove empty placeholder targets
-    #        targets = [target for target in targets if target is not None]
-    #        # Add sample index to targets
-    #        for i, target in enumerate(targets):
-    #            boxes = target['origin']
-    #            boxes[:, 0] = i
-    #        boxes = torch.cat(tuple([target['origin'] for target in targets]), 0)
-    #        pads = [target['pad'] for target in targets]
-    #        scales = [target['scale'] for target in targets]
-    #        im_ids = [target['im_id'] for target in targets]
-
-    #        targets = {}
-    #        targets['origin'] = boxes
-    #        targets['pad'] = pads
-    #        targets['scale'] = scales
-    #        targets['im_id'] = im_ids
-    #    ## Selects new image size every tenth batch
-    #    #if self.multiscale and self.batch_count % 10 == 0:
-    #    #    self.img_size = random.choice(range(self.min_size, self.max_size + 1, 32))
-    #    # Resize images to input shape
-    #    imgs = torch.stack([resize(img, self.img_size) for img in imgs])
-    #    self.batch_count += 1
-    #    return paths, imgs, targets
 
     def __len__(self):
         return len(self.images)
@@ -171,6 +140,11 @@ class ModanetHumanDataset(Dataset):
             else:
                 image['human_box_det'] = [x1, y1, x2, y2]
 
+    def _remove_empty_image(self):
+        num_before = len(self.images)
+        self.images = [image for image in self.images if len(image['objects'])>0]
+        num_after = len(self.images)
+        print("{} images have been removed because they have no boxes!".format(num_before-num_after))
     def get_human_boxes(self):
         id_box_map = {}
         for image in self.images:

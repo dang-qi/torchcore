@@ -2,6 +2,7 @@ from PIL import Image
 import collections
 import torch
 import math
+import random
 import numpy as np
 try:
     import accimage
@@ -194,4 +195,20 @@ class GeneralRCNNTransform(object):
         inputs['data'] = im_tensor
         inputs['scale'] = scales
         inputs['image_sizes'] = image_sizes
+        return inputs, targets
+
+class RandomMirror(object):
+    def __init__(self, probability=0.5):
+        self.probability = probability
+
+    def __call__(self, inputs, targets):
+        inputs['mirrored'] = False
+        if random.random() < self.probability:
+            inputs['mirrored'] = True
+            inputs['data'] = F.mirror(inputs['data'])
+            
+            if 'boxes' in targets:
+                im_width = inputs['data'].width
+                targets['boxes'] = F.mirror_boxes(targets['boxes'], im_width)
+        
         return inputs, targets

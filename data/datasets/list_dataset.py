@@ -16,6 +16,8 @@ class ListDataset(Dataset):
 
         if self.transforms is not None:
             inputs['data'],  targets = self.transforms(img, targets)
+        else:
+            inputs['data'] = img
 
         return inputs, targets
 

@@ -22,7 +22,8 @@ class trainer :
         #if testset is not None :
         #    self._testset_feeder = data_feeder( testset )
 
-        self._set_optimizer()
+        if trainset is not None:
+            self._set_optimizer()
 
     def _set_optimizer( self ):
         params = self._cfg.dnn.OPTIMIZER

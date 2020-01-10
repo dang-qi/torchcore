@@ -145,6 +145,7 @@ class ModanetHumanDataset(Dataset):
         self.images = [image for image in self.images if len(image['objects'])>0]
         num_after = len(self.images)
         print("{} images have been removed because they have no boxes!".format(num_before-num_after))
+
     def get_human_boxes(self):
         id_box_map = {}
         for image in self.images:

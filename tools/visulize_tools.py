@@ -1,7 +1,11 @@
 import matplotlib.pyplot as plt
 import numpy as np
 from PIL.ImageDraw import Draw
+from PIL import ImageFont
+from .color_gen import random_colors
 import os
+
+FONT_PATH = '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'
 
 def parse_loss_log(log_path, losses_names):
     epoch = 0
@@ -105,24 +109,46 @@ def draw_pair_class_accuracy(log_path, name, out_path, dataset_name, interval=0,
 
     plt.savefig(out_path.format('pair_classification'), dpi=300)
 
+def get_font(size):
+    font = ImageFont.truetype(FONT_PATH, size)
+    return font
 
-def draw_single_image(image, boxes, scores=None): 
+def draw_single_image(image, boxes, scores, class_inds, colors, class_names): 
     # (x1, y1, x2, y2, object_conf, class_score, class_pred)
+    font = get_font(26)
     if boxes is not None:
         draw = Draw(image)
-        for i, box in enumerate(boxes):
+        for box, score, class_ind in zip(boxes, scores, class_inds):
             if type(box) == list:
                 return image
             if type(box) is not np.ndarray:
                 box = box.detach().cpu().numpy()
-            box_rec = list(box[:4])
-            draw.rectangle(box_rec)
-            if scores is not None:
-                draw.text((box[0], box[1]), '{:.2f}'.format(scores[i]))
+            box_rec = box[:4]
+            draw.rectangle(box_rec, outline=colors[class_ind], width=3)
+            draw.text((box[0], box[1]), '{:.2f} {}'.format(score, class_names[class_ind]), font=font, fill=colors[class_ind] )
     return image
 
-def draw_and_save(images, batch_boxes, path, im_ids):
-    for i, (image, boxes) in enumerate(zip(images, batch_boxes)):
-        image = draw_single_image(image, boxes)
-        im_path = os.path.join(path, '{}.jpg'.format(im_ids[i]))
+def draw_boxes(images, batch_boxes, batch_scores, batch_class_ind, class_names):
+    class_num = len(class_names)
+    colors = random_colors(class_num)
+    for image, boxes, scores, class_ind in zip(images, batch_boxes, batch_scores, batch_class_ind):
+        image = draw_single_image(image, boxes, scores, class_ind, colors, class_names)
+
+def save_images(images, path, ind_start):
+    for i, image in enumerate(images):
+        im_path = os.path.join(path, '{:06d}.jpg'.format(ind_start+i))
         image.save(im_path)
+
+def draw_and_save(images, batch_boxes, batch_scores, batch_class_ind, path, ind_start, class_names):
+    '''
+        images: a list of PIL Image
+        batch_boxes: list(np.array(n*4) or None for no detection, np.array(m*4), ...)
+        batch_scores: list(np.array(n1),np.array(n2)...)
+        batch_class_ind: list(np.array(n1),np.array(n2)...)
+        path: out_path to save the images
+        ind_start: the saveed image is formated as {:06d}.jpg
+        class_names: list(name1, name2)
+    '''
+    #colors = random_color_fix(class_num)
+    draw_boxes(images, batch_boxes, batch_scores, batch_class_ind, class_names)
+    save_images(images, path, ind_start)

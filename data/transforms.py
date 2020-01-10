@@ -169,6 +169,7 @@ class GeneralRCNNTransform(object):
             targets(list[dict{'boxes':x1y1x2y2, 'cat_labels':}])
         '''
         images = []
+        image_path = []
         scales = np.zeros(len(inputs))
         if targets is None:
             targets=[None]*len(inputs)
@@ -184,6 +185,10 @@ class GeneralRCNNTransform(object):
             scales[i] = ainput['scale']
             ainput, target = self.normalize(ainput, target)
             images.append(ainput['data'])
+
+            if 'path' in ainput:
+                image_path.append(ainput['path'])
+
         max_size = tuple(max(s) for s in zip(*[img.shape for img in images]))
         _, height, width = max_size
 
@@ -195,6 +200,7 @@ class GeneralRCNNTransform(object):
         inputs['data'] = im_tensor
         inputs['scale'] = scales
         inputs['image_sizes'] = image_sizes
+        inputs['path'] = image_path
         return inputs, targets
 
 class RandomMirror(object):

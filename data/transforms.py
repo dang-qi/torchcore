@@ -151,7 +151,7 @@ class GroupPadding(object):
         return images
 
 class GeneralRCNNTransform(object):
-    def __init__(self, min_size, max_size, device, image_mean=None, image_std=None):
+    def __init__(self, min_size, max_size, image_mean=None, image_std=None):
         self.min_size = min_size
         self.max_size = max_size
         self.image_mean = image_mean
@@ -159,7 +159,7 @@ class GeneralRCNNTransform(object):
         self.resize_min_max = ResizeMinMax(min_size, max_size)
         self.normalize = Normalize(mean=image_mean, std=image_std)
         self.to_tensor = ToTensor()
-        self.device = device
+        #self.device = device
         #self.transforms = Compose(self.resize_min_max, self.to_tensor)
 
     def __call__(self, inputs, targets=None):

@@ -46,7 +46,7 @@ class COCOPersonDataset(Dataset):
         targets["boxes"] = boxes
         targets["cat_labels"] = labels 
         #target["masks"] = masks
-        targets["image_id"] = np.array(image_id)
+        targets["image_id"] = image_id
         #target["area"] = area
         #target["iscrowd"] = iscrowd
         if self._transforms is not None:

@@ -12,6 +12,7 @@ class ListDataset(Dataset):
         img = Image.open(img_path).convert('RGB')
         inputs = {}
         inputs['path'] = img_path
+        inputs['ori_image'] = img
         targets = None
 
         if self.transforms is not None:

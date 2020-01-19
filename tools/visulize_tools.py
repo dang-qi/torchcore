@@ -113,9 +113,9 @@ def get_font(size):
     font = ImageFont.truetype(FONT_PATH, size)
     return font
 
-def draw_single_image(image, boxes, scores, class_inds, colors, class_names): 
+def draw_single_image(image, boxes, scores, class_inds, colors, class_names, font_size=26): 
     # (x1, y1, x2, y2, object_conf, class_score, class_pred)
-    font = get_font(26)
+    font = get_font(font_size)
     if boxes is not None:
         draw = Draw(image)
         for box, score, class_ind in zip(boxes, scores, class_inds):
@@ -128,18 +128,18 @@ def draw_single_image(image, boxes, scores, class_inds, colors, class_names):
             draw.text((box[0], box[1]), '{:.2f} {}'.format(score, class_names[class_ind]), font=font, fill=colors[class_ind] )
     return image
 
-def draw_boxes(images, batch_boxes, batch_scores, batch_class_ind, class_names):
+def draw_boxes(images, batch_boxes, batch_scores, batch_class_ind, class_names, font_size=26):
     class_num = len(class_names)
     colors = random_colors(class_num)
     for image, boxes, scores, class_ind in zip(images, batch_boxes, batch_scores, batch_class_ind):
-        image = draw_single_image(image, boxes, scores, class_ind, colors, class_names)
+        image = draw_single_image(image, boxes, scores, class_ind, colors, class_names, font_size=font_size)
 
 def save_images(images, path, ind_start):
     for i, image in enumerate(images):
         im_path = os.path.join(path, '{:06d}.jpg'.format(ind_start+i))
         image.save(im_path)
 
-def draw_and_save(images, batch_boxes, batch_scores, batch_class_ind, path, ind_start, class_names):
+def draw_and_save(images, batch_boxes, batch_scores, batch_class_ind, path, ind_start, class_names, font_size=26):
     '''
         images: a list of PIL Image
         batch_boxes: list(np.array(n*4) or None for no detection, np.array(m*4), ...)
@@ -150,5 +150,5 @@ def draw_and_save(images, batch_boxes, batch_scores, batch_class_ind, path, ind_
         class_names: list(name1, name2)
     '''
     #colors = random_color_fix(class_num)
-    draw_boxes(images, batch_boxes, batch_scores, batch_class_ind, class_names)
+    draw_boxes(images, batch_boxes, batch_scores, batch_class_ind, class_names, font_size=font_size)
     save_images(images, path, ind_start)

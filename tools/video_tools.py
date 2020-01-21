@@ -31,7 +31,7 @@ def generate_video(frame_folder, out_path, fourcc='MJPG', frame_rate=24):
     image = cv2.imread(images[0])
     height, width, layers = image.shape
     size = (width,height)
-    out = cv2.VideoWriter(out_path,cv2.VideoWriter_fourcc(*fourcc), 24, size)
+    out = cv2.VideoWriter(out_path,cv2.VideoWriter_fourcc(*fourcc), frame_rate, size)
     for image_path in images:
         image = cv2.imread(image_path)
         out.write(image)

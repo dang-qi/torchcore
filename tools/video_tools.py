@@ -21,6 +21,7 @@ def extract_frames(video_path, out_path, resize=None):
         if count% 100==0:
             print('Save frame {}'.format(count))
         count += 1
+    vidcap.release()
 
 def generate_video(frame_folder, out_path, fourcc='MJPG', frame_rate=24):
     '''

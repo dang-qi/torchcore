@@ -1,7 +1,8 @@
 import torch.nn as nn
 import torch
 import torch.nn.functional as F
-from dnn.networks import common
+#from dnn.networks import common
+from .. import common
 
 class EasyNet(nn.Module):
     def _init_weights( self ):

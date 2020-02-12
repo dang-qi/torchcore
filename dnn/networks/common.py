@@ -30,8 +30,12 @@ def init( m ):
         fill_up_weights(m)
     elif isinstance(m, nn.Dropout):
         pass
+    elif isinstance(m, nn.ReLU):
+        pass
     else:
         print('{} is not initialized'.format(type(m)))
+        return
+    #print('{} is already initialized'.format(type(m)))
 
 def fill_up_weights(up):
     w = up.weight.data

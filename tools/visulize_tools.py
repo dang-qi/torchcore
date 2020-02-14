@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 from PIL.ImageDraw import Draw
-from PIL import ImageFont
+from PIL import ImageFont, Image
 from .color_gen import random_colors
 import os
 
@@ -152,3 +152,20 @@ def draw_and_save(images, batch_boxes, batch_scores, batch_class_ind, path, ind_
     #colors = random_color_fix(class_num)
     draw_boxes(images, batch_boxes, batch_scores, batch_class_ind, class_names, font_size=font_size)
     save_images(images, path, ind_start)
+
+def draw_single_box(image, box):
+    draw = Draw(image)
+    draw.rectangle(box, outline=(255, 0, 0), width=3)
+    return image
+
+def visulize_heatmaps_with_image(heatmap, image):
+    heatmap = np.amax(heatmap,axis=0)
+    heatmap = Image.fromarray((heatmap*255).astype(np.uint8)).convert('RGB')
+    heatmap = heatmap.resize(image.size)
+    blend_im = Image.blend(heatmap, image, 0.5)
+    blend_im.show()
+
+def visulize_heatmaps(heatmap):
+    heatmap = np.amax(heatmap,axis=0)
+    heatmap = Image.fromarray((heatmap*255).astype(np.uint8)).convert('RGB')
+    heatmap.show()

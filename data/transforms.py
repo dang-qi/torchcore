@@ -228,16 +228,34 @@ class RandomCrop(object):
         if isinstance(size, Iterable):
             self.size = size
         else:
-            size == [size, size]
-        assert len(size) == 2
+            self.size = [size, size]
+        assert len(self.size) == 2
 
     def __call__(self, inputs, targets):
         image = inputs['data']
-        width, height = image.size
         inputs['data'], position = F.random_crop(image, self.size)
         inputs['crop_position'] = position
 
         if 'boxes' in targets:
             targets['boxes'] = F.random_crop_boxes(targets['boxes'], position)
+        return inputs, targets
 
+class RandomScale(object):
+    def __init__(self, low, high):
+        assert low > 0
+        assert high > 0
+        assert low<=high
+        self.low =low
+        self.high = high
+
+    def __call__(self, inputs, targets):
+        scale = random.uniform(self.low, self.high)
+        image = inputs['data']
+        inputs['data'] = F.scale(image, scale)
+        inputs['random_scale'] = scale
+
+        if 'boxes' in targets:
+            targets['boxes'] = F.scale_box(targets['boxes'], scale)
+        
+        return inputs, targets
 

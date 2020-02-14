@@ -351,3 +351,11 @@ def random_crop_boxes(boxes, position):
     boxes[:,3] = np.clip(boxes[:,3], 0, position[3]-position[1])
     return boxes
 
+def scale(image, scale):
+    width, height = image.size
+    width = int(width*scale)
+    height = int(height*scale)
+    return image.resize((width, height))
+
+def scale_box(boxes, scale):
+    return boxes*scale

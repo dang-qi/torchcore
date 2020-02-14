@@ -1,16 +1,66 @@
 import torch
 import sys
+import os
+import random
 sys.path.append('torchcore')
+from PIL import Image
+import numpy as np
+import torch
 
-from torchcore.dnn import networks
-from torchcore.dnn.networks.center_net import CenterNet 
+from dnn import networks
+from dnn.networks.center_net import CenterNet 
 from torchvision.models import resnet50
-from torchcore.data.datasets import COCOPersonCenterDataset
+from data.datasets import COCOPersonCenterDataset
+from data.transforms import Compose, RandomCrop, RandomScale, RandomMirror, ToTensor, Normalize
+from tools.visulize_tools import draw_single_box, visulize_heatmaps_with_image
 
 def dataset_test():
-    anno_path = '/ssd/data/annotations/coco2017_instances_person.pkl'
-    root = '/ssd/data/datasets/COCO'
-    dataset = COCOPersonCenterDataset(root=root, anno=anno_path, part='train2017',transforms=transforms)
+    anno_path = os.path.expanduser('~/Vision/data/annotations/coco2014_instances_person_debug.pkl')
+    root = os.path.expanduser('~/Vision/data/datasets/COCO')
+    transform_list = []
+    random_crop = RandomCrop(512)
+    random_scale = RandomScale(0.6, 1.4)
+    random_mirror = RandomMirror()
+    to_tensor= ToTensor()
+    normalize = Normalize()
+    transform_list.append(random_scale)
+    transform_list.append(random_crop)
+    transform_list.append(random_mirror)
+    #transform_list.append(to_tensor)
+    #transform_list.append(normalize)
+    transforms = Compose(transform_list)
+    dataset = COCOPersonCenterDataset(root=root, anno=anno_path, part='val2014',transforms=transforms)
+    #index = random.randint(0, 99)
+    #index = 1
+    #inputs, targets = dataset[index]
+    #im = inputs['data']
+    #heatmap = targets['heatmap']
+    #heatmap_im = np.amax(heatmap,axis=0)
+    #heatmap_im = Image.fromarray((heatmap_im*255).astype(np.uint8)).convert('RGB')
+    #heatmap_im = heatmap_im.resize(im.size)
+    #boxes = targets['boxes']
+    #labels = targets['cat_labels']
+    #for box in boxes:
+    #    draw_single_box(heatmap_im, box)
+    #heatmap_im.show()
+    
+    #visulize_heatmaps_with_image(heatmap, im)
+    #print(im.size)
+    data_loader = torch.utils.data.DataLoader(
+      dataset, 
+      batch_size=4, 
+      shuffle=True,
+      num_workers=2,
+      pin_memory=True,
+      drop_last=True
+    )
+    for inputs,targets in data_loader:
+        print(inputs.keys())
+        print(targets.keys())
+        for k, v in targets.items():
+            print('{}:{}'.format(k, v.shape))
+        break
+    #im.show()
 
 def network_test():
     a = torch.randn(2, 3, 224, 224)

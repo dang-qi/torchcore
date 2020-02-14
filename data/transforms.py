@@ -220,9 +220,24 @@ class RandomMirror(object):
         return inputs, targets
 
 class RandomCrop(object):
+    '''
+       Random crop to the image
+       The padding will be added if the image is too samll
+    '''
     def __init__(self, size):
-        self.size = size
+        if isinstance(size, Iterable):
+            self.size = size
+        else:
+            size == [size, size]
+        assert len(size) == 2
 
     def __call__(self, inputs, targets):
-        pass
+        image = inputs['data']
+        width, height = image.size
+        inputs['data'], position = F.random_crop(image, self.size)
+        inputs['crop_position'] = position
+
+        if 'boxes' in targets:
+            targets['boxes'] = F.random_crop_boxes(targets['boxes'], position)
+
 

@@ -7,6 +7,7 @@ except ImportError:
     accimage = None
 import numpy as np
 import numbers
+import random
 
 Iterable = collections.abc.Iterable
 Sequence = collections.abc.Sequence
@@ -326,3 +327,27 @@ def group_padding(images, width, height):
     for img, pad_img in zip(images, new_ims):
         pad_img[: img.shape[0], : img.shape[1], : img.shape[2]].copy_(img)
     return new_ims
+
+def random_crop(image, size):
+    width, height = image.size
+    range_w = width - size[0] if width > size[0] else 0
+    range_h = height - size[1] if height > size[1] else 0
+    x1 = random.randint(0, range_w)
+    y1 = random.randint(0, range_h)
+    x2 = x1 + size[0]
+    y2 = y1 + size[1]
+
+    cropped_im = image.crop((x1, y1, x2, y2))
+    return cropped_im, (x1, y1, x2, y2)
+
+def random_crop_boxes(boxes, position):
+    boxes[:,0] -= position[0]
+    boxes[:,2] -= position[0]
+    boxes[:,1] -= position[1]
+    boxes[:,3] -= position[1]
+    boxes[:,0] = np.clip(boxes[:,0], 0, position[2]-position[0])
+    boxes[:,2] = np.clip(boxes[:,2], 0, position[2]-position[0])
+    boxes[:,1] = np.clip(boxes[:,1], 0, position[3]-position[1])
+    boxes[:,3] = np.clip(boxes[:,3], 0, position[3]-position[1])
+    return boxes
+

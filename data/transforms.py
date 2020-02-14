@@ -218,3 +218,11 @@ class RandomMirror(object):
                 targets['boxes'] = F.mirror_boxes(targets['boxes'], im_width)
         
         return inputs, targets
+
+class RandomCrop(object):
+    def __init__(self, size):
+        self.size = size
+
+    def __call__(self, inputs, targets):
+        pass
+

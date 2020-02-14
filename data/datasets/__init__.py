@@ -16,6 +16,7 @@ from .coco_person import COCOPersonDataset
 from .modanet_dataset_new import ModanetDataset
 from .modanet_human_dataset import ModanetHumanDataset
 from .list_dataset import ListDataset
+from .coco_person_center import COCOPersonCenterDataset
 
 selector = {}
 selector['coco'] = coco_dataset

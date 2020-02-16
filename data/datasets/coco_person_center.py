@@ -84,7 +84,6 @@ class COCOPersonCenterDataset(COCOPersonDataset):
 
         ind = np.zeros(self._max_obj, dtype=int)
 
-        #inputs['data'] = np.array(inputs['data'])
         transforms_post = Compose([ToTensor(), Normalize()])
         inputs, _ = transforms_post(inputs )
 
@@ -95,8 +94,8 @@ class COCOPersonCenterDataset(COCOPersonDataset):
 
         return inputs, targets
 
-def generate_gaussian_heatmap(class_num, height, width, center_x, center_y, boxes_w, boxes_h, labels ):
-    heatmaps = np.zeros((class_num, width, height), dtype=np.float32)
+def generate_gaussian_heatmap(class_num, width, height, center_x, center_y, boxes_w, boxes_h, labels ):
+    heatmaps = np.zeros((class_num, height, width), dtype=np.float32)
     if len(center_x)== 0:
         return heatmaps
     center_x = center_x.astype(int)

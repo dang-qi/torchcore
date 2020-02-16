@@ -32,10 +32,10 @@ class CenterNetLoss(nn.Module):
             self.heatmap_loss = FocalLossHeatmap(alpha=0.5, gamma=2)
     
     def forward(self, pred, targets):
-        loss = 0
+        losses = {}
         if 'heatmap' in targets:
-            loss += self.heatmap_loss(pred['heatmap'], targets['heatmap'])
-        return loss
+            losses['heatmap'] = self.heatmap_loss(pred['heatmap'], targets['heatmap'])
+        return losses
 
 
 

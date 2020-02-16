@@ -43,9 +43,7 @@ class FocalLossHeatmap(nn.Module):
         neg_loss = (1 - self.alpha) * torch.pow(pred, self.gamma) * torch.log(1-pred) * neg_mask * neg_weight
 
         pos_loss = pos_loss.sum()
-        print(pos_loss)
         neg_loss = neg_loss.sum()
-        print(neg_loss)
         pos_num = pos_mask.sum()
 
         loss = 0

@@ -14,6 +14,35 @@ from torchvision.transforms import ToPILImage
 from data.datasets import COCOPersonCenterDataset
 from data.transforms import Compose, RandomCrop, RandomScale, RandomMirror, ToTensor, Normalize
 from tools.visulize_tools import draw_single_box, visulize_heatmaps_with_image
+from dnn.networks.losses import FocalLossHeatmap
+
+def get_data_loader():
+    anno_path = os.path.expanduser('~/Vision/data/annotations/coco2014_instances_person_debug.pkl')
+    root = os.path.expanduser('~/Vision/data/datasets/COCO')
+    transform_list = []
+    random_crop = RandomCrop((512,448)) #(width, height)
+    #random_crop = RandomCrop(512)
+    random_scale = RandomScale(0.6, 1.4)
+    random_mirror = RandomMirror()
+    to_tensor= ToTensor()
+    normalize = Normalize()
+    transform_list.append(random_scale)
+    transform_list.append(random_crop)
+    transform_list.append(random_mirror)
+    #transform_list.append(to_tensor)
+    #transform_list.append(normalize)
+    transforms = Compose(transform_list)
+    dataset = COCOPersonCenterDataset(root=root, anno=anno_path, part='val2014',transforms=transforms)
+
+    data_loader = torch.utils.data.DataLoader(
+      dataset, 
+      batch_size=2, 
+      shuffle=True,
+      num_workers=2,
+      pin_memory=True,
+      drop_last=True
+    )
+    return data_loader
 
 def dataset_test():
     anno_path = os.path.expanduser('~/Vision/data/annotations/coco2014_instances_person_debug.pkl')
@@ -82,3 +111,22 @@ def network_test():
     #print(b.keys())
     for key, item in b.items():
         print('{}:{}'.format(key, item.shape))
+
+def get_model():
+    backbone = networks.feature.resnet50()
+    in_channel = backbone.out_channel
+    neck = networks.neck['upsample_basic'](in_channel)
+    #net = resnet50()
+    backbone.multi_feature = False
+    loss_parts = ['heatmap']
+    model = CenterNet(backbone, 1, neck=neck, loss_parts=loss_parts)
+    return model
+
+
+def loss_test(data_loader, model):
+    #data_loader = get_data_loader()
+    #model = get_model()
+    for inputs, targets in data_loader:
+        loss = model(inputs, targets)
+        print(loss)
+        break

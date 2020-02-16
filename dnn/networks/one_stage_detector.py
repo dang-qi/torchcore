@@ -18,10 +18,8 @@ class OneStageDetector(nn.Module):
         pred = self.pred_heads(features)
 
         if self.training:
-            losses = self.losses(pred, targets)
-
-        if self.training:
-            return losses
+            loss = self.losses(pred, targets)
+            return loss
         
         output = self.postprocess(pred, inputs)
         return output

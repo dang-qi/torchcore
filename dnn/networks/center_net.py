@@ -40,11 +40,11 @@ class CenterNetLoss(nn.Module):
     
     def forward(self, pred, targets ):
         losses = {}
-        if 'heatmap' in targets:
+        if 'heatmap' in self.loss_parts:
             losses['heatmap'] = self.heatmap_loss(pred['heatmap'], targets['heatmap']) * self.loss_weight['heatmap']
-        if 'offset' in targets:
+        if 'offset' in self.loss_parts:
             losses['offset'] = self.offset_loss(pred['offset'], targets['mask'], targets['offset']) * self.loss_weight['offset']
-        if 'width_height' in targets:
+        if 'width_height' in self.loss_parts:
             losses['width_height'] = self.width_height_loss(pred['width_height'], targets['mask'], targets['width_height']) * self.loss_weight['width_height']
         return losses
 

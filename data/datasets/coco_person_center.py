@@ -61,12 +61,18 @@ class COCOPersonCenterDataset(COCOPersonDataset):
         height_out = height // self.down_stride
 
         # filter out the valid boxes
-        valid_box_ind = np.where(np.logical_and(boxes[:,3]>boxes[:,1],boxes[:,2]>boxes[:,0]))
+        boxes_out = targets['boxes']
+        valid_box_ind = np.where(np.logical_and(boxes_out[:,3]>boxes_out[:,1],boxes_out[:,2]>boxes_out[:,0]))
         valid_boxes = targets['boxes'][valid_box_ind]
         valid_labels = labels[valid_box_ind]
         targets['cat_labels'] = valid_labels
         del targets['cat_labels']
         del targets['boxes']
+
+        if (valid_boxes[:,2] / self.down_stride>=width_out).any():
+            print('x2 wrong', valid_boxes)
+        if (valid_boxes[:,3] / self.down_stride>=height_out).any():
+            print('y2 wrong', valid_boxes)
 
         center_x = (valid_boxes[:,0] + valid_boxes[:,2])/2 
         center_y = (valid_boxes[:,1] + valid_boxes[:,3])/2 
@@ -77,10 +83,13 @@ class COCOPersonCenterDataset(COCOPersonDataset):
 
         heatmaps = generate_gaussian_heatmap(class_num, width_out, height_out, center_x_out, center_y_out, boxes_w, boxes_h, labels )
 
-        offset = generate_offset(center_x_out, center_y_out, self._max_obj)
-        width_height = generate_width_height(valid_boxes, self._max_obj)
-        mask = np.zeros(self._max_obj, dtype=np.uint8)
-        mask[:len(valid_boxes)] = 1
+        #offset = generate_offset(center_x_out, center_y_out, self._max_obj)
+        offset_map = generate_offset_map(center_x_out, center_y_out, height_out, width_out)
+        #width_height = generate_width_height(valid_boxes, self._max_obj)
+        width_height_map = generate_width_height_map(valid_boxes, center_x_out, center_y_out, height_out, width_out)
+        mask = generate_mask(center_x_out, center_y_out, width_out, height_out)
+        #mask = np.zeros(self._max_obj, dtype=np.uint8)
+        #mask[:len(valid_boxes)] = 1
 
         ind = np.zeros(self._max_obj, dtype=int)
 
@@ -88,11 +97,17 @@ class COCOPersonCenterDataset(COCOPersonDataset):
         inputs, _ = transforms_post(inputs )
 
         targets['heatmap'] = heatmaps
-        targets['offset'] = offset
-        targets['width_height'] = width_height
+        targets['offset'] = offset_map
+        targets['width_height'] = width_height_map
         targets['mask'] = mask
 
         return inputs, targets
+
+def generate_mask(center_x, center_y, width, height):
+    mask = np.zeros((2, height, width), dtype=np.uint8)
+    for x,y in zip(center_x.astype(int), center_y.astype(int)):
+        mask[:,y,x] = True
+    return mask
 
 def generate_gaussian_heatmap(class_num, width, height, center_x, center_y, boxes_w, boxes_h, labels ):
     heatmaps = np.zeros((class_num, height, width), dtype=np.float32)
@@ -117,6 +132,30 @@ def generate_offset(center_x, center_y, max_length):
     offset[:real_len,0] = center_x - center_x.astype(int)
     offset[:real_len,1] = center_y - center_y.astype(int)
     return offset
+
+def generate_offset_map(center_x, center_y, height, width):
+    offset_map = np.zeros((2, height, width), dtype=np.float32)
+    center_x_int = center_x.astype(int)
+    center_y_int = center_y.astype(int)
+    offset_x = center_x - center_x_int
+    offset_y = center_y - center_y_int
+    if (center_x_int >= width).any():
+        print('center_x:{}, width:{}'.format(center_x_int, width))
+    if (center_y_int >= height).any():
+        print('center_y:{}, height:{}'.format(center_y_int, height))
+    for x, y, off_x, off_y in zip(center_x_int, center_y_int, offset_x, offset_y):
+        offset_map[:, y, x] = (off_x, off_y)
+    return offset_map
+    
+def generate_width_height_map(boxes, center_x, center_y, height, width):
+    width_height_map = np.zeros((2, height, width), dtype=np.float32)
+    center_x = center_x.astype(int)
+    center_y = center_y.astype(int)
+    width = boxes[:,2]-boxes[:,0]
+    height = boxes[:,3]-boxes[:,1]
+    for x, y, w, h in zip(center_x, center_y, width, height):
+        width_height_map[:, y, x] = (w, h)
+    return width_height_map
 
 def generate_width_height(boxes, max_length):
     real_len = len(boxes)

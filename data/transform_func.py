@@ -316,7 +316,7 @@ def mirror(image):
     return ImageOps.mirror(image)
 
 def mirror_boxes(boxes, im_width):
-    boxes[:,0], boxes[:,2] = im_width -boxes[:,2], im_width -boxes[:,0]
+    boxes[:,0], boxes[:,2] = im_width -boxes[:,2] - 1, im_width -boxes[:,0]-1
     #boxes[:,2] = im_width -boxes[:,2]
     return boxes
 
@@ -345,10 +345,10 @@ def random_crop_boxes(boxes, position):
     boxes[:,2] -= position[0]
     boxes[:,1] -= position[1]
     boxes[:,3] -= position[1]
-    boxes[:,0] = np.clip(boxes[:,0], 0, position[2]-position[0])
-    boxes[:,2] = np.clip(boxes[:,2], 0, position[2]-position[0])
-    boxes[:,1] = np.clip(boxes[:,1], 0, position[3]-position[1])
-    boxes[:,3] = np.clip(boxes[:,3], 0, position[3]-position[1])
+    boxes[:,0] = np.clip(boxes[:,0], 0, position[2]-position[0]-1)
+    boxes[:,2] = np.clip(boxes[:,2], 0, position[2]-position[0]-1)
+    boxes[:,1] = np.clip(boxes[:,1], 0, position[3]-position[1]-1)
+    boxes[:,3] = np.clip(boxes[:,3], 0, position[3]-position[1]-1)
     return boxes
 
 def scale(image, scale):

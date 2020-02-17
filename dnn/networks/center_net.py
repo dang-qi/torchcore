@@ -1,7 +1,7 @@
 import torch.nn as nn
 from .one_stage_detector import OneStageDetector
 from .heads import CommonHead, ComposedHead
-from .losses import FocalLossHeatmap
+from .losses import FocalLossHeatmap, L1LossWithMask
 
 class CenterNet(OneStageDetector):
     def __init__(self, backbone, num_classes, loss_parts=['heatmap'], cfg=None, neck=None, pred_heads=None):
@@ -25,16 +25,27 @@ class CenterNet(OneStageDetector):
         return pred
 
 class CenterNetLoss(nn.Module):
-    def __init__(self, loss_parts):
+    def __init__(self, loss_parts, loss_weight=None):
         super().__init__()
         self.loss_parts = loss_parts
+        if loss_weight is None:
+            loss_weight = {'heatmap':1., 'offset':1., 'width_height':0.1}
+            self.loss_weight = loss_weight
         if 'heatmap' in loss_parts:
             self.heatmap_loss = FocalLossHeatmap(alpha=0.5, gamma=2)
+        if 'offset' in loss_parts:
+            self.offset_loss = L1LossWithMask()
+        if 'width_height' in loss_parts:
+            self.width_height_loss = L1LossWithMask() 
     
-    def forward(self, pred, targets):
+    def forward(self, pred, targets ):
         losses = {}
         if 'heatmap' in targets:
-            losses['heatmap'] = self.heatmap_loss(pred['heatmap'], targets['heatmap'])
+            losses['heatmap'] = self.heatmap_loss(pred['heatmap'], targets['heatmap']) * self.loss_weight['heatmap']
+        if 'offset' in targets:
+            losses['offset'] = self.offset_loss(pred['offset'], targets['mask'], targets['offset']) * self.loss_weight['offset']
+        if 'width_height' in targets:
+            losses['width_height'] = self.width_height_loss(pred['width_height'], targets['mask'], targets['width_height']) * self.loss_weight['width_height']
         return losses
 
 

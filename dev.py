@@ -16,6 +16,25 @@ from data.transforms import Compose, RandomCrop, RandomScale, RandomMirror, ToTe
 from tools.visulize_tools import draw_single_box, visulize_heatmaps_with_image
 from dnn.networks.losses import FocalLossHeatmap
 
+def get_dataset():
+    anno_path = os.path.expanduser('~/Vision/data/annotations/coco2014_instances_person_debug.pkl')
+    root = os.path.expanduser('~/Vision/data/datasets/COCO')
+    transform_list = []
+    random_crop = RandomCrop((512,448)) #(width, height)
+    #random_crop = RandomCrop(512)
+    random_scale = RandomScale(0.6, 1.4)
+    random_mirror = RandomMirror()
+    to_tensor= ToTensor()
+    normalize = Normalize()
+    transform_list.append(random_scale)
+    transform_list.append(random_crop)
+    transform_list.append(random_mirror)
+    #transform_list.append(to_tensor)
+    #transform_list.append(normalize)
+    transforms = Compose(transform_list)
+    dataset = COCOPersonCenterDataset(root=root, anno=anno_path, part='val2014',transforms=transforms)
+    return dataset
+
 def get_data_loader():
     anno_path = os.path.expanduser('~/Vision/data/annotations/coco2014_instances_person_debug.pkl')
     root = os.path.expanduser('~/Vision/data/datasets/COCO')
@@ -48,7 +67,7 @@ def dataset_test():
     anno_path = os.path.expanduser('~/Vision/data/annotations/coco2014_instances_person_debug.pkl')
     root = os.path.expanduser('~/Vision/data/datasets/COCO')
     transform_list = []
-    random_crop = RandomCrop((300,400)) #(width, height)
+    random_crop = RandomCrop((256,224)) #(width, height)
     #random_crop = RandomCrop(512)
     random_scale = RandomScale(0.6, 1.4)
     random_mirror = RandomMirror()
@@ -79,20 +98,22 @@ def dataset_test():
     
     #visulize_heatmaps_with_image(heatmap, im)
     #print(im.size)
-    #data_loader = torch.utils.data.DataLoader(
-    #  dataset, 
-    #  batch_size=4, 
-    #  shuffle=True,
-    #  num_workers=2,
-    #  pin_memory=True,
-    #  drop_last=True
-    #)
-    #for inputs,targets in data_loader:
-    #    print(inputs.keys())
-    #    print(targets.keys())
-    #    for k, v in targets.items():
-    #        print('{}:{}'.format(k, v.shape))
-    #    break
+    data_loader = torch.utils.data.DataLoader(
+      dataset, 
+      batch_size=4, 
+      shuffle=True,
+      num_workers=2,
+      pin_memory=True,
+      drop_last=True
+    )
+    for inputs,targets in data_loader:
+        print(inputs.keys())
+        print(targets.keys())
+        for k, v in inputs.items():
+            print('{}:{}'.format(k, v.shape))
+        for k, v in targets.items():
+            print('{}:{}'.format(k, v.shape))
+        break
     #im.show()
 
 def network_test():
@@ -118,7 +139,7 @@ def get_model():
     neck = networks.neck['upsample_basic'](in_channel)
     #net = resnet50()
     backbone.multi_feature = False
-    loss_parts = ['heatmap']
+    loss_parts = ['heatmap', 'offset', 'width_height']
     model = CenterNet(backbone, 1, neck=neck, loss_parts=loss_parts)
     return model
 
@@ -130,3 +151,13 @@ def loss_test(data_loader, model):
         loss = model(inputs, targets)
         print(loss)
         break
+
+def dataset_test1(dataset):
+    i=0
+    for inputs, targets in dataset:
+        im = inputs['data']
+        print(im.shape)
+        i+=1
+        if i==5:
+            break
+

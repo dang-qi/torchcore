@@ -11,9 +11,10 @@ class FocalLoss(nn.Module):
         pass
 
 class FocalLossHeatmap(nn.Module):
-    def __init__(self, alpha=0.5, gamma=2):
+    def __init__(self, alpha=0.5, beta=4, gamma=2):
         super().__init__()
         self.alpha = alpha
+        self.beta = beta
         self.gamma = gamma
 
     def forward(self, pred, groundtruth):
@@ -34,11 +35,8 @@ class FocalLossHeatmap(nn.Module):
         pos_mask = groundtruth.eq(1).float()
         neg_mask = groundtruth.lt(1).float()
 
-        neg_weight = torch.pow((1 - groundtruth), 4) # just follow the original code TODO: check it later
+        neg_weight = torch.pow((1 - groundtruth), self.beta) # just follow the original code TODO: check it later
 
-        #print(pred.shape)
-        #print(pos_mask.shape)
-        #print(pos_mask.shape)
         pos_loss = self.alpha * torch.pow(1 - pred, self.gamma) * torch.log(pred) * pos_mask
         neg_loss = (1 - self.alpha) * torch.pow(pred, self.gamma) * torch.log(1-pred) * neg_mask * neg_weight
 

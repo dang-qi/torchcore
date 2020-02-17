@@ -104,7 +104,7 @@ class COCOPersonCenterDataset(COCOPersonDataset):
         return inputs, targets
 
 def generate_mask(center_x, center_y, width, height):
-    mask = np.zeros((2, height, width), dtype=np.uint8)
+    mask = np.zeros((2, height, width), dtype=np.bool)
     for x,y in zip(center_x.astype(int), center_y.astype(int)):
         mask[:,y,x] = True
     return mask

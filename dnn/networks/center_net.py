@@ -29,7 +29,8 @@ class CenterNet(OneStageDetector):
         if self.training and targets is None:
             raise ValueError('targets should not be None during the training')
 
-        features = self.backbone(inputs['data'])['0']
+        features = self.backbone(inputs['data'])
+        #print(features.keys())
         if self.neck is not None:
             features = self.neck(features)
         pred = self.pred_heads(features)

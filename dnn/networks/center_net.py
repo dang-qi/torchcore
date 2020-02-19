@@ -25,6 +25,22 @@ class CenterNet(OneStageDetector):
         #self.losses = losses
         super().__init__(backbone, heads, losses, neck=neck)
 
+    def forward(self, inputs, targets=None):
+        if self.training and targets is None:
+            raise ValueError('targets should not be None during the training')
+
+        features = self.backbone(inputs['data'])['0']
+        if self.neck is not None:
+            features = self.neck(features)
+        pred = self.pred_heads(features)
+
+        if self.training:
+            loss = self.losses(pred, targets)
+            return loss
+        
+        output = self.postprocess(pred, inputs)
+        return output
+
     def postprocess(self, pred, inputs):
         heatmap = pred['heatmap'].sigmoid_()
         #heatmap = pred['heatmap']

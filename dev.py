@@ -13,14 +13,26 @@ from torchvision.models import resnet50
 from torchvision.transforms import ToPILImage
 from data.datasets import COCOPersonCenterDataset
 from data.transforms import Compose, RandomCrop, RandomScale, RandomMirror, ToTensor, Normalize
-from tools.visulize_tools import draw_single_box, visulize_heatmaps_with_image
+from tools.visulize_tools import draw_single_box, visulize_heatmaps_with_image, draw_boxes
 from dnn.networks.losses import FocalLossHeatmap, L1LossWithInd
 
 def post_process_test(dataset, model):
     for inputs, targets in dataset:
         out = model.postprocess(targets, inputs)
-        print(out['offset'][:,:,:10])
-        print(targets['offset'][:,:,:10])
+        #print((targets['heatmap']==1).nonzero())
+
+        #print(targets['offset'][0,:,:10])
+        #print(out['boxes'][0,:10])
+        #print(out['scores'][0,:10])
+        #print(out['category'][0,:10])
+
+        ori_image = inputs['cropped_im'][0].numpy()
+        im = Image.fromarray(np.uint8(ori_image))
+        #im = Image.fromarray(inputs['cropped_im'].numpy())
+        box = out['boxes'][0,0].numpy()
+        #draw_boxes(im, boxes, scores, category, class_names=['person'])
+        draw_single_box(im, box)
+        im.show()
         break
         
 
@@ -176,8 +188,8 @@ def get_model():
     neck = networks.neck['upsample_basic'](in_channel)
     #net = resnet50()
     backbone.multi_feature = False
-    loss_parts = ['heatmap', 'offset', 'width_height']
-    model = CenterNet(backbone, 1, neck=neck, parts=loss_parts)
+    parts = ['heatmap', 'offset', 'width_height']
+    model = CenterNet(backbone, 1, neck=neck, parts=parts)
     #device = torch.device('cpu')
     #state_dict_ = torch.load(model_path, map_location=device)['model_state_dict']
     #state_dict = {}

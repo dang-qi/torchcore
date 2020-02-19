@@ -44,9 +44,13 @@ class CenterNet(OneStageDetector):
             width_height = pred['width_height']
             width_height = decode_by_ind(width_height, inds)
             #width_height = width_height.masked_select(mask)
+        boxes = recover_boxes(xs, ys, offset, width_height, self.down_stride)
         result = {}
         result['offset'] = offset
         result['width_height'] = width_height
+        result['boxes'] = boxes
+        result['scores'] = scores
+        result['category'] = categories
 
         return result
 
@@ -82,7 +86,7 @@ class CenterNetLoss(nn.Module):
 
 def get_center_head(in_channel, num_classes):
     head_names = ['heatmap', 'offset', 'width_height']
-    heatmap_head = CommonHead(num_classes, in_channel, head_conv_channel=64)
+    heatmap_head = nn.Sequential(CommonHead(num_classes, in_channel, head_conv_channel=64), nn.Sigmoid())
     offset_head = CommonHead(2, in_channel, head_conv_channel=64)
     witdh_height_head = CommonHead(2, in_channel, head_conv_channel=64)
     heads = [heatmap_head, offset_head, witdh_height_head]
@@ -91,6 +95,7 @@ def get_center_head(in_channel, num_classes):
 def point_nms(heatmap, kernel_size=3):
     padding = (kernel_size - 1) // 2
     heatout = nn.functional.max_pool2d(heatmap, kernel_size=kernel_size, padding=padding, stride=1 )
+    #print((heatout==1).nonzero())
     mask = (heatout == heatmap).float()
     return mask*heatmap
 
@@ -106,7 +111,6 @@ def topk_ind(heatmap, k=100):
     return scores, categories, ys, xs, topk_inds
 
 def decode_by_ind(offset, ind):
-    print(offset.shape)
     n,c,h,w = offset.shape
     offset = offset.view(n,c, -1)
     ind = ind.unsqueeze(1).expand(n,c, ind.size(1))
@@ -134,8 +138,14 @@ def decode_mask(mask):
     return ys, xs, categories
 
 def recover_boxes(xs, ys, offset, width_height, down_stride):
-    xs = (xs + offset[0,:])*down_stride
-    ys = (ys + offset[1,:])*down_stride
-    width = width_height[0,:]
-    height = width_height[1,:]
+    xs = (xs + offset[:,0,:])*down_stride
+    ys = (ys + offset[:,1,:])*down_stride
+    width = width_height[:,0,:]
+    height = width_height[:,1,:]
+    x1 = xs - width/2
+    x2 = xs + width/2
+    y1 = ys - height/2
+    y2 = ys + height/2
+    boxes = torch.stack([x1, y1, x2, y2], dim=2)
+    return  boxes
     

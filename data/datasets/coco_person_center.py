@@ -87,8 +87,8 @@ class COCOPersonCenterDataset(COCOPersonDataset):
 
         offset = generate_offset(center_x_out, center_y_out, self._max_obj)
         width_height = generate_width_height(valid_boxes, self._max_obj)
-        offset_map = generate_offset_map(center_x_out, center_y_out, height_out, width_out)
-        width_height_map = generate_width_height_map(valid_boxes, center_x_out, center_y_out, height_out, width_out)
+        #offset_map = generate_offset_map(center_x_out, center_y_out, height_out, width_out)
+        #width_height_map = generate_width_height_map(valid_boxes, center_x_out, center_y_out, height_out, width_out)
         mask = generate_mask(center_x_out, center_y_out, width_out, height_out)
         #mask = np.zeros(self._max_obj, dtype=np.uint8)
         #mask[:len(valid_boxes)] = 1
@@ -103,9 +103,9 @@ class COCOPersonCenterDataset(COCOPersonDataset):
 
         targets['heatmap'] = heatmaps
         targets['offset'] = offset
-        targets['offset_map'] = offset_map
+        #targets['offset_map'] = offset_map
         targets['width_height'] = width_height
-        targets['width_height_map'] = width_height_map
+        #targets['width_height_map'] = width_height_map
         targets['ind'] = ind
         targets['ind_mask'] = ind_mask
         #targets['offset'] = offset_map

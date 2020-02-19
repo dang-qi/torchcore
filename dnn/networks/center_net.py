@@ -15,6 +15,7 @@ class CenterNet(OneStageDetector):
                 in_channel = neck.out_channel
             heads = get_center_head(in_channel, num_classes)
         self.parts = parts
+        self.down_stride = 4
 
         losses = CenterNetLoss(parts)
 
@@ -29,19 +30,25 @@ class CenterNet(OneStageDetector):
 
         k=100
         heatmap = point_nms(heatmap)
-        mask = topk_mask(heatmap, k=k)
+        scores, categories, ys, xs, inds = topk_ind(heatmap, k=k)
+        #mask = topk_mask(heatmap, k=k)
         batch_size = heatmap.size(0)
-        scores= heatmap.masked_select(mask).view(batch_size, k)
-        ys, xs, categories = decode_mask(mask) # (batch_size, k)
+        #scores= heatmap.masked_select(mask).view(batch_size, k)
+        #ys, xs, categories = decode_mask(mask) # (batch_size, k)
         if 'offset' in self.parts:
             offset = pred['offset']
-            offset = offset.masked_select(mask)
+            offset = decode_by_ind(offset, inds)
+            #offset = offset.masked_select(mask)
             
         if 'width_height' in self.parts:
             width_height = pred['width_height']
-            width_height = width_height.masked_select(mask)
+            width_height = decode_by_ind(width_height, inds)
+            #width_height = width_height.masked_select(mask)
+        result = {}
+        result['offset'] = offset
+        result['width_height'] = width_height
 
-        return pred
+        return result
 
 class CenterNetLoss(nn.Module):
     def __init__(self, loss_parts, loss_weight=None):
@@ -81,11 +88,31 @@ def get_center_head(in_channel, num_classes):
     heads = [heatmap_head, offset_head, witdh_height_head]
     return ComposedHead(head_names, heads)
 
-def point_nms(heatmap, kernal_size=3):
-    padding = (kernal_size - 1) // 2
-    heatout = nn.functional.max_pool2d(heatmap, kernal_size=kernal_size, padding=padding, stride=1 )
+def point_nms(heatmap, kernel_size=3):
+    padding = (kernel_size - 1) // 2
+    heatout = nn.functional.max_pool2d(heatmap, kernel_size=kernel_size, padding=padding, stride=1 )
     mask = (heatout == heatmap).float()
     return mask*heatmap
+
+def topk_ind(heatmap, k=100):
+    n, c, h, w = heatmap.shape
+    topk, inds = torch.topk(heatmap.view(n,-1), k=k)
+    scores = topk
+
+    categories = inds // (w*h)
+    topk_inds = inds % (w*h)
+    ys = topk_inds // w
+    xs = topk_inds % w
+    return scores, categories, ys, xs, topk_inds
+
+def decode_by_ind(offset, ind):
+    print(offset.shape)
+    n,c,h,w = offset.shape
+    offset = offset.view(n,c, -1)
+    ind = ind.unsqueeze(1).expand(n,c, ind.size(1))
+    offset = offset.gather(2, ind)
+    return offset
+
 
 def topk_mask(heatmap, k=100):
     n, c, h, w = heatmap.shape
@@ -106,5 +133,9 @@ def decode_mask(mask):
     xs = indexes[:,1].view(n,-1)
     return ys, xs, categories
 
-#def get_from_mask(mask, heatmap)
+def recover_boxes(xs, ys, offset, width_height, down_stride):
+    xs = (xs + offset[0,:])*down_stride
+    ys = (ys + offset[1,:])*down_stride
+    width = width_height[0,:]
+    height = width_height[1,:]
     

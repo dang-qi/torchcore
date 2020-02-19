@@ -16,6 +16,14 @@ from data.transforms import Compose, RandomCrop, RandomScale, RandomMirror, ToTe
 from tools.visulize_tools import draw_single_box, visulize_heatmaps_with_image
 from dnn.networks.losses import FocalLossHeatmap, L1LossWithInd
 
+def post_process_test(dataset, model):
+    for inputs, targets in dataset:
+        out = model.postprocess(targets, inputs)
+        print(out['offset'][:,:,:10])
+        print(targets['offset'][:,:,:10])
+        break
+        
+
 def test_loss():
     fcloss= FocalLossHeatmap()
     pred = torch.rand((3,3))

@@ -23,7 +23,7 @@ class L1LossWithInd(nn.Module):
         inds = inds.unsqueeze(1).expand(batch, c, inds.size(1) )
         ind_mask = ind_mask.unsqueeze(1).expand(batch, c, ind_mask.size(1))
         pred = pred.gather(2, inds)
-        loss = F.l1_loss(pred*ind_mask, gt)
+        loss = F.l1_loss(pred*ind_mask, gt*ind_mask)
         loss = loss / (ind_mask.sum() + 1e-4)
         return loss
         

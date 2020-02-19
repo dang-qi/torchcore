@@ -26,7 +26,7 @@ class COCOPersonCenterDataset(COCOPersonDataset):
         img_path = os.path.join(self._root, self._part, image['file_name'] )
         image_id=image['id']
         img = Image.open(img_path).convert('RGB')
-        ori_image = img.copy()
+        #ori_image = img.copy()
 
         # Load labels
         boxes = []
@@ -54,6 +54,8 @@ class COCOPersonCenterDataset(COCOPersonDataset):
         if self._transforms is not None:
             inputs, targets = self._transforms(inputs, targets)
 
+        # for debug
+        inputs['cropped_im'] = np.asarray(inputs['data'].copy())
         # Generate heatmaps, offset, width_hight map, etc.
         class_num = self.class_num
         width, height = inputs['data'].size
@@ -83,25 +85,40 @@ class COCOPersonCenterDataset(COCOPersonDataset):
 
         heatmaps = generate_gaussian_heatmap(class_num, width_out, height_out, center_x_out, center_y_out, boxes_w, boxes_h, labels )
 
-        #offset = generate_offset(center_x_out, center_y_out, self._max_obj)
+        offset = generate_offset(center_x_out, center_y_out, self._max_obj)
+        width_height = generate_width_height(valid_boxes, self._max_obj)
         offset_map = generate_offset_map(center_x_out, center_y_out, height_out, width_out)
-        #width_height = generate_width_height(valid_boxes, self._max_obj)
         width_height_map = generate_width_height_map(valid_boxes, center_x_out, center_y_out, height_out, width_out)
         mask = generate_mask(center_x_out, center_y_out, width_out, height_out)
         #mask = np.zeros(self._max_obj, dtype=np.uint8)
         #mask[:len(valid_boxes)] = 1
 
         ind = np.zeros(self._max_obj, dtype=int)
+        ind = generate_ind(ind, center_x_out, center_y_out, width_out)
+        ind_mask = np.zeros(self._max_obj, dtype=int)
+        ind_mask[:len(center_x_out)] = 1
 
         transforms_post = Compose([ToTensor(), Normalize()])
         inputs, _ = transforms_post(inputs )
 
         targets['heatmap'] = heatmaps
-        targets['offset'] = offset_map
-        targets['width_height'] = width_height_map
+        targets['offset'] = offset
+        targets['offset_map'] = offset_map
+        targets['width_height'] = width_height
+        targets['width_height_map'] = width_height_map
+        targets['ind'] = ind
+        targets['ind_mask'] = ind_mask
+        #targets['offset'] = offset_map
+        #targets['width_height'] = width_height_map
         targets['mask'] = mask
 
         return inputs, targets
+
+def generate_ind(ind, cx, cy, w ):
+    for i, (x, y ) in enumerate(zip(cx.astype(int), cy.astype(int))):
+        ind[i] = y*w + x
+    return ind
+
 
 def generate_mask(center_x, center_y, width, height):
     mask = np.zeros((2, height, width), dtype=np.bool)
@@ -126,11 +143,12 @@ def generate_gaussian_heatmap(class_num, width, height, center_x, center_y, boxe
 def generate_offset(center_x, center_y, max_length):
     real_len = len(center_x)
     assert real_len <= max_length
-    offset = np.zeros((max_length, 2),dtype=np.float32)
+    #offset = np.zeros((max_length, 2),dtype=np.float32)
+    offset = np.zeros((2, max_length),dtype=np.float32)
     if real_len == 0:
         return offset
-    offset[:real_len,0] = center_x - center_x.astype(int)
-    offset[:real_len,1] = center_y - center_y.astype(int)
+    offset[0, :real_len] = center_x - center_x.astype(int)
+    offset[1, :real_len] = center_y - center_y.astype(int)
     return offset
 
 def generate_offset_map(center_x, center_y, height, width):
@@ -160,11 +178,11 @@ def generate_width_height_map(boxes, center_x, center_y, height, width):
 def generate_width_height(boxes, max_length):
     real_len = len(boxes)
     assert real_len <= max_length
-    width_height = np.zeros((max_length, 2), dtype=np.float32)
+    width_height = np.zeros((2, max_length), dtype=np.float32)
     if real_len == 0:
         return width_height
-    width_height[:real_len,0] = boxes[:,2]-boxes[:,0]
-    width_height[:real_len,1] = boxes[:,3]-boxes[:,1]
+    width_height[0, :real_len] = boxes[:,2]-boxes[:,0]
+    width_height[1, :real_len] = boxes[:,3]-boxes[:,1]
     return width_height
 
 def draw_gaussian_heatmap(heatmap, center, radius):

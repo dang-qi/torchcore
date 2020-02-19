@@ -14,7 +14,34 @@ from torchvision.transforms import ToPILImage
 from data.datasets import COCOPersonCenterDataset
 from data.transforms import Compose, RandomCrop, RandomScale, RandomMirror, ToTensor, Normalize
 from tools.visulize_tools import draw_single_box, visulize_heatmaps_with_image
-from dnn.networks.losses import FocalLossHeatmap
+from dnn.networks.losses import FocalLossHeatmap, L1LossWithInd
+
+def test_loss():
+    fcloss= FocalLossHeatmap()
+    pred = torch.rand((3,3))
+    pred1 = pred.clone()
+    gt = torch.rand((3,3))
+    gt[0,1] = 1
+    gt1 = gt.clone()
+
+    loss1 = fcloss._forword_impl(pred1, gt1)
+    loss2 = _neg_loss(pred, gt)
+    print(loss1*2)
+    print(loss2)
+
+def test_l1_loss(dataset):
+    f1loss = L1LossWithInd()
+    for inputs, targets in dataset:
+        pre = targets['width_height_map']
+        #pre = torch.rand_like(pre)
+        ind = targets['ind']
+        ind_mask = targets['ind_mask']
+        gt = targets['width_height']
+        loss = f1loss.forward(pre, ind, ind_mask, gt)
+        #print(ind_mask.sum())
+        print(loss)
+        #print(len(gt.nonzero()))
+        break
 
 def get_dataset():
     anno_path = os.path.expanduser('~/Vision/data/annotations/coco2014_instances_person_debug.pkl')
@@ -134,13 +161,24 @@ def network_test():
         print('{}:{}'.format(key, item.shape))
 
 def get_model():
+    model_path = 'checkpoints_20200217_centernet_24.pkl'
+    #model_path = 'checkpoints_20200216_frcnn_human_416_15.pkl'
     backbone = networks.feature.resnet50()
     in_channel = backbone.out_channel
     neck = networks.neck['upsample_basic'](in_channel)
     #net = resnet50()
     backbone.multi_feature = False
     loss_parts = ['heatmap', 'offset', 'width_height']
-    model = CenterNet(backbone, 1, neck=neck, loss_parts=loss_parts)
+    model = CenterNet(backbone, 1, neck=neck, parts=loss_parts)
+    #device = torch.device('cpu')
+    #state_dict_ = torch.load(model_path, map_location=device)['model_state_dict']
+    #state_dict = {}
+    #for k in state_dict_:
+    #    if k.startswith('module') and not k.startswith('module_list'):
+    #        state_dict[k[7:]] = state_dict_[k]
+    #    else:
+    #        state_dict[k] = state_dict_[k]
+    #model.load_state_dict(state_dict, strict=True )
     return model
 
 
@@ -152,6 +190,32 @@ def loss_test(data_loader, model):
         print(loss)
         break
 
+def inference_test(dataset, model):
+    model.eval()
+    i=0
+    for inputs, targets in dataset:
+        pred = model(inputs, targets)
+        ori_image = inputs['cropped_im'][0].numpy()
+        print(ori_image.shape)
+        im = Image.fromarray(np.uint8(ori_image))
+        pred['heatmap'] = torch.clamp(pred['heatmap'].sigmoid_(), min=1e-4, max=1-1e-4)
+        heatmap = pred['heatmap'][0][0].detach().numpy()
+        heatmap_im = Image.fromarray((heatmap*255).astype(np.uint8)).convert('RGB')
+        heatmap_im = heatmap_im.resize(im.size)
+        #heatmap = pred['heatmap'][0].detach().numpy()
+        #print(heatmap)
+        #visulize_heatmaps_with_image(heatmap, im)
+        heatmap_im.show()
+        im.show()
+        #print(ori_image[0].size())
+        #for k, v in pred.items():
+        #    print('{}:{}'.format(k, v.shape))
+        break
+        i+=1
+        if i==5:
+            break
+
+
 def dataset_test1(dataset):
     i=0
     for inputs, targets in dataset:
@@ -161,3 +225,30 @@ def dataset_test1(dataset):
         if i==5:
             break
 
+
+def _neg_loss(pred, gt):
+    ''' Modified focal loss. Exactly the same as CornerNet.
+        Runs faster and costs a little bit more memory
+        Arguments:
+        pred (batch x c x h x w)
+        gt_regr (batch x c x h x w)
+    '''
+    pos_inds = gt.eq(1).float()
+    neg_inds = gt.lt(1).float()
+
+    neg_weights = torch.pow(1 - gt, 4)
+
+    loss = 0
+
+    pos_loss = torch.log(pred) * torch.pow(1 - pred, 2) * pos_inds
+    neg_loss = torch.log(1 - pred) * torch.pow(pred, 2) * neg_weights * neg_inds
+
+    num_pos  = pos_inds.float().sum()
+    pos_loss = pos_loss.sum()
+    neg_loss = neg_loss.sum()
+
+    if num_pos == 0:
+        loss = loss - neg_loss
+    else:
+        loss = loss - (pos_loss + neg_loss) / num_pos
+    return loss

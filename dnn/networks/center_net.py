@@ -26,8 +26,8 @@ class CenterNet(OneStageDetector):
         super().__init__(backbone, heads, losses, neck=neck)
 
     def postprocess(self, pred, inputs):
-        #heatmap = pred['heatmap'].sigmoid_()
-        heatmap = pred['heatmap']
+        heatmap = pred['heatmap'].sigmoid_()
+        #heatmap = pred['heatmap']
 
         k=100
         heatmap = point_nms(heatmap)
@@ -87,7 +87,7 @@ class CenterNetLoss(nn.Module):
 
 def get_center_head(in_channel, num_classes):
     head_names = ['heatmap', 'offset', 'width_height']
-    heatmap_head = CommonHeadWithSigmoid(num_classes, in_channel, head_conv_channel=64)
+    heatmap_head = CommonHead(num_classes, in_channel, head_conv_channel=64)
     offset_head = CommonHead(2, in_channel, head_conv_channel=64)
     witdh_height_head = CommonHead(2, in_channel, head_conv_channel=64)
     heads = [heatmap_head, offset_head, witdh_height_head]

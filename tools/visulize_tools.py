@@ -158,6 +158,14 @@ def draw_single_box(image, box):
     draw.rectangle(box, outline=(255, 0, 0), width=3)
     return image
 
+def draw_plain_boxes(image,boxes):
+    draw = Draw(image)
+    for box in boxes:
+        box = list(np.array(box, dtype=int))
+        draw.rectangle(box, outline=(255, 0, 0), width=3)
+    return image
+
+
 def visulize_heatmaps_with_image(heatmap, image):
     heatmap = np.amax(heatmap,axis=0)
     heatmap = Image.fromarray((heatmap*255).astype(np.uint8)).convert('RGB')

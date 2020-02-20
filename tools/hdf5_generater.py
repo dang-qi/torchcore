@@ -125,9 +125,6 @@ def generate_hdf5_patch(hdf5_path, part, human_detections, imageset, im_root, ex
         cropped_im = im.crop(biggest_box)
         # resize 
         resized_im = cropped_im.resize(out_size)
-        print(boxes)
-        resized_im = draw_plain_boxes(resized_im, boxes)
-        resized_im.show()
         data = np.array(resized_im)
 
         group_name = str(im_id)
@@ -136,7 +133,7 @@ def generate_hdf5_patch(hdf5_path, part, human_detections, imageset, im_root, ex
         h5_group['bbox'] = boxes
         h5_group['category_id'] = labels
         h5_group['image_id'] = im_id
-        break
+    h5.close()
         
 def test():
     human_det_path = 'modanet_human_val.pkl'
@@ -155,13 +152,13 @@ def test():
 
 
 if __name__ == '__main__':
-    human_det_path = 'modanet_human_val.pkl'
-    h5_out_path = ''
+    human_det_path = '../../modanet_human_val.pkl'
     anno_path = '/ssd/data/annotations/modanet2018_instances_revised.pkl'
     root = '/ssd/data/datasets/modanet/Images'
-    anno_path = os.path.expanduser('~/data/annotations/modanet2018_instances_revised.pkl')
-    root = os.path.expanduser('~/data/datasets/modanet/Images')
+    #anno_path = os.path.expanduser('~/data/annotations/modanet2018_instances_revised.pkl')
+    #root = os.path.expanduser('~/data/datasets/modanet/Images')
     part = 'val'
+    h5_out_path = '/ssd/data/datasets/modanet/modanet_{}_hdf5.hdf5'.format(part)
 
     with open(anno_path, 'rb') as f:
         imageset = pickle.load(f)[part]

@@ -24,6 +24,7 @@ class ModanetDataset(Dataset):
         img_path = os.path.join(self._root, 'train', image['file_name'] )
         image_id=image['id']
         img = Image.open(img_path).convert('RGB')
+        ori_image = img
 
         # Load targets
         boxes = []
@@ -41,6 +42,7 @@ class ModanetDataset(Dataset):
         #targets (list[Dict[Tensor]]): ground-truth boxes present in the image (optional)
         inputs = {}
         inputs['data'] = img
+        inputs['ori_image'] = ori_image
 
         targets = {}
         targets["boxes"] = boxes

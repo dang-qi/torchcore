@@ -5,7 +5,7 @@ import numpy as np
 
 from PIL import Image
 
-from .visulize_tools import draw_plain_boxes
+from .visulize_tools import draw_plain_boxes,draw_single_box
 def gen_human_id_map(human_detections):
     human_map = {}
     for detection in human_detections:
@@ -76,10 +76,10 @@ def pad_box_by_ratio(box, ratio):
     else:
         out_h = int((box[2]-box[0])*ratio)
         pad_all = out_h - (box[3]-box[1])
-        pad_up = int((out_h-(box[3]-box[1]))/2)
-        pad_down = out_h - pad_up
-        box[1] = box[0] - pad_up
-        box[3] = box[2] + pad_down
+        pad_up = int(pad_all/2)
+        pad_down = pad_all - pad_up
+        box[1] = box[1] - pad_up
+        box[3] = box[3] + pad_down
     return box
 
 def generate_hdf5_patch(hdf5_path, part, human_detections, imageset, im_root, expand_rate=0):
@@ -108,6 +108,7 @@ def generate_hdf5_patch(hdf5_path, part, human_detections, imageset, im_root, ex
             continue
 
         if expand_rate > 0:
+            print(ratio)
             biggest_box = expand_box(biggest_box, expand_rate, im_w, im_h)
 
         # make the box correct ratio to crop
@@ -123,6 +124,7 @@ def generate_hdf5_patch(hdf5_path, part, human_detections, imageset, im_root, ex
         boxes = boxes * scale
         
         cropped_im = im.crop(biggest_box)
+        #cropped_im.show()
         # resize 
         resized_im = cropped_im.resize(out_size)
         data = np.array(resized_im)
@@ -150,6 +152,22 @@ def test():
         human_detections = pickle.load(f)
     generate_hdf5_patch(h5_out_path, part, human_detections, imageset, root, expand_rate=0.2)
 
+def load_h5():
+    h5_path = 'modanet_val_hdf5.hdf5'
+    a = h5py.File(h5_path, 'r')
+    return a
+
+def test_hdf5(h5):
+    part = 'val'
+    keys = list(h5[part].keys())
+    ind = np.random.randint(5000)
+    ind=3836
+    print(ind)
+    data = h5['val'][keys[ind]]['data']
+    print(np.array(h5['val'][keys[ind]]['image_id']))
+    im = Image.fromarray(np.array(data))
+    im.show()
+    return im
 
 if __name__ == '__main__':
     human_det_path = '../../modanet_human_val.pkl'

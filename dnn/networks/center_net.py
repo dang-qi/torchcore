@@ -77,7 +77,7 @@ class CenterNetLoss(nn.Module):
         super().__init__()
         self.loss_parts = loss_parts
         if loss_weight is None:
-            loss_weight = {'heatmap':1., 'offset':1., 'width_height':0.1}
+            loss_weight = {'heatmap':1., 'offset':0.5, 'width_height':0.05}
             self.loss_weight = loss_weight
         if 'heatmap' in loss_parts:
             self.heatmap_loss = FocalLossHeatmap(alpha=0.5, gamma=2)

@@ -114,7 +114,7 @@ def dataset_test():
     anno_path = os.path.expanduser('~/Vision/data/annotations/coco2014_instances_person_debug.pkl')
     root = os.path.expanduser('~/Vision/data/datasets/COCO')
     transform_list = []
-    random_crop = RandomCrop((256,224)) #(width, height)
+    random_crop = RandomCrop((448,512)) #(width, height)
     #random_crop = RandomCrop(512)
     random_scale = RandomScale(0.6, 1.4)
     random_mirror = RandomMirror()
@@ -131,7 +131,9 @@ def dataset_test():
     #index = 1
     inputs, targets = dataset[index]
     #im = ToPILImage()(inputs['data'])
-    im = inputs['data']
+    ori_image = inputs['cropped_im']
+    im = Image.fromarray(np.uint8(ori_image))
+    #im = inputs['data']
     heatmap = targets['heatmap']
     #im.show()
     #heatmap_im = np.amax(heatmap,axis=0)
@@ -143,24 +145,24 @@ def dataset_test():
     #    draw_single_box(im, box)
     #heatmap_im.show()
     
-    #visulize_heatmaps_with_image(heatmap, im)
+    visulize_heatmaps_with_image(heatmap, im)
     #print(im.size)
-    data_loader = torch.utils.data.DataLoader(
-      dataset, 
-      batch_size=4, 
-      shuffle=True,
-      num_workers=2,
-      pin_memory=True,
-      drop_last=True
-    )
-    for inputs,targets in data_loader:
-        print(inputs.keys())
-        print(targets.keys())
-        for k, v in inputs.items():
-            print('{}:{}'.format(k, v.shape))
-        for k, v in targets.items():
-            print('{}:{}'.format(k, v.shape))
-        break
+    #data_loader = torch.utils.data.DataLoader(
+    #  dataset, 
+    #  batch_size=4, 
+    #  shuffle=True,
+    #  num_workers=2,
+    #  pin_memory=True,
+    #  drop_last=True
+    #)
+    #for inputs,targets in data_loader:
+    #    print(inputs.keys())
+    #    print(targets.keys())
+    #    for k, v in inputs.items():
+    #        print('{}:{}'.format(k, v.shape))
+    #    for k, v in targets.items():
+    #        print('{}:{}'.format(k, v.shape))
+    #    break
     #im.show()
 
 def network_test():
@@ -181,8 +183,8 @@ def network_test():
         print('{}:{}'.format(key, item.shape))
 
 def get_model():
-    model_path = 'checkpoints_20200217_centernet_24.pkl'
-    #model_path = 'checkpoints_20200216_frcnn_human_416_15.pkl'
+    #model_path = 'checkpoints_20200217_centernet_50.pkl'
+    model_path = 'checkpoints_20200219_centernet_100.pkl'
     backbone = networks.feature.resnet50()
     in_channel = backbone.out_channel
     neck = networks.neck['upsample_basic'](in_channel)
@@ -190,21 +192,22 @@ def get_model():
     backbone.multi_feature = False
     parts = ['heatmap', 'offset', 'width_height']
     model = CenterNet(backbone, 1, neck=neck, parts=parts)
-    #device = torch.device('cpu')
-    #state_dict_ = torch.load(model_path, map_location=device)['model_state_dict']
-    #state_dict = {}
-    #for k in state_dict_:
-    #    if k.startswith('module') and not k.startswith('module_list'):
-    #        state_dict[k[7:]] = state_dict_[k]
-    #    else:
-    #        state_dict[k] = state_dict_[k]
-    #model.load_state_dict(state_dict, strict=True )
+    device = torch.device('cpu')
+    state_dict_ = torch.load(model_path, map_location=device)['model_state_dict']
+    state_dict = {}
+    for k in state_dict_:
+        if k.startswith('module') and not k.startswith('module_list'):
+            state_dict[k[7:]] = state_dict_[k]
+        else:
+            state_dict[k] = state_dict_[k]
+    model.load_state_dict(state_dict, strict=True )
     return model
 
 
 def loss_test(data_loader, model):
     #data_loader = get_data_loader()
     #model = get_model()
+    model.train()
     for inputs, targets in data_loader:
         loss = model(inputs, targets)
         print(loss)
@@ -214,19 +217,28 @@ def inference_test(dataset, model):
     model.eval()
     i=0
     for inputs, targets in dataset:
-        pred = model(inputs, targets)
+        result = model(inputs, targets)
         ori_image = inputs['cropped_im'][0].numpy()
-        print(ori_image.shape)
         im = Image.fromarray(np.uint8(ori_image))
-        pred['heatmap'] = torch.clamp(pred['heatmap'].sigmoid_(), min=1e-4, max=1-1e-4)
-        heatmap = pred['heatmap'][0][0].detach().numpy()
-        heatmap_im = Image.fromarray((heatmap*255).astype(np.uint8)).convert('RGB')
-        heatmap_im = heatmap_im.resize(im.size)
-        #heatmap = pred['heatmap'][0].detach().numpy()
-        #print(heatmap)
-        #visulize_heatmaps_with_image(heatmap, im)
-        heatmap_im.show()
+        boxes = result['boxes'][0].detach().numpy()
+        scores = result['scores'][0].detach().numpy()
+        print(scores)
+        print(boxes[:3])
+        for box, score in zip(boxes, scores):
+            if score>0.1:
+                draw_single_box(im, box)
         im.show()
+
+        #print(ori_image.shape)
+        #result['heatmap'] = torch.clamp(result['heatmap'].sigmoid_(), min=1e-4, max=1-1e-4)
+        #heatmap = result['heatmap'][0][0].detach().numpy()
+        #heatmap_im = Image.fromarray((heatmap*255).astype(np.uint8)).convert('RGB')
+        #heatmap_im = heatmap_im.resize(im.size)
+        ###heatmap = pred['heatmap'][0].detach().numpy()
+        ###print(heatmap)
+        ###visulize_heatmaps_with_image(heatmap, im)
+        #heatmap_im.show()
+        #im.show()
         #print(ori_image[0].size())
         #for k, v in pred.items():
         #    print('{}:{}'.format(k, v.shape))

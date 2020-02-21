@@ -101,6 +101,9 @@ def generate_hdf5_patch(hdf5_path, part, human_detections, imageset, im_root, ex
         im_w, im_h = im.size
         objects = image['objects']
         human_boxes = human_map[im_id]
+        if len(human_boxes)==0:
+            print('no human detection in image {}'.format(im_id))
+            continue
         biggest_box = get_biggest_box(human_boxes)
         ratio = (biggest_box[3]-biggest_box[1]) / (biggest_box[2]-biggest_box[0])
         if ratio < 2:

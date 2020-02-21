@@ -3,7 +3,7 @@ import os
 import pickle
 import numpy as np
 
-from PIL import Image
+from PIL import Image, ImageOps
 
 from .visulize_tools import draw_plain_boxes,draw_single_box
 def gen_human_id_map(human_detections):
@@ -82,7 +82,7 @@ def pad_box_by_ratio(box, ratio):
         box[3] = box[3] + pad_down
     return box
 
-def generate_hdf5_patch(hdf5_path, part, human_detections, imageset, im_root, expand_rate=0):
+def generate_hdf5_patch(hdf5_path, part, human_detections, imageset, im_root, expand_rate=0, add_mirror=True):
     '''human detections:[{'image_id':int, 'human_box':ndarray}]
        human_boxes:n*6 (x1, y1, x2, y2, score, label)
     '''
@@ -135,7 +135,26 @@ def generate_hdf5_patch(hdf5_path, part, human_detections, imageset, im_root, ex
         h5_group['bbox'] = boxes
         h5_group['category_id'] = labels
         h5_group['image_id'] = im_id
+        h5_group['mirrored'] = False
+        if add_mirror:
+            add_mirror_h5(h5_group_part, resized_im, boxes, labels, im_id)
     h5.close()
+
+def add_mirror_h5(h5_group_part, im, boxes, labels, im_id):
+    mirrored_im = ImageOps.mirror(im)
+    data = np.array(mirrored_im)
+    width, height = im.size
+    boxes[:,0], boxes[:,2] = width - boxes[:,2], width - boxes[:,0]
+
+    group_name = str(im_id)+'M'
+    h5_group = h5_group_part.create_group(group_name)
+    h5_group['data'] = data
+    h5_group['bbox'] = boxes
+    h5_group['category_id'] = labels
+    h5_group['image_id'] = im_id
+    h5_group['mirrored'] = True
+    
+
         
 def test():
     human_det_path = 'modanet_human_val.pkl'
@@ -161,7 +180,6 @@ def test_hdf5(h5):
     part = 'val'
     keys = list(h5[part].keys())
     ind = np.random.randint(5000)
-    ind=3836
     print(ind)
     data = h5['val'][keys[ind]]['data']
     print(np.array(h5['val'][keys[ind]]['image_id']))

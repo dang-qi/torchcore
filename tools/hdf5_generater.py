@@ -108,7 +108,6 @@ def generate_hdf5_patch(hdf5_path, part, human_detections, imageset, im_root, ex
             continue
 
         if expand_rate > 0:
-            print(ratio)
             biggest_box = expand_box(biggest_box, expand_rate, im_w, im_h)
 
         # make the box correct ratio to crop
@@ -138,7 +137,11 @@ def generate_hdf5_patch(hdf5_path, part, human_detections, imageset, im_root, ex
         h5_group['mirrored'] = False
         if add_mirror:
             add_mirror_h5(h5_group_part, resized_im, boxes, labels, im_id)
+
     h5.close()
+    print('total image number is {}'.format(len(imageset)))
+    print('The image(ratio less than 2) number is {}'.format(bad_ratio))
+    print('Invalid detection(no garments in the expanded and padded box) number is {}'.format(invalid_num))
 
 def add_mirror_h5(h5_group_part, im, boxes, labels, im_id):
     mirrored_im = ImageOps.mirror(im)

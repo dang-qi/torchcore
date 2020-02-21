@@ -184,9 +184,16 @@ def test_hdf5(h5):
     keys = list(h5[part].keys())
     ind = np.random.randint(5000)
     print(ind)
+    print(keys[ind])
+    print(h5['val'][keys[ind]].keys())
     data = h5['val'][keys[ind]]['data']
+    boxes = h5['val'][keys[ind]]['bbox']
+    mirrored = h5['val'][keys[ind]]['mirrored'][()]
+    print(boxes.shape)
+    print(mirrored)
     print(np.array(h5['val'][keys[ind]]['image_id']))
     im = Image.fromarray(np.array(data))
+    im = draw_plain_boxes(im, boxes)
     im.show()
     return im
 

@@ -4,6 +4,7 @@ from PIL.ImageDraw import Draw
 from PIL import ImageFont, Image
 from .color_gen import random_colors
 import os
+import io
 
 FONT_PATH = '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'
 
@@ -177,3 +178,20 @@ def visulize_heatmaps(heatmap):
     heatmap = np.amax(heatmap,axis=0)
     heatmap = Image.fromarray((heatmap*255).astype(np.uint8)).convert('RGB')
     heatmap.show()
+
+def visulize_colored_heatmaps_with_image(heatmap, image):
+    fig = plt.figure(frameon=False)
+    heatmap = np.amax(heatmap,axis=0)
+    ax = plt.Axes(fig, [0., 0., 1., 1.])
+    ax.set_axis_off()
+    fig.add_axes(ax)
+    plt.imshow(heatmap, aspect='auto')
+    plt.set_cmap('jet')
+    buf = io.BytesIO()
+    plt.savefig(buf, format='png')
+    buf.seek(0)
+    heatmap = Image.open(buf).convert('RGB')
+    #heatmap = Image.fromarray((heatmap*255).astype(np.uint8)).convert('RGB')
+    heatmap = heatmap.resize(image.size)
+    blend_im = Image.blend(heatmap, image, 0.7)
+    blend_im.show()

@@ -140,15 +140,18 @@ def generate_hdf5_patch(hdf5_path, part, human_detections, imageset, im_root, ou
         h5_group['image_id'] = im_id
         h5_group['mirrored'] = False
         h5_group['scale'] = scale
+        h5_group['crop_box'] = biggest_box
         if add_mirror:
-            add_mirror_h5(h5_group_part, resized_im, boxes, labels, im_id, scale)
+            crop_box= biggest_box.copy()
+            crop_box[0], crop_box[2] = im_w -crop_box[2], im_w - crop_box[0]
+            add_mirror_h5(h5_group_part, resized_im, boxes, labels, im_id, scale, crop_box)
 
     h5.close()
     print('total image number is {}'.format(len(imageset)))
     print('The image(ratio less than 2) number is {}'.format(bad_ratio))
     print('Invalid detection(no garments in the expanded and padded box) number is {}'.format(invalid_num))
 
-def add_mirror_h5(h5_group_part, im, boxes, labels, im_id, scale):
+def add_mirror_h5(h5_group_part, im, boxes, labels, im_id, scale, crop_box):
     mirrored_im = ImageOps.mirror(im)
     data = np.array(mirrored_im)
     width, height = im.size
@@ -162,6 +165,7 @@ def add_mirror_h5(h5_group_part, im, boxes, labels, im_id, scale):
     h5_group['image_id'] = im_id
     h5_group['mirrored'] = True
     h5_group['scale'] = scale
+    h5_group['crop_box'] = crop_box
 
         
 def test():
@@ -215,9 +219,10 @@ if __name__ == '__main__':
     #root = os.path.expanduser('~/data/datasets/modanet/Images')
     part = 'val'
     h5_out_path = '/ssd/data/datasets/modanet/modanet_{}_hdf5.hdf5'.format(part)
+    width=128
 
     with open(anno_path, 'rb') as f:
         imageset = pickle.load(f)[part]
     with open(human_det_path, 'rb') as f:
         human_detections = pickle.load(f)
-    generate_hdf5_patch(h5_out_path, part, human_detections, imageset, root, expand_rate=0.2)
+    generate_hdf5_patch(h5_out_path, part, human_detections, imageset, root,width, expand_rate=0.2)

@@ -14,11 +14,11 @@ class ModanetHDF5Dataset(Dataset):
 
         # load annotations
         self._images = h5py.File(h5_path, 'r')[part]
-        self._keys = self._images.keys()
+        self._keys = list(self._images.keys())
         #with open(anno, 'rb') as f:
         #    self._images = pickle.load(f)[part] 
         if transforms is None:
-            self._transforms = Normalize()
+            self._transforms = Compose([ToTensor(),Normalize()])
 
     def __len__(self):
         return len(self._images)
@@ -27,18 +27,20 @@ class ModanetHDF5Dataset(Dataset):
         image = self._images[self._keys[idx]]
 
         img = np.array(image['data'])
-        boxes = np.array(image['bbox'])
+        boxes = np.array(image['bbox']).astype(np.float32)
         labels = np.array(image['category_id'])
         image_id = np.array(image['image_id'])
         scale = np.array(image['scale'])
         mirrored = image['mirrored'][()]
+        h, w, c = img.shape
 
         #images (list[Tensor]): images to be processed
         #targets (list[Dict[Tensor]]): ground-truth boxes present in the image (optional)
         inputs = {}
-        inputs['data'] = torch.from_numpy(img)
+        inputs['data'] = img
         inputs['scale'] = scale
         inputs['mirrored'] = mirrored
+        inputs['image_sizes'] = (h, w)
 
         targets = {}
         targets["boxes"] = boxes

@@ -35,7 +35,7 @@ def get_object_inside_box(objects, box):
             boxes.append(bbox)
             category.append(obj['category_id'])
     boxes = np.array(boxes)
-    category = np.array(boxes)
+    category = np.array(category)
     return boxes, category
 
 def expand_box(box, expand_rate, im_w, im_h):
@@ -138,15 +138,16 @@ def generate_hdf5_patch(hdf5_path, part, human_detections, imageset, im_root, ex
         h5_group['category_id'] = labels
         h5_group['image_id'] = im_id
         h5_group['mirrored'] = False
+        h5_group['scale'] = scale
         if add_mirror:
-            add_mirror_h5(h5_group_part, resized_im, boxes, labels, im_id)
+            add_mirror_h5(h5_group_part, resized_im, boxes, labels, im_id, scale)
 
     h5.close()
     print('total image number is {}'.format(len(imageset)))
     print('The image(ratio less than 2) number is {}'.format(bad_ratio))
     print('Invalid detection(no garments in the expanded and padded box) number is {}'.format(invalid_num))
 
-def add_mirror_h5(h5_group_part, im, boxes, labels, im_id):
+def add_mirror_h5(h5_group_part, im, boxes, labels, im_id, scale):
     mirrored_im = ImageOps.mirror(im)
     data = np.array(mirrored_im)
     width, height = im.size
@@ -159,7 +160,7 @@ def add_mirror_h5(h5_group_part, im, boxes, labels, im_id):
     h5_group['category_id'] = labels
     h5_group['image_id'] = im_id
     h5_group['mirrored'] = True
-    
+    h5_group['scale'] = scale
 
         
 def test():
@@ -191,8 +192,13 @@ def test_hdf5(h5):
     print(h5['val'][keys[ind]].keys())
     data = h5['val'][keys[ind]]['data']
     boxes = h5['val'][keys[ind]]['bbox']
+    labels = h5['val'][keys[ind]]['category_id']
+    im_id = h5['val'][keys[ind]]['image_id']
     mirrored = h5['val'][keys[ind]]['mirrored'][()]
-    print(boxes.shape)
+    
+    #print(np.array(boxes)) # x1, y1, x2, y2
+    print(int(np.array(im_id)))
+    print(np.array(labels))
     print(mirrored)
     print(np.array(h5['val'][keys[ind]]['image_id']))
     im = Image.fromarray(np.array(data))

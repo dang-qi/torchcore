@@ -82,14 +82,15 @@ def pad_box_by_ratio(box, ratio):
         box[3] = box[3] + pad_down
     return box
 
-def generate_hdf5_patch(hdf5_path, part, human_detections, imageset, im_root, expand_rate=0, add_mirror=True):
+def generate_hdf5_patch(hdf5_path, part, human_detections, imageset, im_root, out_size, expand_rate=0, add_mirror=True):
     '''human detections:[{'image_id':int, 'human_box':ndarray}]
        human_boxes:n*6 (x1, y1, x2, y2, score, label)
+       out_size: (width, height)
     '''
     invalid_num = 0
     bad_ratio = 0
     ratio_box = 2
-    out_size = (128, 256)
+    #out_size = (128, 256)
     assert out_size[0] * ratio_box == out_size[1]
     human_map = gen_human_id_map(human_detections)
     h5 = h5py.File(hdf5_path, mode='w')

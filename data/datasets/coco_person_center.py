@@ -71,10 +71,10 @@ class COCOPersonCenterDataset(COCOPersonDataset):
         del targets['cat_labels']
         del targets['boxes']
 
-        if (valid_boxes[:,2] / self.down_stride>=width_out).any():
-            print('x2 wrong', valid_boxes)
-        if (valid_boxes[:,3] / self.down_stride>=height_out).any():
-            print('y2 wrong', valid_boxes)
+        #if (valid_boxes[:,2] / self.down_stride>=width_out).any():
+        #    print('x2 wrong', valid_boxes)
+        #if (valid_boxes[:,3] / self.down_stride>=height_out).any():
+        #    print('y2 wrong', valid_boxes)
 
         center_x = (valid_boxes[:,0] + valid_boxes[:,2])/2 
         center_y = (valid_boxes[:,1] + valid_boxes[:,3])/2 

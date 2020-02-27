@@ -5,6 +5,7 @@ from PIL import Image
 
 from .coco_person import COCOPersonDataset
 from ..gaussian_tools import gaussian_radius, draw_umich_gaussian
+from ..my_gaussian_tools import ellipse_gaussian_radius, draw_ellipse_gaussian
 from ..transforms import ToTensor, Normalize, Compose
 
 class COCOPersonCenterDataset(COCOPersonDataset):
@@ -90,8 +91,10 @@ class COCOPersonCenterDataset(COCOPersonDataset):
         boxes_w = valid_boxes[:,2] - valid_boxes[:,0]
         boxes_h = valid_boxes[:,3] - valid_boxes[:,1]
 
-        heatmaps = generate_gaussian_heatmap(class_num, width_out, height_out, center_x_out, center_y_out, boxes_w, boxes_h, labels )
+        #heatmaps = generate_gaussian_heatmap(class_num, width_out, height_out, center_x_out, center_y_out, boxes_w, boxes_h, labels )
 
+        heatmaps = generate_ellipse_gaussian_heatmap(class_num, width_out ,height_out, center_x_out, center_y_out, boxes_w, boxes_h, labels)
+    
         offset = generate_offset(center_x_out, center_y_out, self._max_obj)
         width_height = generate_width_height(valid_boxes, self._max_obj)
         #offset_map = generate_offset_map(center_x_out, center_y_out, height_out, width_out)
@@ -138,12 +141,30 @@ def generate_gaussian_heatmap(class_num, width, height, center_x, center_y, boxe
     center_y = center_y.astype(int)
     for x, y, label, w, h in zip(center_x, center_y, labels, boxes_w, boxes_h):
         radius = get_gaussian_radius((h,w))
+        print(radius)
         radius = max(0, int(radius))
         #print('x:{}  y:{}  radius:{}'.format(x,y,radius))
         draw_gaussian_heatmap(heatmaps[label-1], (x,y), radius )
 
     return heatmaps
 
+def generate_ellipse_gaussian_heatmap(class_num, width, height, center_x, center_y, boxes_w, boxes_h, labels ):
+    heatmaps = np.zeros((class_num, height, width), dtype=np.float32)
+    if len(center_x)== 0:
+        return heatmaps
+    center_x = center_x.astype(int)
+    center_y = center_y.astype(int)
+    for x, y, label, w, h in zip(center_x, center_y, labels, boxes_w, boxes_h):
+        radius = get_gaussian_radius((h,w))
+        r_w, r_h = ellipse_gaussian_radius(w, h, IoU=0.7)
+        sigma_x = r_w/3
+        sigma_y = r_h/3
+        radius = max(0, int(radius))
+        #print('x:{}  y:{}  radius:{}'.format(x,y,radius))
+        draw_ellipse_gaussian(heatmaps[label-1], x, y, r_w, r_h, sigma_x, sigma_y)
+        #draw_gaussian_heatmap(heatmaps[label-1], (x,y), radius )
+
+    return heatmaps
 def generate_offset(center_x, center_y, max_length):
     real_len = len(center_x)
     assert real_len <= max_length

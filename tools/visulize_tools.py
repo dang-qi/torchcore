@@ -193,5 +193,5 @@ def visulize_colored_heatmaps_with_image(heatmap, image):
     heatmap = Image.open(buf).convert('RGB')
     #heatmap = Image.fromarray((heatmap*255).astype(np.uint8)).convert('RGB')
     heatmap = heatmap.resize(image.size)
-    blend_im = Image.blend(heatmap, image, 0.7)
+    blend_im = Image.blend(heatmap, image, 0.5)
     blend_im.show()

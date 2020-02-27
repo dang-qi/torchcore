@@ -61,7 +61,7 @@ class COCOPersonCenterDataset(COCOPersonDataset):
         transforms_post = Compose([ToTensor(), Normalize()])
         inputs, _ = transforms_post(inputs )
         if not self.training:
-            return inputs, None
+            return inputs, targets
 
         # Generate heatmaps, offset, width_hight map, etc.
         class_num = self.class_num

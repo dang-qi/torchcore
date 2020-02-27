@@ -41,7 +41,6 @@ class COCOPersonCenterDataset(COCOPersonDataset):
         boxes = np.array(boxes, dtype=np.float32)
         labels = np.array(labels, dtype=np.int64)
 
-
         inputs = {}
         inputs['data'] = img
 
@@ -58,16 +57,17 @@ class COCOPersonCenterDataset(COCOPersonDataset):
         # for debug
         inputs['cropped_im'] = np.asarray(inputs['data'].copy())
 
-        transforms_post = Compose([ToTensor(), Normalize()])
-        inputs, _ = transforms_post(inputs )
-        if not self.training:
-            return inputs, targets
 
         # Generate heatmaps, offset, width_hight map, etc.
         class_num = self.class_num
         width, height = inputs['data'].size
         width_out = width // self.down_stride
         height_out = height // self.down_stride
+
+        transforms_post = Compose([ToTensor(), Normalize()])
+        inputs, _ = transforms_post(inputs )
+        if not self.training:
+            return inputs, targets
 
         # filter out the valid boxes
         boxes_out = targets['boxes']

@@ -8,12 +8,13 @@ from ..gaussian_tools import gaussian_radius, draw_umich_gaussian
 from ..transforms import ToTensor, Normalize, Compose
 
 class COCOPersonCenterDataset(COCOPersonDataset):
-    def __init__( self, root, anno, part, transforms=None, max_obj=128, down_stride=4):
+    def __init__( self, root, anno, part, training=True, transforms=None, max_obj=128, down_stride=4):
         super(COCOPersonDataset,self).__init__( root, transforms )
         self._part = part
         self._max_obj = max_obj # used for ground truth batching 
         self.class_num = 1
         self.down_stride = down_stride
+        self.training = training
 
         # load annotations
         with open(anno, 'rb') as f:
@@ -56,6 +57,12 @@ class COCOPersonCenterDataset(COCOPersonDataset):
 
         # for debug
         inputs['cropped_im'] = np.asarray(inputs['data'].copy())
+
+        transforms_post = Compose([ToTensor(), Normalize()])
+        inputs, _ = transforms_post(inputs )
+        if not self.training:
+            return inputs, None
+
         # Generate heatmaps, offset, width_hight map, etc.
         class_num = self.class_num
         width, height = inputs['data'].size
@@ -97,9 +104,6 @@ class COCOPersonCenterDataset(COCOPersonDataset):
         ind = generate_ind(ind, center_x_out, center_y_out, width_out)
         ind_mask = np.zeros(self._max_obj, dtype=int)
         ind_mask[:len(center_x_out)] = 1
-
-        transforms_post = Compose([ToTensor(), Normalize()])
-        inputs, _ = transforms_post(inputs )
 
         targets['heatmap'] = heatmaps
         targets['offset'] = offset

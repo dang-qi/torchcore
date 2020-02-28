@@ -25,17 +25,38 @@ class trainer :
         if trainset is not None:
             self._set_optimizer()
 
+    #def _set_optimizer( self ):
+    #    params = self._cfg.dnn.OPTIMIZER
+    #    self._optimizer = optim.SGD( self._model['net'].parameters(),
+    #                                 lr=params['lr'],
+    #                                 momentum=params.get('momentum',0.9),
+    #                                 weight_decay=params.get('weight_decay',1e-4))
+
+    #    self._scheduler = optim.lr_scheduler.StepLR( self._optimizer,
+    #                                                step_size=params['decay_step'],
+    #                                                gamma=params['decay_rate'] )
+
+    #    self._niter = self._cfg.dnn.NITER
+
     def _set_optimizer( self ):
         params = self._cfg.dnn.OPTIMIZER
-        self._optimizer = optim.SGD( self._model['net'].parameters(),
-                                     lr=params['lr'],
-                                     momentum=params.get('momentum',0.9),
-                                     weight_decay=params.get('weight_decay',1e-4))
+        if params['type'] == 'GD':
+            self._optimizer = optim.SGD( self._model.parameters(),
+                                        lr=params['lr'],
+                                        momentum=params.get('momentum',0.9),
+                                        weight_decay=params.get('weight_decay',0))
+        elif params['type'] == 'Adam':
+            self._optimizer = optim.Adam(self._model.parameters(),
+                                         lr = params['lr'],
+                                         betas=params.get('betas',(0.9, 0.999)),
+                                         eps = params.get('eps', 1e-8)
+                                         )
+        else:
+            raise ValueError('Optimiser type wrong, {} is not a valid optimizer type!')
 
-        self._scheduler = optim.lr_scheduler.StepLR( self._optimizer,
-                                                    step_size=params['decay_step'],
+        self._scheduler = optim.lr_scheduler.MultiStepLR( self._optimizer,
+                                                    milestones=params['decay_steps'],
                                                     gamma=params['decay_rate'] )
-
         self._niter = self._cfg.dnn.NITER
 
     def _set_device( self, blobs ):
@@ -114,12 +135,12 @@ class trainer :
 
         for i in range( self._epoch, self._niter ):
             print('epoch {} / {}'.format(i+1, self._niter))
-            self._scheduler.step()
             self._train()
 
             if self._testset is not None :
                 self._validate()
             self._epoch = i
+            self._scheduler.step()
 
     def load_trained_model(self, model_path):
         state_dict = torch.load(model_path)['state_dict']

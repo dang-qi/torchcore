@@ -6,9 +6,10 @@ def ellipse_gaussian_radius(width, height, IoU=0.7):
     return r_w, r_h
 
 def ellipse_gaussian_2D(r_w, r_h, sigma_x, sigma_y):
+    r_w, r_h = int(r_w), int(r_h)
     y, x = np.ogrid[-r_h:r_h+1, -r_w:r_w+1]
 
-    h = np.exp(-1*(x*x/ (2*sigma_x**2) + y*y/(2*sigma_y**2)))
+    h = np.exp(-0.5*(x*x/ (sigma_x*sigma_x) + y*y/(sigma_y*sigma_y)))
     h[h < np.finfo(h.dtype).eps * h.max()] = 0
     return h
 

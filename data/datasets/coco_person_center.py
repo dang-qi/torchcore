@@ -156,10 +156,17 @@ def generate_ellipse_gaussian_heatmap(class_num, width, height, center_x, center
     center_y = center_y.astype(int)
     for x, y, label, w, h in zip(center_x, center_y, labels, boxes_w, boxes_h):
         r_w, r_h = ellipse_gaussian_radius(w, h, IoU=0.7)
+        #set the maximum radius while keep the ratio
+        r_max = max(r_w, r_h)
+        if r_max > 10:
+            scale = r_max / 10
+            r_w = r_w / scale
+            r_h = r_h / scale
         sigma_x = r_w/3
         sigma_y = r_h/3
         r_w = max(0, int(r_w))
         r_h = max(0, int(r_h))
+        #print('rw: {}, rh: {}'.format(r_w, r_h))
         #print('x:{}  y:{}  radius:{}'.format(x,y,radius))
         draw_ellipse_gaussian(heatmaps[label-1], x, y, r_w, r_h, sigma_x, sigma_y)
         #draw_gaussian_heatmap(heatmaps[label-1], (x,y), radius )

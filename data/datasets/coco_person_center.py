@@ -158,8 +158,8 @@ def generate_ellipse_gaussian_heatmap(class_num, width, height, center_x, center
         r_w, r_h = ellipse_gaussian_radius(w, h, IoU=0.7)
         #set the maximum radius while keep the ratio
         r_max = max(r_w, r_h)
-        if r_max > 15:
-            scale = r_max / 15
+        if r_max > 5:
+            scale = r_max / 5
             r_w = r_w / scale
             r_h = r_h / scale
         sigma_x = r_w/3

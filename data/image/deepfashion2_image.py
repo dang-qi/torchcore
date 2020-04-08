@@ -6,8 +6,8 @@ from PIL import Image
 from PIL import ImageOps
 
 from .image import image
-from tools import annot_tools
-from tools import bbox_tools
+from ...tools import annot_tools
+from ...tools import bbox_tools
 
 # TODO
 # For landmarks this is just from deepfashion1, not deepfashion2

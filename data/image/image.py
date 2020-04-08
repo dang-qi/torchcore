@@ -4,8 +4,8 @@ import copy
 from PIL import Image
 from PIL import ImageOps
 
-from tools import annot_tools
-from tools import bbox_tools
+from ...tools import annot_tools
+from ...tools import bbox_tools
 
 class image :
     def __init__( self, cfg, image_info, mirrored=False ):

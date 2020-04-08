@@ -2,7 +2,7 @@ import numpy as np
 import copy
 
 from .image import image
-from tools import annot_tools
+from ...tools import annot_tools
 
 keypoints_mirror_mapping = np.array([0,2,1,4,3,6,5,8,7,10,9,12,11,14,13,16,15])
 

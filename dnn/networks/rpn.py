@@ -8,7 +8,12 @@ class MyAnchorGenerator(AnchorGenerator):
         grid_sizes = tuple([feature_map.shape[-2:] for feature_map in feature_maps])
         image_size = inputs['data'].shape[-2:]
         strides = tuple((image_size[0] / g[0], image_size[1] / g[1]) for g in grid_sizes)
-        self.set_cell_anchors(feature_maps[0].device)
+        try:
+            # for earlier version torchvision
+            self.set_cell_anchors(feature_maps[0].device)
+        except TypeError:
+            self.set_cell_anchors(feature_maps[0].dtype,feature_maps[0].device)
+
         anchors_over_all_feature_maps = self.cached_grid_anchors(grid_sizes, strides)
         anchors = []
         for _ in range(len(inputs['data'])):

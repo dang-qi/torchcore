@@ -3,7 +3,7 @@ import copy
 from pprint import pprint
 
 from .image import image
-from tools import annot_tools
+from ...tools import annot_tools
 
 class fire_image( image ):
     def __init__( self, cfg, image_info, mirrored=False ):

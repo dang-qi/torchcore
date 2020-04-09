@@ -1,6 +1,6 @@
 import numpy as np
 #from config import dnn_cfg
-from tools import image_tools
+from ...tools import image_tools
 from PIL import Image
 
  # { R, G, B }

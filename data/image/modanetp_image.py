@@ -1,7 +1,7 @@
 import numpy as np
 import copy
-from tools import annot_tools
-from tools import bbox_tools
+from ...tools import annot_tools
+from ...tools import bbox_tools
 
 from .modanet_image import modanet_image
 

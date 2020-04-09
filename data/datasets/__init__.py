@@ -18,6 +18,7 @@ from .modanet_human_dataset import ModanetHumanDataset
 from .list_dataset import ListDataset
 from .coco_person_center import COCOPersonCenterDataset
 from .modanet_hdf5_dataset import ModanetHDF5Dataset
+from .demo_dataset import DemoDataset
 
 selector = {}
 selector['coco'] = coco_dataset

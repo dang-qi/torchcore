@@ -1,8 +1,8 @@
 import numpy as np
 import copy
 from pprint import pprint
-from tools import annot_tools
-from tools import bbox_tools
+from ...tools import annot_tools
+from ...tools import bbox_tools
 
 from .deepfashion_image import deepfashion_image
 

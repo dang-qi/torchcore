@@ -19,6 +19,9 @@ from .list_dataset import ListDataset
 from .coco_person_center import COCOPersonCenterDataset
 from .modanet_hdf5_dataset import ModanetHDF5Dataset
 from .demo_dataset import DemoDataset
+from .mix_dataset import MixDataset
+from .coco_person_patch import COCOPersonPatchDataset
+from .modanet_human_patch import ModanetHumanPatchDataset
 
 selector = {}
 selector['coco'] = coco_dataset

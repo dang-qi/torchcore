@@ -22,6 +22,7 @@ from .demo_dataset import DemoDataset
 from .mix_dataset import MixDataset
 from .coco_person_patch import COCOPersonPatchDataset
 from .modanet_human_patch import ModanetHumanPatchDataset
+from .coco_center import COCOCenterDataset
 
 selector = {}
 selector['coco'] = coco_dataset

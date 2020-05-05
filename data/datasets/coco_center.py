@@ -122,6 +122,9 @@ class COCOCenterDataset():
 
         return inputs, targets
 
+    def __len__(self):
+        return len(self._images)
+
 def generate_ind(ind, cx, cy, w ):
     for i, (x, y ) in enumerate(zip(cx.astype(int), cy.astype(int))):
         ind[i] = y*w + x

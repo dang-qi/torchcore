@@ -5,8 +5,22 @@ from PIL import ImageFont, Image
 from .color_gen import random_colors
 import os
 import io
+import cv2
 
 FONT_PATH = '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'
+
+def cv_put_text_with_box(im, text, position, font=cv2.FONT_HERSHEY_COMPLEX, font_scale=1, font_color=(0,0,0), box_color=(255,0,0), thickness=1):
+    retval, baseLine = cv2.getTextSize(text, font, font_scale, thickness)
+    pos = (position[0], position[1]+retval[1])
+    right_down = (position[0]+retval[0], position[1]+retval[1])
+    cv2.rectangle(im, position, right_down, box_color, thickness=-1)
+    cv2.putText(im, text, pos, font, font_scale, font_color, thickness=thickness )
+
+def cv_put_text(im, text, position, font=cv2.FONT_HERSHEY_COMPLEX, font_scale=1, font_color=(0,0,0), thickness=1):
+    retval, baseLine = cv2.getTextSize(text, font, font_scale, thickness)
+    pos = (position[0], position[1]+retval[1])
+    #cv2.rectangle(im, position, retval, box_color, thickness=-1)
+    cv2.putText(im, text, pos, font, font_scale, font_color, thickness=thickness )
 
 def parse_loss_log(log_path, losses_names):
     epoch = 0

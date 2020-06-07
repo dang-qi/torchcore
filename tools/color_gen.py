@@ -21,7 +21,7 @@ def random_color_fix(n, seed=123):
     return ret
 
 # from https://github.com/matterport/Mask_RCNN/blob/master/mrcnn/visualize.py
-def random_colors(N, bright=True):
+def random_colors(N, bright=True, GBR=False):
     """
     Generate random colors.
     To get visually distinct colors, generate them in HSV space then
@@ -30,5 +30,7 @@ def random_colors(N, bright=True):
     brightness = 1.0 if bright else 0.7
     hsv = [(i / N, 1, brightness) for i in range(N)]
     colors = list(map(lambda c: tuple(int(x*255) for x in colorsys.hsv_to_rgb(*c)), hsv))
+    if GBR:
+        colors = [(color[2], color[1], color[0]) for color in colors]
     #random.shuffle(colors)
     return colors

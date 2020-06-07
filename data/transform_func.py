@@ -53,12 +53,12 @@ def resize(img, size, interpolation=Image.BILINEAR, smaller_edge=None):
                 return img, 1.0
             if w < h:
                 ow = size
-                oh = int(size * h / w)
+                oh = max(1, int(size * h / w))
                 scale = size / w
                 return img.resize((ow, oh), interpolation), scale
             else:
                 oh = size
-                ow = int(size * w / h)
+                ow = max(1,int(size * w / h))
                 scale = size / h
                 return img.resize((ow, oh), interpolation), scale
         else:
@@ -66,12 +66,12 @@ def resize(img, size, interpolation=Image.BILINEAR, smaller_edge=None):
                 return img, 1.0
             if w > h:
                 ow = size
-                oh = int(size * h / w)
+                oh = max(1, int(size * h / w))
                 scale = size / w
                 return img.resize((ow, oh), interpolation), scale
             else:
                 oh = size
-                ow = int(size * w / h)
+                ow = max(1, int(size * w / h))
                 scale = size / h
                 return img.resize((ow, oh), interpolation), scale
 

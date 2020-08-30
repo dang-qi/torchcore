@@ -10,20 +10,40 @@ class MixDataset(Dataset):
         self.transforms_b = transforms_b
         len_a = len(dataset_a)
         len_b = len(dataset_b)
-        if sample:
+        if sample is None:
+            self.dev_a = len_a
+            self.dev_all = len_a + len_b
+            self.inds = np.arange(self.dev_all)
+        elif sample == 'subsample':
             self.dev_a = min(len_a, len_b) # devide for dataset a
             self.dev_all = self.dev_a * 2
+            self.inds = np.arange(self.dev_all)
+        elif sample == 'duplicate':
+            self.dev_a = len_a
+            if len_a < len_b:
+                times = len_b // len_a
+                extra = len_b % len_a
+                ind_a = np.tile(np.arange(len_a), times)
+                ind_a_extra = np.random.choice(np.arange(len_a), extra)
+                ind_a = np.concatenate((ind_a, ind_a_extra))
+                ind_b = np.arange(len_a, len_a+len_b)
+            else:
+                times = len_a // len_b
+                extra = len_a % len_b
+                ind_a = np.arange(len_a)
+                ind_b = np.tile(np.arange(len_a, len_a+len_b), times)
+                ind_b_extra = np.random.choice(np.arange(len_a, len_a+len_b), extra)
+                ind_b = np.concatenate((ind_b, ind_b_extra))
+            self.inds = np.concatenate((ind_a, ind_b))
         else:
-            self.dev_ind = len_a
-            self.dev_all = len_a + len_b
+            raise ValueError('Wrong sample method, it can be None, subsample or duplicate')
 
-        self.inds = np.arange(self.dev_all)
         if shuffle:
             np.random.shuffle(self.inds)
 
 
     def __len__(self):
-        return self.dev_all
+        return len(self.inds)
 
     def __getitem__(self, idx):
         ind = self.inds[idx]

@@ -24,6 +24,8 @@ from .coco_person_patch import COCOPersonPatchDataset
 from .modanet_human_patch import ModanetHumanPatchDataset
 from .patch_dataset import PatchDataset
 from .coco_center import COCOCenterDataset
+from .coco_person_cv2 import COCOPersonCV2Dataset
+from .modanet_dataset_cv2 import ModanetCV2Dataset
 
 selector = {}
 selector['coco'] = coco_dataset

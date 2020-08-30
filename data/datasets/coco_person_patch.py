@@ -10,7 +10,7 @@ from ..my_gaussian_tools import ellipse_gaussian_radius, draw_ellipse_gaussian
 from ..transforms import ToTensor, Normalize, Compose
 
 class COCOPersonPatchDataset(COCOPersonDataset):
-    def __init__( self, root, anno, part, transforms=None):
+    def __init__( self, root, anno, part, transforms=None, xywh=True):
         super(COCOPersonDataset,self).__init__( root, transforms )
         self._part = part
         self.class_num = 1
@@ -22,7 +22,8 @@ class COCOPersonPatchDataset(COCOPersonDataset):
 
         # filter out the patches
         self.filter_the_person_patch()
-        self.convert_boxes()
+        if xywh:
+            self.convert_boxes()
 
     def filter_the_person_patch(self):
         self.ind_map = []

@@ -187,6 +187,7 @@ def visulize_heatmaps_with_image(heatmap, image):
     heatmap = heatmap.resize(image.size)
     blend_im = Image.blend(heatmap, image, 0.5)
     blend_im.show()
+    return blend_im
 
 def visulize_heatmaps(heatmap):
     heatmap = np.amax(heatmap,axis=0)
@@ -208,4 +209,5 @@ def visulize_colored_heatmaps_with_image(heatmap, image):
     #heatmap = Image.fromarray((heatmap*255).astype(np.uint8)).convert('RGB')
     heatmap = heatmap.resize(image.size)
     blend_im = Image.blend(heatmap, image, 0.5)
-    blend_im.show()
+    #blend_im.show()
+    return blend_im

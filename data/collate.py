@@ -75,54 +75,54 @@ class test_collate(object):
         return all_inputs, all_targets
 
 class mix_dataset_collate(object):
-    def __init__(self, dataset_num, inputs_keys, targets_keys, ind_key, image_key='data'):
+    def __init__(self, dataset_num, inputs_split_keys, targets_split_keys, ind_key ):
         # parameters for centernet:
         # ind_key = 'dataset_label'
         # input_keys = ['data']
         # target_keys = ['image_id', 'heatmap', 'offset', 'width_height', 'ind', 'ind_mask', 'mask']
         self._dataset_num = dataset_num
-        self._inputs_keys = inputs_keys
-        self._target_keys = targets_keys
         self._ind_key = ind_key
-        self._image_key = image_key
+        self._inputs_split_keys = inputs_split_keys
+        self._targets_split_keys = targets_split_keys
 
     def __call__(self, batch):
         #batch_size = len(batch)
-        inputs_dict = {key:[[] for i in range(self._dataset_num)] for key in self._inputs_keys }
-        image_key = self._image_key
-        inputs_dict[image_key] = []
-        targets_dict = {key:[[] for i in range(self._dataset_num)] for key in self._target_keys }
+        inputs_dict = {key:[[] for i in range(self._dataset_num)] for key in self._inputs_split_keys }
+        targets_dict = {key:[[] for i in range(self._dataset_num)] for key in self._targets_split_keys }
         inds = []
 
         for inputs, targets in batch:
             ind = inputs[self._ind_key]
-            inds.append(ind)
+            #inds.append(ind)
             for key, val in inputs.items():
-                if key == self._ind_key:
-                    continue
-                elif key == image_key:
-                    inputs_dict[key].append(val)
+                if key in self._inputs_split_keys:
+                    inputs_dict[key][ind].append(val)
                 else:
                     if key not in inputs_dict:
-                        inputs_dict[key] = [[] for i in range(self._dataset_num)]
-                    inputs_dict[key][ind].append(val)
+                        inputs_dict[key] = []
+                    inputs_dict[key].append(val)
 
             for key, val in targets.items():
-                if key != self._ind_key:
-                    if key not in targets_dict:
-                        targets_dict[key] = [[] for i in range(self._dataset_num)]
+                if key in self._targets_split_keys:
                     targets_dict[key][ind].append(val)
+                else:
+                    if key not in targets_dict:
+                        targets_dict[key] = []
+                        targets_dict[key].append(val)
 
         for key, val_list in inputs_dict.items():
-            if key == image_key:
+            if key not in self._inputs_split_keys:
                 inputs_dict[key] = default_collate(val_list)
-                continue
-            for i, val in enumerate(val_list):
-                inputs_dict[key][i] = default_collate(val)
+            else:
+                for i, val in enumerate(val_list):
+                    inputs_dict[key][i] = default_collate(val)
 
         for key, val_list in targets_dict.items():
-            for i, val in enumerate(val_list):
-                targets_dict[key][i] = default_collate(val)
+            if key not in self._targets_split_keys:
+                targets_dict[key] = default_collate(val_list)
+            else:
+                for i, val in enumerate(val_list):
+                    targets_dict[key][i] = default_collate(val)
 
-        inputs_dict[self._ind_key] = inds
+        #inputs_dict[self._ind_key] = torch.tensor(inds)
         return inputs_dict, targets_dict

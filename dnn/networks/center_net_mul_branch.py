@@ -2,28 +2,36 @@ import torch
 import torch.nn as nn
 
 from .one_stage_detector import OneStageDetector
-from .heads import CommonHead, ComposedHead, CommonHeadWithSigmoid
+from .heads import CommonHead, ComposedHead, CommonHeadWithSigmoid, ComposedListHead
 from .losses import FocalLossHeatmap, L1LossWithMask, L1LossWithInd
 
-class CenterNet(OneStageDetector):
-    def __init__(self, backbone, num_classes, parts=['heatmap'], cfg=None, neck=None, pred_heads=None, loss_weight=None):
+class CenterNetMulBranch(nn.Module):
+    def __init__(self, backbone, num_branches, num_classes, parts=['heatmap'], cfg=None, neck=None, pred_heads=None, loss_weight=None, output_branch=None):
         #super(OneStageDetector,self).__init__()
+        super(CenterNetMulBranch, self).__init__()
+        assert num_branches == len(num_classes)
+        if output_branch is None:
+            output_branch = list(range(num_branches))
+        assert max(output_branch)<num_branches
         if pred_heads is None:
             if neck is None:
                 in_channel = backbone.out_channel
             else:
                 in_channel = neck.out_channel
-            heads = get_center_head(in_channel, num_classes)
+            mul_branch_heads = get_center_mul_branch_heads(in_channel, num_classes)
+            normal_heads = get_center_normal_heads(in_channel)
         self.parts = parts
         self.down_stride = 4
+        self.num_branches = num_branches
+        self.output_branch = output_branch
 
-        losses = CenterNetLoss(parts, loss_weight=loss_weight)
+        losses = CenterNetMulBranchLoss(parts, num_branches, loss_weight=loss_weight)
 
-        #self.backbone = backbone
-        #self.neck = neck
-        #self.pred_heads = pred_heads
-        #self.losses = losses
-        super().__init__(backbone, heads, losses, neck=neck)
+        self.backbone = backbone
+        self.neck = neck
+        self.normal_heads = normal_heads
+        self.mul_branch_heads = mul_branch_heads
+        self.losses = losses
 
     def forward(self, inputs, targets=None):
         if self.training and targets is None:
@@ -31,56 +39,81 @@ class CenterNet(OneStageDetector):
 
         features = self.backbone(inputs['data'])
         #print(features.keys())
+        branch_ids = inputs['dataset_label']
         if self.neck is not None:
             features = self.neck(features)
-        pred = self.pred_heads(features)
+        pred = self.normal_heads(features)
+        feature_list = self.feature_split(features, branch_ids)
+        mul_branch_pred = self.mul_branch_heads(feature_list)
+
+        pred_all = dict(**pred, **mul_branch_pred)
 
         if self.training:
-            loss = self.losses(pred, targets)
+            loss = self.losses(pred_all, targets)
             return loss
         
-        output = self.postprocess(pred, inputs)
+        output = self.postprocess(pred_all, branch_ids)
         return output
 
-    def postprocess(self, pred, inputs):
-        heatmap = pred['heatmap'].sigmoid_()
+    def feature_split(self, feature, branch_ids):
+        feature_list = []
+        for i in range(self.num_branches):
+            index = (branch_ids==i).nonzero().view(-1)
+            out_feature = torch.index_select(feature, 0, index)
+            feature_list.append(out_feature)
+        return feature_list
+        
+
+    def postprocess(self, pred, branch_ids):
+        results = []
+        for branch in self.output_branch:
+            heatmap = pred['heatmap'][branch].sigmoid_()
+        #heatmap = pred['heatmap'].sigmoid_()
         #heatmap = pred['heatmap']
 
-        k=100
-        heatmap = point_nms(heatmap)
-        scores, categories, ys, xs, inds = topk_ind(heatmap, k=k)
-        #mask = topk_mask(heatmap, k=k)
-        batch_size = heatmap.size(0)
-        #scores= heatmap.masked_select(mask).view(batch_size, k)
-        #ys, xs, categories = decode_mask(mask) # (batch_size, k)
-        if 'offset' in self.parts:
-            offset = pred['offset']
-            offset = decode_by_ind(offset, inds)
-            #offset = offset.masked_select(mask)
-            
-        if 'width_height' in self.parts:
-            width_height = pred['width_height']
-            width_height = decode_by_ind(width_height, inds)
-            #width_height = width_height.masked_select(mask)
-        boxes = recover_boxes(xs, ys, offset, width_height, self.down_stride)
-        result = {}
-        result['offset'] = offset
-        result['width_height'] = width_height
-        result['boxes'] = boxes
-        result['scores'] = scores
-        result['category'] = categories
+            k=100
+            heatmap = point_nms(heatmap)
+            scores, categories, ys, xs, inds = topk_ind(heatmap, k=k)
+            #mask = topk_mask(heatmap, k=k)
+            batch_size = heatmap.size(0)
+            #scores= heatmap.masked_select(mask).view(batch_size, k)
+            #ys, xs, categories = decode_mask(mask) # (batch_size, k)
+            index = (branch_ids==branch).nonzero().view(-1)
+            if 'offset' in self.parts:
+                offset = pred['offset']
+                offset = torch.index_select(offset, 0, index)
+                offset = decode_by_ind(offset, inds)
+                #offset = offset.masked_select(mask)
+                
+            if 'width_height' in self.parts:
+                width_height = pred['width_height']
+                width_height = torch.index_select(width_height, 0, index)
+                width_height = decode_by_ind(width_height, inds)
+                #width_height = width_height.masked_select(mask)
+            boxes = recover_boxes(xs, ys, offset, width_height, self.down_stride)
+            result = {}
+            result['offset'] = offset
+            result['width_height'] = width_height
+            result['boxes'] = boxes
+            result['scores'] = scores
+            result['category'] = categories
+            results.append(result)
 
-        return result
+        return results
+    
+    def set_output_branch(self, output_branch):
+        self.output_branch = output_branch
 
-class CenterNetLoss(nn.Module):
-    def __init__(self, loss_parts, loss_weight=None):
+class CenterNetMulBranchLoss(nn.Module):
+    def __init__(self, loss_parts, num_branches, loss_weight=None):
         super().__init__()
         self.loss_parts = loss_parts
+        self.num_branches = num_branches
         if loss_weight is None:
             loss_weight = {'heatmap':1., 'offset':0.5, 'width_height':0.01}
         self.loss_weight = loss_weight
         if 'heatmap' in loss_parts:
-            self.heatmap_loss = FocalLossHeatmap(alpha=0.5, gamma=2)
+            self.heatmap_loss = [FocalLossHeatmap(alpha=0.5, gamma=2) for i in range(num_branches)]
         if 'offset' in loss_parts:
             #self.offset_loss = L1LossWithMask()
             self.offset_loss = L1LossWithInd()
@@ -91,7 +124,9 @@ class CenterNetLoss(nn.Module):
     def forward(self, pred, targets ):
         losses = {}
         if 'heatmap' in self.loss_parts:
-            losses['heatmap'] = self.heatmap_loss(pred['heatmap'], targets['heatmap']) * self.loss_weight['heatmap']
+            losses['heatmap'] = 0
+            for i in range(self.num_branches):
+                losses['heatmap'] = self.heatmap_loss[i](pred['heatmap'][i], targets['heatmap'][i]) * self.loss_weight['heatmap']
         if 'offset' in self.loss_parts:
             #losses['offset'] = self.offset_loss(pred['offset'], targets['mask'], targets['offset']) * self.loss_weight['offset']
             losses['offset'] = self.offset_loss(pred['offset'], targets['ind'],targets['ind_mask'], targets['offset']) * self.loss_weight['offset']
@@ -102,12 +137,17 @@ class CenterNetLoss(nn.Module):
 
 
 
-def get_center_head(in_channel, num_classes):
-    head_names = ['heatmap', 'offset', 'width_height']
-    heatmap_head = CommonHead(num_classes, in_channel, head_conv_channel=64)
+def get_center_mul_branch_heads(in_channel, num_classes ):
+    head_names = ['heatmap']
+    heatmap_heads = [CommonHead(num_class, in_channel, head_conv_channel=64) for num_class in num_classes]
+    heads = [heatmap_heads]
+    return ComposedListHead(head_names, heads)
+
+def get_center_normal_heads(in_channel):
+    head_names = [ 'offset', 'width_height']
     offset_head = CommonHead(2, in_channel, head_conv_channel=64)
     witdh_height_head = CommonHead(2, in_channel, head_conv_channel=64)
-    heads = [heatmap_head, offset_head, witdh_height_head]
+    heads = [offset_head, witdh_height_head]
     return ComposedHead(head_names, heads)
 
 def point_nms(heatmap, kernel_size=3):

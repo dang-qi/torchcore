@@ -38,18 +38,17 @@ class CenterNetMulBranch(nn.Module):
             raise ValueError('targets should not be None during the training')
 
         features = self.backbone(inputs['data'])
-        #print(features.keys())
         branch_ids = inputs['dataset_label']
         if self.neck is not None:
             features = self.neck(features)
         pred = self.normal_heads(features)
-        feature_list = self.feature_split(features, branch_ids)
-        mul_branch_pred = self.mul_branch_heads(feature_list)
+        feature_list, indexes = self.feature_split(features, branch_ids)
+        mul_branch_pred = self.mul_branch_heads(feature_list )
 
         pred_all = dict(**pred, **mul_branch_pred)
 
         if self.training:
-            loss = self.losses(pred_all, targets)
+            loss = self.losses(pred_all, targets, indexes)
             return loss
         
         output = self.postprocess(pred_all, branch_ids)
@@ -57,11 +56,13 @@ class CenterNetMulBranch(nn.Module):
 
     def feature_split(self, feature, branch_ids):
         feature_list = []
+        indexes = []
         for i in range(self.num_branches):
             index = (branch_ids==i).nonzero().view(-1)
             out_feature = torch.index_select(feature, 0, index)
             feature_list.append(out_feature)
-        return feature_list
+            indexes.append(index)
+        return feature_list, indexes
         
 
     def postprocess(self, pred, branch_ids):
@@ -121,12 +122,14 @@ class CenterNetMulBranchLoss(nn.Module):
             #self.width_height_loss = L1LossWithMask() 
             self.width_height_loss = L1LossWithInd() 
     
-    def forward(self, pred, targets ):
+    def forward(self, pred, targets, heatmap_indexes ):
         losses = {}
         if 'heatmap' in self.loss_parts:
             losses['heatmap'] = 0
             for i in range(self.num_branches):
-                losses['heatmap'] = self.heatmap_loss[i](pred['heatmap'][i], targets['heatmap'][i]) * self.loss_weight['heatmap']
+                # select the target heatmap by index
+                heat_target = torch.index_select(targets['heatmap'][i], 0, heatmap_indexes[i])
+                losses['heatmap'] = self.heatmap_loss[i](pred['heatmap'][i], heat_target) * self.loss_weight['heatmap']
         if 'offset' in self.loss_parts:
             #losses['offset'] = self.offset_loss(pred['offset'], targets['mask'], targets['offset']) * self.loss_weight['offset']
             losses['offset'] = self.offset_loss(pred['offset'], targets['ind'],targets['ind_mask'], targets['offset']) * self.loss_weight['offset']
@@ -153,7 +156,6 @@ def get_center_normal_heads(in_channel):
 def point_nms(heatmap, kernel_size=3):
     padding = (kernel_size - 1) // 2
     heatout = nn.functional.max_pool2d(heatmap, kernel_size=kernel_size, padding=padding, stride=1 )
-    #print((heatout==1).nonzero())
     mask = (heatout == heatmap).float()
     return mask*heatmap
 

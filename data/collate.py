@@ -1,6 +1,7 @@
 from .transforms import ResizeAndPadding, ToTensor, Compose
 import torch
 from torch.utils.data._utils.collate import default_collate
+import numpy as np
 
 class rcnn_collate(object):
     ''' collate function for rcnn, inputs are (inputs, targets)'''
@@ -86,43 +87,55 @@ class mix_dataset_collate(object):
         self._targets_split_keys = targets_split_keys
 
     def __call__(self, batch):
-        #batch_size = len(batch)
+        batch_size = len(batch)
         inputs_dict = {key:[[] for i in range(self._dataset_num)] for key in self._inputs_split_keys }
         targets_dict = {key:[[] for i in range(self._dataset_num)] for key in self._targets_split_keys }
-        inds = []
 
         for inputs, targets in batch:
             ind = inputs[self._ind_key]
-            #inds.append(ind)
-            for key, val in inputs.items():
-                if key in self._inputs_split_keys:
-                    inputs_dict[key][ind].append(val)
-                else:
-                    if key not in inputs_dict:
-                        inputs_dict[key] = []
-                    inputs_dict[key].append(val)
+            self.collect_data_once(inputs, inputs_dict, ind, self._inputs_split_keys)
+            self.collect_data_once(targets, targets_dict, ind, self._targets_split_keys)
 
-            for key, val in targets.items():
-                if key in self._targets_split_keys:
-                    targets_dict[key][ind].append(val)
-                else:
-                    if key not in targets_dict:
-                        targets_dict[key] = []
-                        targets_dict[key].append(val)
-
-        for key, val_list in inputs_dict.items():
-            if key not in self._inputs_split_keys:
-                inputs_dict[key] = default_collate(val_list)
-            else:
-                for i, val in enumerate(val_list):
-                    inputs_dict[key][i] = default_collate(val)
-
-        for key, val_list in targets_dict.items():
-            if key not in self._targets_split_keys:
-                targets_dict[key] = default_collate(val_list)
-            else:
-                for i, val in enumerate(val_list):
-                    targets_dict[key][i] = default_collate(val)
+        self.summary_data(inputs_dict, batch_size, self._inputs_split_keys)
+        self.summary_data(targets_dict, batch_size, self._targets_split_keys)
 
         #inputs_dict[self._ind_key] = torch.tensor(inds)
         return inputs_dict, targets_dict
+
+    def collect_data_once(self, data, data_dict, ind, split_key):
+        for key, val in data.items():
+            if key in split_key:
+                data_dict[key][ind].append(val)
+                for i in range(self._dataset_num):
+                    if ind != i:
+                        data_dict[key][i].append(None)
+            else:
+                if key not in data_dict:
+                    data_dict[key] = []
+                data_dict[key].append(val)
+                
+    def summary_data(self, data_dict, batch_size, split_key):
+        for key, val_list in data_dict.items():
+            if key not in split_key:
+                data_dict[key] = default_collate(val_list)
+                #inputs_dict[key] = [default_collate(item) for item in val_list]
+            else:
+                for i, val in enumerate(val_list):
+                    val = self.convert_None_to_zero(val)
+                    data_dict[key][i] = default_collate(val)
+
+    def convert_None_to_zero(self, data_list):
+        sample = None
+        for data in data_list:
+            if data is not None:
+                sample = np.zeros_like(data)
+                break
+
+        if sample is None:
+            return data_list
+
+        for i, data in enumerate(data_list):
+            if data is None:
+                data_list[i] = np.copy(sample)
+
+        return data_list

@@ -4,7 +4,7 @@ from .pooling import RoiAliagnFPN
 from .general_detector import GeneralDetector
 from torchvision.ops import roi_align, nms
 
-class FasterRCNNNew(GeneralDetector):
+class FasterRCNNFPN(GeneralDetector):
     def __init__(self, backbone, neck=None, heads=None, cfg=None, training=True):
         super(GeneralDetector, self).__init__()
         self.backbone = backbone

@@ -46,7 +46,7 @@ class trainer :
 
     def _set_optimizer( self ):
         if self._optimizer is None:
-            params = self._cfg.dnn.OPTIMIZER
+            params = self._cfg.optimizer
         if params['type'] == 'GD':
             self._optimizer = optim.SGD( self._model.parameters(),
                                         lr=params['lr'],

@@ -40,11 +40,6 @@ class FasterRCNNFPN(GeneralDetector):
 
     def post_process(self, results, inputs):
         for i, (boxes, scores, labels) in enumerate(zip(results['boxes'], results['scores'], results['labels'])):
-            # perform nms
-            keep = nms(boxes, scores, iou_threshold=0.5)
-            boxes = boxes[keep]
-            scores = scores[keep]
-            labels = labels[keep]
 
             if len(boxes)>0:
                 if 'scale' in inputs:

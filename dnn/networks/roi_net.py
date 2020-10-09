@@ -42,26 +42,45 @@ class RoINet(nn.Module):
             results = self.inference_result(label_pre, bbox_pre, proposals)
             return results
 
+    def remove_small_boxes(self, boxes, min_area=0.1):
+        area = (boxes[:,3]-boxes[:,1]) * (boxes[:,2]-boxes[:,0])
+        keep = torch.where(area > min_area)[0]
+        return keep
+        
     def inference_result(self, label_pre, bbox_pre, proposals):
         results = {'boxes':[], 'labels':[], 'scores':[]}
         for label_pre_image, bbox_pre_image, proposal in zip(label_pre, bbox_pre, proposals):
             label_pre_image = F.softmax(label_pre_image, dim=1)
-            scores, labels = torch.max(label_pre_image, dim=1)
-            pos_label_ind = torch.where(labels>0)
+
+            # ignore the background class
+            #proposal = proposal[:, 4:].view(-1,4)
+            bbox_pre_image = bbox_pre_image[:, 4:].view(-1,4)
+            boxes = self.box_coder.decode_once(bbox_pre_image, proposal)
+            scores = label_pre_image[:, 1:]
+            #scores = scores[:, 1:]
+            labels = torch.arange(1, self.cfg.class_num+1).expand_as(scores)
+
+            scores = scores.view(-1)
+            labels = labels.view(-1)
+            #scores, labels = torch.max(label_pre_image, dim=1)
+            pos_label_ind = torch.where(scores > self.cfg.roi_head.score_thre)
             labels = labels[pos_label_ind]
             scores = scores[pos_label_ind]
-            if len(pos_label_ind[0]) == 0:
-                results['boxes'].append(labels)
-                results['labels'].append(scores)
-                results['scores'].append(scores)
-                continue
-            proposal = proposal[pos_label_ind]
-            bbox_pre_image = bbox_pre_image[pos_label_ind]
-            bbox_pre_image = bbox_pre_image.view(bbox_pre_image.shape[0], -1, 4)
-            ind0 = torch.arange(bbox_pre_image.shape[0])
-            bbox_pre_image = bbox_pre_image[ind0, labels]
-            #print('bbox_pre_image shape:', bbox_pre_image.shape)
-            boxes = self.box_coder.decode_once(bbox_pre_image, proposal)
+            boxes = boxes[pos_label_ind]
+
+            # remove small boxes
+            keep = self.remove_small_boxes(boxes, min_area=0.1)
+            labels = labels[keep]
+            scores = scores[keep]
+            boxes = boxes[keep]
+
+            # perform nms for each class
+            keep = batched_nms(boxes, scores, labels, self.cfg.nms_thresh)
+            keep = keep[:300]
+            labels = labels[keep]
+            scores = scores[keep]
+            boxes = boxes[keep]
+
             results['boxes'].append(boxes)
             results['labels'].append(labels)
             results['scores'].append(scores)

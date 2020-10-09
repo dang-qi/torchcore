@@ -1,4 +1,5 @@
 from .transforms import ResizeAndPadding, ToTensor, Compose
+from .transforms import GeneralRCNNTransform
 import torch
 from torch.utils.data._utils.collate import default_collate
 import numpy as np
@@ -139,3 +140,16 @@ class mix_dataset_collate(object):
                 data_list[i] = np.copy(sample)
 
         return data_list
+
+class CollateFnRCNN(object):
+    '''apply general rcnn transform to batchs'''
+    def __init__(self, min_size, max_size, image_mean=None, image_std=None):
+        self.transforms = GeneralRCNNTransform(min_size, max_size,  
+                                               image_mean=image_mean, image_std=image_std)
+
+    def __call__(self, batch):
+        inputs, targets = [list(s) for s in zip(*batch)]
+        ori_image = [input['ori_image'] for input in inputs]
+        inputs, targets = self.transforms(inputs, targets)
+        inputs['ori_image'] = ori_image
+        return inputs, targets

@@ -5,24 +5,18 @@ from .dataset_new import Dataset
 
 class VideoDataset(torch.utils.data.IterableDataset):
     def __init__(self, video_path, transforms=None ):
+        self.video_path = video_path
         self.vidcap = cv2.VideoCapture(video_path)
         self.transforms = transforms
 
-    def __iter__(self)
-    def __getitem__(self, index):
-        img_path = self.img_files[index % len(self.img_files)].rstrip()
-        img = Image.open(img_path).convert('RGB')
-        inputs = {}
-        inputs['path'] = img_path
-        inputs['ori_image'] = img
-        targets = None
+    def __iter__(self):
+        return VideoDatasetIterator(self)
 
-        if self.transforms is not None:
-            inputs['data'],  targets = self.transforms(img, targets)
-        else:
-            inputs['data'] = img
 
-        return inputs, targets
+    class VideoDatasetIterator():
+        def __init__(self, video_dataset):
+            self.cap = cv2.VideoCapture(video_dataset.video_path)
+            self.transforms = video_dataset.transforms
 
-    def __len__(self):
-        return len(self.img_files)
+        def __next__(self):
+            ...

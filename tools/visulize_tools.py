@@ -173,11 +173,11 @@ def draw_single_box(image, box):
     draw.rectangle(box, outline=(255, 0, 0), width=3)
     return image
 
-def draw_plain_boxes(image,boxes):
+def draw_plain_boxes(image,boxes, color=(255, 0, 0)):
     draw = Draw(image)
     for box in boxes:
         box = list(np.array(box, dtype=int))
-        draw.rectangle(box, outline=(255, 0, 0), width=3)
+        draw.rectangle(box, outline=color, width=3)
     return image
 
 

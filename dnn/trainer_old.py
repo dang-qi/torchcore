@@ -1,6 +1,5 @@
 import torch
 import torch.optim as optim
-from torch import nn
 import numpy as np
 import time
 import progressbar
@@ -9,17 +8,15 @@ import logging
 from .data import data_feeder
 
 class trainer :
-    def __init__( self, cfg, model, device, trainset, testset=None, optimizer=None, scheduler=None ):
+    def __init__( self, cfg, model, device, trainset, testset=None ):
         self._cfg = cfg
         self._device = device
-        self._optimizer = optimizer
+        self._optimizer = None
         self._model = model
 
         self._trainset = trainset
         self._testset = testset
         self._epoch = 0
-        self._scheduler = scheduler
-        self._niter = cfg.n_iter
         #self._trainset_feeder = data_feeder( trainset )
 
         #if testset is not None :
@@ -27,9 +24,6 @@ class trainer :
 
         if trainset is not None:
             self._set_optimizer()
-        if self._scheduler is not None:
-            self._set_scheduler()
-        
 
     #def _set_optimizer( self ):
     #    params = self._cfg.dnn.OPTIMIZER
@@ -45,8 +39,7 @@ class trainer :
     #    self._niter = self._cfg.dnn.NITER
 
     def _set_optimizer( self ):
-        if self._optimizer is None:
-            params = self._cfg.dnn.OPTIMIZER
+        params = self._cfg.dnn.OPTIMIZER
         if params['type'] == 'GD':
             self._optimizer = optim.SGD( self._model.parameters(),
                                         lr=params['lr'],
@@ -61,20 +54,39 @@ class trainer :
         else:
             raise ValueError('Optimiser type wrong, {} is not a valid optimizer type!')
 
-    def _set_scheduler(self):
-        raise NotImplementedError
-        #self._scheduler = optim.lr_scheduler.MultiStepLR( self._optimizer,
-        #                                            milestones=params['decay_steps'],
-        #                                            gamma=params['decay_rate'] )
-        #self._niter = self._cfg.dnn.NITER
+        self._scheduler = optim.lr_scheduler.MultiStepLR( self._optimizer,
+                                                    milestones=params['decay_steps'],
+                                                    gamma=params['decay_rate'] )
+        self._niter = self._cfg.dnn.NITER
 
     def _set_device( self, blobs ):
         for n,d in blobs.items() :
             blobs[n] = d.to( self._device )
         return blobs
 
+    def trainstep( self ):
+        inputs, targets = self._trainset.next()
+        inputs = self._set_device( inputs )
+        targets = self._set_device( targets )
+
+        outputs = self._model['net']( inputs )
+        loss = self._model['loss']( outputs, targets )
+
+        print( loss )
+        self._optimizer.zero_grad()
+        #loss.backward()
+        #self._optimizer.step()
+
+        return loss
+
+    def test( self ):
+        self._model['net'].test()
+        images = self._batch_gen.next()
+        data, targets = self._blobs_gen.get_blobs( images )
+        return self._model( data )
+
     def _train( self ):
-        self._model.train()
+        self._model['net'].train()
 
         widgets = [ progressbar.Percentage(), ' ', progressbar.ETA(), ' ',
                     '(',progressbar.DynamicMessage('loss'),')' ]
@@ -82,7 +94,6 @@ class trainer :
 
         loss_values = []
 
-        self._optimizer.zero_grad()
         for idx in range( len(self._trainset) ):
             inputs, targets = self._trainset.next()
 
@@ -95,14 +106,9 @@ class trainer :
             loss_values.append( loss.cpu().detach().numpy() )
 
             # Computing gradient and do SGD step
-            #self._optimizer.zero_grad()
+            self._optimizer.zero_grad()
             loss.backward()
-            #self._optimizer.step()
-            if (idx+1)%self._accumulate_step == 0:
-                # every 10 iterations of batches of size 10
-                self._optimizer.step()
-                self._optimizer.zero_grad()
-
+            self._optimizer.step()
 
             bar.update(idx+1,loss=loss.item())
         bar.finish()
@@ -124,8 +130,8 @@ class trainer :
         bench.summary()
 
     def train( self ):
-        #if self._testset is not None :
-        #    self._validate()
+        if self._testset is not None :
+            self._validate()
 
         for i in range( self._epoch, self._niter ):
             print('epoch {} / {}'.format(i+1, self._niter))
@@ -134,23 +140,17 @@ class trainer :
             if self._testset is not None :
                 self._validate()
             self._epoch = i
-            if self._scheduler is not None:
-                self._scheduler.step()
+            self._scheduler.step()
 
     def load_trained_model(self, model_path):
         state_dict = torch.load(model_path)['state_dict']
-        self._model.load_state_dict(state_dict)
+        self._model['net'].load_state_dict(state_dict)
 
     def save_training(self, path, to_print=True):
-        if isinstance(self._model, nn.DataParallel):
-            model_state_dict = self._model.module.state_dict()
-        else:
-            model_state_dict = self._model.state_dict()
         torch.save({
             'epoch': self._epoch,
-            'model_state_dict': model_state_dict,
-            'optimizer_state_dict': self._optimizer.state_dict(),
-            'scheduler_state_dict': self._scheduler if self._scheduler is None else self._scheduler.state_dict()
+            'model_state_dict': self._model['net'].state_dict(),
+            'optimizer_state_dict': self._optimizer.state_dict()
         }, path)
         if to_print:
             print('The checkpoint has been saved to {}'.format(path))
@@ -160,6 +160,5 @@ class trainer :
         self._epoch = checkpoint['epoch']
         self._model['net'] = checkpoint['model_state_dict']
         self._optimizer = checkpoint['optimizer_state_dict']
-        self._scheduler = checkpoint['scheduler_state_dict']
         if to_print:
             print('Chekpoint has been loaded from {}'.format(path))

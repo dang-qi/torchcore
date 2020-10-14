@@ -47,7 +47,7 @@ class trainer :
     def _set_optimizer( self ):
         if self._optimizer is None:
             params = self._cfg.optimizer
-        if params['type'] == 'GD':
+        if params['type'] == 'SGD':
             self._optimizer = optim.SGD( self._model.parameters(),
                                         lr=params['lr'],
                                         momentum=params.get('momentum',0.9),

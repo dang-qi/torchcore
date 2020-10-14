@@ -13,6 +13,7 @@ class COCOPersonDataset(Dataset):
         # load annotations
         with open(anno, 'rb') as f:
             self._images = pickle.load(f)[part] 
+        self.remove_wrong_labels()
 
     def __len__(self):
         return len(self._images)
@@ -56,3 +57,21 @@ class COCOPersonDataset(Dataset):
 
         return inputs, targets
 
+
+    def remove_wrong_labels(self):
+        i = 0
+        while i < len(self._images):
+            image = self._images[i]
+            j = 0
+            while j < len(image['objects']):
+                obj = image['objects'][j]
+                if obj['bbox'][2]<= 0 or obj['bbox'][3]<=0:
+                    print('delete one wrong object: {}'.format(image['objects'][j]['bbox']))
+                    del image['objects'][j]
+                else:
+                    j += 1
+            if len(image['objects']) == 0:
+                print('delete image {}'.format(image['id']))
+                del self._images[i]
+            else:
+                i += 1

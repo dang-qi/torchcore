@@ -54,14 +54,18 @@ class RoINet(nn.Module):
 
             # ignore the background class
             #proposal = proposal[:, 4:].view(-1,4)
-            bbox_pre_image = bbox_pre_image[:, 4:].view(-1,4)
+            bbox_pre_image = bbox_pre_image[:, 4:].reshape(bbox_pre_image.shape[0],-1,4)
+            proposal = proposal.unsqueeze(1).expand_as(bbox_pre_image)
+            bbox_pre_image = bbox_pre_image.reshape(-1, 4)
+            proposal = proposal.reshape(-1, 4)
             boxes = self.box_coder.decode_once(bbox_pre_image, proposal)
+            boxes = proposal
             scores = label_pre_image[:, 1:]
             #scores = scores[:, 1:]
             labels = torch.arange(1, self.cfg.class_num+1).expand_as(scores)
 
-            scores = scores.view(-1)
-            labels = labels.view(-1)
+            scores = scores.reshape(-1)
+            labels = labels.reshape(-1)
             #scores, labels = torch.max(label_pre_image, dim=1)
             pos_label_ind = torch.where(scores > self.cfg.roi_head.score_thre)
             labels = labels[pos_label_ind]

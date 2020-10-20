@@ -27,6 +27,7 @@ from .coco_center import COCOCenterDataset
 from .coco_person_cv2 import COCOPersonCV2Dataset
 from .modanet_dataset_cv2 import ModanetCV2Dataset
 from .madanet_center import ModanetCenterDataset
+from .coco import COCODataset
 
 selector = {}
 selector['coco'] = coco_dataset

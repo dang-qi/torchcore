@@ -170,6 +170,7 @@ class GeneralRCNNTransform(object):
         '''
         images = []
         image_path = []
+        dataset_label = []
         scales = np.zeros(len(inputs))
         if targets is None:
             targets=[None]*len(inputs)
@@ -188,6 +189,8 @@ class GeneralRCNNTransform(object):
 
             if 'path' in ainput:
                 image_path.append(ainput['path'])
+            if 'dataset_label' in ainput:
+                dataset_label.append(ainput['dataset_label'])
 
         max_size = tuple(max(s) for s in zip(*[img.shape for img in images]))
         _, height, width = max_size
@@ -200,7 +203,10 @@ class GeneralRCNNTransform(object):
         inputs['data'] = im_tensor
         inputs['scale'] = scales
         inputs['image_sizes'] = image_sizes
-        inputs['path'] = image_path
+        if len(image_path) > 0:
+            inputs['path'] = image_path
+        if len(dataset_label) > 0:
+            inputs['dataset_label'] = torch.tensor(dataset_label)
         return inputs, targets
 
 class RandomMirror(object):

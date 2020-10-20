@@ -144,12 +144,23 @@ class mix_dataset_collate(object):
 class CollateFnRCNN(object):
     '''apply general rcnn transform to batchs'''
     def __init__(self, min_size, max_size, image_mean=None, image_std=None):
-        self.transforms = GeneralRCNNTransform(min_size, max_size,  
+        if isinstance(min_size, (list, tuple)):
+            self.transforms = [GeneralRCNNTransform(min_size_i, max_size, image_mean=image_mean, image_std=image_std) for min_size_i in min_size]
+            self.transform_num = len(min_size)
+            self.multi_scale = True
+        else:
+            self.transforms = GeneralRCNNTransform(min_size, max_size,  
                                                image_mean=image_mean, image_std=image_std)
+            self.multi_scale = False
 
     def __call__(self, batch):
         inputs, targets = [list(s) for s in zip(*batch)]
         ori_image = [input['ori_image'] for input in inputs]
-        inputs, targets = self.transforms(inputs, targets)
+        if self.multi_scale:
+            i = np.random.randint(self.transform_num)
+            transform = self.transforms[i]
+        else:
+            transform = self.transforms
+        inputs, targets = transform(inputs, targets)
         inputs['ori_image'] = ori_image
         return inputs, targets

@@ -7,19 +7,18 @@ from .tools import AnchorBoxesCoder
 from torchvision.ops.boxes import batched_nms, box_iou
 from .heads import FastRCNNHead
 
-class RoINet(nn.Module):
+class RoICenterNet(nn.Module):
     def __init__(self,cfg):
         super().__init__()
         self.cfg = cfg
 
-        self.pos_neg_sampler = PosNegSampler(pos_num=128, neg_num=128)
+        self.pos_neg_sampler = PosNegSampler(pos_num=127, neg_num=127)
         self.roi_align = RoiAliagnFPN(cfg.roi_pool.pool_h,
                                       cfg.roi_pool.pool_w,
                                       sampling=-1)
         self.faster_rcnn_head = FastRCNNHead(cfg)
         self.box_coder = AnchorBoxesCoder(box_code_clip=None)
-        #self.smooth_l1_loss = nn.SmoothL1Loss(reduction='mean')
-        self.smooth_l1_loss = nn.SmoothL1Loss(reduction='sum', beta= 1.0 / 9) 
+        self.smooth_l1_loss = nn.SmoothL1Loss(reduction='mean')
         self.label_loss = nn.CrossEntropyLoss(reduction='mean')
 
     def forward(self, proposals, features, strides, targets=None):
@@ -119,8 +118,7 @@ class RoINet(nn.Module):
         #print('label pre', label_pre.shape)
         #print('target labels', target_labels.shape)
 
-        bbox_loss = self.smooth_l1_loss(bbox_pre_pos, target_boxes) / label_pos.numel()
-        #bbox_loss = self.smooth_l1_loss(bbox_pre_pos, target_boxes) 
+        bbox_loss = self.smooth_l1_loss(bbox_pre_pos, target_boxes)
         label_loss = self.label_loss(label_pre, target_labels)
         return label_loss, bbox_loss
 

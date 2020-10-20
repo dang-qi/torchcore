@@ -9,6 +9,7 @@ from torch.nn import functional as F
 
 from .tools import AnchorBoxesCoder
 from .tools import PosNegSampler
+from .tools.mul_branch import split_dict, split_list
 
 class MyAnchorGenerator(AnchorGenerator):
     def __init__(
@@ -96,7 +97,7 @@ class MyAnchorGenerator(AnchorGenerator):
     #    anchors = []
     #    cell_anchors = self.cell_anchors
 
-class MyRegionProposalNetwork(RegionProposalNetwork):
+class RegionProposalNetworkMulBranch(RegionProposalNetwork):
     def __init__(self, anchor_generator, head, cfg):
         super(RegionProposalNetwork, self).__init__()
         self.anchor_generator = anchor_generator
@@ -111,8 +112,7 @@ class MyRegionProposalNetwork(RegionProposalNetwork):
 
         # used to remove the boxes not in the image
         self.min_size = 1e-3
-        self.smooth_l1_loss = nn.SmoothL1Loss(reduction='sum', beta= 1.0 / 9) 
-        #self.smooth_l1_loss = nn.SmoothL1Loss(reduction='mean') 
+        self.smooth_l1_loss = nn.SmoothL1Loss(reduction='mean')
 
     def forward(self, inputs, features, targets):
         """
@@ -204,10 +204,8 @@ class MyRegionProposalNetwork(RegionProposalNetwork):
 
         loss_class = F.binary_cross_entropy_with_logits(label_pred, label_target)
         #print('pred boxes shape:', pred_bbox_deltas.shape)
-        #print('label pos shape:', label_pos.shape)
         #print('targets shape:', regression_targets.shape)
-        loss_box = self.smooth_l1_loss(pred_bbox_deltas, regression_targets) / label_pos.numel()
-        #loss_box = self.smooth_l1_loss(pred_bbox_deltas, regression_targets) 
+        loss_box = self.smooth_l1_loss(pred_bbox_deltas, regression_targets)
         #loss_box = det_utils.smooth_l1_loss(
         #    pred_bbox_deltas,
         #    regression_targets,
@@ -294,8 +292,6 @@ class MyRegionProposalNetwork(RegionProposalNetwork):
         for proposal, pred_class_image, image_size, idxs in zip(proposals, pred_class, image_sizes, indexes):
             # first crop the boxes inside the image
             proposal = self.crop_boxes(proposal, image_size)
-            if len(proposal) == 0:
-                print('proposal are 0')
             #print('proposal shape:', len(proposal))
             keep = self.remove_small_boxes(proposal, self.min_size)
             #print('keep1', keep)
@@ -348,11 +344,7 @@ class MyRegionProposalNetwork(RegionProposalNetwork):
         boxes_width = boxes[:,2] - boxes[:,0]
         boxes_height = boxes[:,3] - boxes[:,1]
         keep = (boxes_width >= min_size) & (boxes_height >= min_size)
-        try:
-            keep = torch.where(keep)[0]
-        except RuntimeError:
-            print('keep', keep)
-            raise RuntimeError
+        keep = torch.where(keep)[0]
         return keep
 
     def crop_boxes(self, boxes, image_size):

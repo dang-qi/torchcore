@@ -155,12 +155,14 @@ class CollateFnRCNN(object):
 
     def __call__(self, batch):
         inputs, targets = [list(s) for s in zip(*batch)]
-        ori_image = [input['ori_image'] for input in inputs]
+        if 'ori_image' in inputs:
+            ori_image = [input['ori_image'] for input in inputs]
         if self.multi_scale:
             i = np.random.randint(self.transform_num)
             transform = self.transforms[i]
         else:
             transform = self.transforms
         inputs, targets = transform(inputs, targets)
-        inputs['ori_image'] = ori_image
+        if 'ori_image' in inputs:
+            inputs['ori_image'] = ori_image
         return inputs, targets

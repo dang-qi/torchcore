@@ -12,14 +12,23 @@ class FasterRCNNFPN(GeneralDetector):
         self.rpn = heads['rpn']
         self.roi_head = heads['bbox']
         self.training = training
+        #self.feature_names = ['0', '1', '2', '3']
         
 
     def forward(self, inputs, targets=None):
         features = self.backbone(inputs['data'])
         #print('feature keys:', features.keys())
+        #for k,v in features.items():
+        #    print('{}:{}'.format(k, v.shape))
         if self.neck is not None:
             features = self.neck(features)
+        #features_new = OrderedDict()
+        #for k in self.feature_names:
+        #    features_new[k] = features[k]
+        #features = features_new
+
         strides = self.get_strides(inputs, features)
+        #print('strides', strides)
 
         if self.training:
             proposals, losses_rpn = self.rpn(inputs, features, targets)

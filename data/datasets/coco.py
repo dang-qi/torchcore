@@ -26,7 +26,7 @@ class COCODataset(Dataset):
         img_path = os.path.join(self._root, self._part, image['file_name'] )
         image_id=image['id']
         img = Image.open(img_path).convert('RGB')
-        ori_image = img.copy()
+        #ori_image = img.copy()
 
         # Load targets
         boxes = []
@@ -44,7 +44,7 @@ class COCODataset(Dataset):
         #targets (list[Dict[Tensor]]): ground-truth boxes present in the image (optional)
         inputs = {}
         inputs['data'] = img
-        inputs['ori_image'] = ori_image
+        #inputs['ori_image'] = ori_image
 
         targets = {}
         targets["boxes"] = boxes

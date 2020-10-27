@@ -81,7 +81,7 @@ class RoINet(nn.Module):
 
             # perform nms for each class
             keep = batched_nms(boxes, scores, labels, self.cfg.nms_thresh)
-            keep = keep[:300]
+            keep = keep[:self.cfg.roi_head.detection_per_image]
             labels = labels[keep]
             scores = scores[keep]
             boxes = boxes[keep]

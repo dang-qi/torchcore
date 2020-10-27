@@ -2,7 +2,7 @@ import torch
 import math
 from torch import nn
 
-from torchvision.models.detection.rpn import AnchorGenerator, RegionProposalNetwork, concat_box_prediction_layers
+from torchvision.models.detection.rpn import AnchorGenerator, RegionProposalNetwork
 from torchvision.ops import nms
 from torchvision.ops.boxes import batched_nms, box_iou
 from torch.nn import functional as F
@@ -164,6 +164,7 @@ class MyRegionProposalNetwork(RegionProposalNetwork):
             #print('all the boxes are:', boxes)
             pos_boxes = [target['boxes'][ind] for target, ind in zip(targets, ind_pos_boxes)]
             pos_anchor = [target[ind] for target, ind in zip(anchors, ind_pos_anchor)]
+            #return pos_boxes, pos_anchor
             regression_targets  = self.box_coder.encode(pos_anchor, pos_boxes )
             #print('regression targets shapes',[t.shape for t in regression_targets])
             #print('regression targets:', regression_targets)
@@ -399,50 +400,50 @@ def permute_and_flatten(pred, N, C, A, H, W):
     return pred
 
 
-class MyRegionProposalNetworkOld(RegionProposalNetwork):
-    def forward(self, inputs, features, targets):
-        """
-        Arguments:
-            inputs (dict with 'data', 'image_size'): images for which we want to compute the predictions
-            features (List[Tensor]): features computed from the images that are
-                used for computing the predictions. Each tensor in the list
-                correspond to different feature levels
-            targets (List[Dict[Tensor]): ground-truth boxes present in the image (optional).
-                If provided, each element in the dict should contain a field `boxes`,
-                with the locations of the ground-truth boxes.
-
-        Returns:
-            boxes (List[Tensor]): the predicted boxes from the RPN, one Tensor per
-                image.
-            losses (Dict[Tensor]): the losses for the model during training. During
-                testing, it is an empty dict.
-        """
-        # RPN uses all feature maps that are available
-        features = list(features.values())
-        objectness, pred_bbox_deltas = self.head(features) # return list[(pred_obj, pred_bbox_deltas),...for each feature maps]
-        anchors = self.anchor_generator(inputs, features)
-
-        num_images = len(anchors)
-        num_anchors_per_level = [o[0].numel() for o in objectness]
-        objectness, pred_bbox_deltas = \
-            concat_box_prediction_layers(objectness, pred_bbox_deltas)
-        # apply pred_bbox_deltas to anchors to obtain the decoded proposals
-        # note that we detach the deltas because Faster R-CNN do not backprop through
-        # the proposals
-        proposals = self.box_coder.decode(pred_bbox_deltas.detach(), anchors)
-        proposals = proposals.view(num_images, -1, 4)
-        boxes, scores = self.filter_proposals(proposals, objectness, inputs['image_sizes'], num_anchors_per_level)
-
-        losses = {}
-        if self.training:
-            labels, matched_gt_boxes = self.assign_targets_to_anchors(anchors, targets)
-            regression_targets = self.box_coder.encode(matched_gt_boxes, anchors)
-            loss_objectness, loss_rpn_box_reg = self.compute_loss(
-                objectness, pred_bbox_deltas, labels, regression_targets)
-            losses = {
-                "loss_objectness": loss_objectness,
-                "loss_rpn_box_reg": loss_rpn_box_reg,
-            }
-            return boxes, losses
-        else:
-            return boxes, scores
+#class MyRegionProposalNetworkOld(RegionProposalNetwork):
+#    def forward(self, inputs, features, targets):
+#        """
+#        Arguments:
+#            inputs (dict with 'data', 'image_size'): images for which we want to compute the predictions
+#            features (List[Tensor]): features computed from the images that are
+#                used for computing the predictions. Each tensor in the list
+#                correspond to different feature levels
+#            targets (List[Dict[Tensor]): ground-truth boxes present in the image (optional).
+#                If provided, each element in the dict should contain a field `boxes`,
+#                with the locations of the ground-truth boxes.
+#
+#        Returns:
+#            boxes (List[Tensor]): the predicted boxes from the RPN, one Tensor per
+#                image.
+#            losses (Dict[Tensor]): the losses for the model during training. During
+#                testing, it is an empty dict.
+#        """
+#        # RPN uses all feature maps that are available
+#        features = list(features.values())
+#        objectness, pred_bbox_deltas = self.head(features) # return list[(pred_obj, pred_bbox_deltas),...for each feature maps]
+#        anchors = self.anchor_generator(inputs, features)
+#
+#        num_images = len(anchors)
+#        num_anchors_per_level = [o[0].numel() for o in objectness]
+#        objectness, pred_bbox_deltas = \
+#            concat_box_prediction_layers(objectness, pred_bbox_deltas)
+#        # apply pred_bbox_deltas to anchors to obtain the decoded proposals
+#        # note that we detach the deltas because Faster R-CNN do not backprop through
+#        # the proposals
+#        proposals = self.box_coder.decode(pred_bbox_deltas.detach(), anchors)
+#        proposals = proposals.view(num_images, -1, 4)
+#        boxes, scores = self.filter_proposals(proposals, objectness, inputs['image_sizes'], num_anchors_per_level)
+#
+#        losses = {}
+#        if self.training:
+#            labels, matched_gt_boxes = self.assign_targets_to_anchors(anchors, targets)
+#            regression_targets = self.box_coder.encode(matched_gt_boxes, anchors)
+#            loss_objectness, loss_rpn_box_reg = self.compute_loss(
+#                objectness, pred_bbox_deltas, labels, regression_targets)
+#            losses = {
+#                "loss_objectness": loss_objectness,
+#                "loss_rpn_box_reg": loss_rpn_box_reg,
+#            }
+#            return boxes, losses
+#        else:
+#            return boxes, scores

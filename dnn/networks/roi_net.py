@@ -12,7 +12,7 @@ class RoINet(nn.Module):
         super().__init__()
         self.cfg = cfg
 
-        self.pos_neg_sampler = PosNegSampler(pos_num=128, neg_num=128)
+        self.pos_neg_sampler = PosNegSampler(pos_num=cfg.roi_head.pos_sample_num, neg_num=cfg.roi_head.neg_sample_num)
         self.roi_align = RoiAliagnFPN(cfg.roi_pool.pool_h,
                                       cfg.roi_pool.pool_w,
                                       sampling=-1)
@@ -176,7 +176,7 @@ class RoINet(nn.Module):
                 iou_mat = box_iou(proposal_image, boxes) # proposal N and target boxes M, iou mat: NxM
                 # set up the max iou for each box as positive 
                 # set up the iou bigger than a value as positive
-                ind_pos_proposal, ind_pos_boxes, ind_neg_proposal, _ = self.match_boxes(iou_mat, low_thresh=0.3, high_thresh=0.7)
+                ind_pos_proposal, ind_pos_boxes, ind_neg_proposal, _ = self.match_boxes(iou_mat, low_thresh=self.cfg.roi_head.iou_low_thre, high_thresh=self.cfg.roi_head.iou_high_thre)
                 ind_pos_proposal_all.append(ind_pos_proposal)
                 ind_neg_proposal_all.append(ind_neg_proposal)
                 ind_pos_boxes_all.append(ind_pos_boxes)
@@ -198,7 +198,7 @@ class RoINet(nn.Module):
         index_above_thre = torch.where(iou_mat>=high_thresh)
         index_mat[index_above_thre] = 1
         index_pos_anchor, index_pos_boxes = torch.where(index_mat==1)
-        index_neg_anchor, index_neg_boxes = torch.where(iou_mat<=low_thresh)
+        index_neg_anchor, index_neg_boxes = torch.where(iou_mat<low_thresh)
         #print('index pos boxes:', index_pos_boxes)
         #print('index pos anchor:', index_pos_anchor)
         return index_pos_anchor, index_pos_boxes, index_neg_anchor, index_neg_boxes

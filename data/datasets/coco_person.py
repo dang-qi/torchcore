@@ -4,6 +4,7 @@ from .dataset_new import Dataset
 from PIL import Image
 import os
 
+# THIS DATASET IS WRONG, NEED CHANGE the convert xyxy in initial stage
 class COCOPersonDataset(Dataset):
     '''COCO dataset only contarin person class'''
     def __init__( self, root, anno, part, transforms=None ):

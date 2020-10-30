@@ -17,6 +17,8 @@ class COCODataset(Dataset):
         self.map_category_id_to_continous()
         self.debug = debug
         self.xyxy = xyxy
+        if xyxy:
+            self.convert_to_xyxy()
 
     def __len__(self):
         return len(self._images)
@@ -35,10 +37,13 @@ class COCODataset(Dataset):
         boxes = []
         labels = []
         for obj in image['objects']:
-            if self.xyxy:
-                # convert the bbox from xywh to xyxy
-                obj['bbox'][2]+=obj['bbox'][0]
-                obj['bbox'][3]+=obj['bbox'][1]
+            # WARNING:
+            # DO NOT CHANGE objects here
+            # IT WILL change the data every time and you will keep getting wrong result
+            #if self.xyxy:
+            #    # convert the bbox from xywh to xyxy
+            #    obj['bbox'][2]+=obj['bbox'][0]
+            #    obj['bbox'][3]+=obj['bbox'][1]
             boxes.append(obj['bbox'])
             labels.append(obj['category_id'])
         boxes = np.array(boxes, dtype=np.float32)
@@ -97,3 +102,9 @@ class COCODataset(Dataset):
                 i += 1
         if wrong_im_num > 0:
             print('{} images are deleted.'.format(wrong_im_num))
+    
+    def convert_to_xyxy(self):
+        for image in self._images:
+            for obj in image['objects']:
+                obj['bbox'][2]+=obj['bbox'][0]
+                obj['bbox'][3]+=obj['bbox'][1]

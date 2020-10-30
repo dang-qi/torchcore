@@ -15,7 +15,7 @@ class RoINet(nn.Module):
         self.pos_neg_sampler = PosNegSampler(pos_num=cfg.roi_head.pos_sample_num, neg_num=cfg.roi_head.neg_sample_num)
         self.roi_align = RoiAliagnFPN(cfg.roi_pool.pool_h,
                                       cfg.roi_pool.pool_w,
-                                      sampling=-1)
+                                      sampling=2)
         self.faster_rcnn_head = FastRCNNHead(cfg)
         self.box_coder = AnchorBoxesCoder(box_code_clip=None)
         #self.smooth_l1_loss = nn.SmoothL1Loss(reduction='mean')

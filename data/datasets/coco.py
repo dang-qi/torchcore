@@ -6,7 +6,7 @@ import os
 
 class COCODataset(Dataset):
     '''COCO dataset'''
-    def __init__( self, root, anno, part, transforms=None ):
+    def __init__( self, root, anno, part, transforms=None, debug=False ):
         super().__init__( root, transforms )
         self._part = part
 
@@ -15,6 +15,7 @@ class COCODataset(Dataset):
             self._images = pickle.load(f)[part] 
         self.remove_wrong_labels()
         self.map_category_id_to_continous()
+        self.debug = debug
 
     def __len__(self):
         return len(self._images)
@@ -26,7 +27,8 @@ class COCODataset(Dataset):
         img_path = os.path.join(self._root, self._part, image['file_name'] )
         image_id=image['id']
         img = Image.open(img_path).convert('RGB')
-        #ori_image = img.copy()
+        #if self.debug:
+        #    ori_image = img.copy()
 
         # Load targets
         boxes = []
@@ -44,7 +46,6 @@ class COCODataset(Dataset):
         #targets (list[Dict[Tensor]]): ground-truth boxes present in the image (optional)
         inputs = {}
         inputs['data'] = img
-        #inputs['ori_image'] = ori_image
 
         targets = {}
         targets["boxes"] = boxes
@@ -55,6 +56,9 @@ class COCODataset(Dataset):
         #target["iscrowd"] = iscrowd
         if self._transforms is not None:
             inputs, targets = self._transforms(inputs, targets)
+
+        if self.debug:
+            inputs['ori_image'] = inputs['data'].copy()
 
         return inputs, targets
 

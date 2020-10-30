@@ -133,7 +133,11 @@ def draw_single_image(image, boxes, scores, class_inds, colors, class_names, fon
     font = get_font(font_size)
     if boxes is not None:
         draw = Draw(image)
-        for box, score, class_ind in zip(boxes, scores, class_inds):
+        for i, (box, class_ind) in enumerate(zip(boxes, class_inds)):
+            if scores is not None:
+                score = scores[i]
+            else:
+                score = 1
             if type(box) == list:
                 return image
             if type(box) is not np.ndarray:
@@ -143,10 +147,29 @@ def draw_single_image(image, boxes, scores, class_inds, colors, class_names, fon
             draw.text((box[0], box[1]), '{:.2f} {}'.format(score, class_names[class_ind]), font=font, fill=colors[class_ind] )
     return image
 
-def draw_boxes(images, batch_boxes, batch_scores, batch_class_ind, class_names, font_size=26):
+def draw_boxes_old(images, batch_boxes, batch_scores, batch_class_ind, class_names, font_size=26):
     class_num = len(class_names)
     colors = random_colors(class_num)
     for image, boxes, scores, class_ind in zip(images, batch_boxes, batch_scores, batch_class_ind):
+        image = draw_single_image(image, boxes, scores, class_ind, colors, class_names, font_size=font_size)
+
+def draw_boxes(images, batch_boxes, batch_scores, batch_class_ind, class_names, font_size=26):
+    class_num = len(class_names)
+    colors = random_colors(class_num)
+    for i, image in enumerate(images):
+        if batch_boxes is not None:
+            boxes = batch_boxes[i]
+        else:
+            boxes = None
+        if batch_scores is not None:
+            scores = batch_scores[i]
+        else:
+            scores = None
+        if batch_class_ind is not None:
+            class_ind = batch_class_ind[i]
+        else:
+            class_ind = None
+
         image = draw_single_image(image, boxes, scores, class_ind, colors, class_names, font_size=font_size)
 
 def save_images(images, path, ind_start):

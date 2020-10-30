@@ -6,7 +6,7 @@ import os
 
 class COCODataset(Dataset):
     '''COCO dataset'''
-    def __init__( self, root, anno, part, transforms=None, debug=False ):
+    def __init__( self, root, anno, part, transforms=None, debug=False, xyxy=True ):
         super().__init__( root, transforms )
         self._part = part
 
@@ -16,6 +16,7 @@ class COCODataset(Dataset):
         self.remove_wrong_labels()
         self.map_category_id_to_continous()
         self.debug = debug
+        self.xyxy = xyxy
 
     def __len__(self):
         return len(self._images)
@@ -34,9 +35,10 @@ class COCODataset(Dataset):
         boxes = []
         labels = []
         for obj in image['objects']:
-            # convert the bbox from xywh to xyxy
-            obj['bbox'][2]+=obj['bbox'][0]
-            obj['bbox'][3]+=obj['bbox'][1]
+            if self.xyxy:
+                # convert the bbox from xywh to xyxy
+                obj['bbox'][2]+=obj['bbox'][0]
+                obj['bbox'][3]+=obj['bbox'][1]
             boxes.append(obj['bbox'])
             labels.append(obj['category_id'])
         boxes = np.array(boxes, dtype=np.float32)

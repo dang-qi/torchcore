@@ -167,3 +167,6 @@ class CollateFnRCNN(object):
         if ori_image is not None:
             inputs['ori_image'] = ori_image
         return inputs, targets
+
+def collate_fn_torchvision(batch):
+    return tuple(zip(*batch))

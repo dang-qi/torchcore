@@ -1,5 +1,6 @@
 import torch
 from torch import nn
+from torch.nn import functional as F
 import collections
 
 class RPNHead(nn.Module):
@@ -32,7 +33,7 @@ class RPNHead(nn.Module):
         return out
 
     def _forward_once(self, feature):
-        feature1 = self.conv1(feature)
+        feature1 = F.relu(self.conv1(feature))
         class_pred = self.class_pred(feature1)
         bbox_pred = self.bbox_pred(feature1)
         return class_pred, bbox_pred

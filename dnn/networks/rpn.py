@@ -151,7 +151,7 @@ class MyRegionProposalNetwork(RegionProposalNetwork):
         # the proposals
         proposals = self.box_coder.decode(pred_bbox_deltas.detach(), anchors)
         proposals = proposals.view(num_images, -1, 4)
-        boxes, scores = self.filter_proposals(proposals, pred_class, inputs['image_sizes'], num_anchors_per_level)
+        boxes, scores = self.filter_proposals(proposals, pred_class.detach(), inputs['image_sizes'], num_anchors_per_level)
 
         if not self.training:
             #return anchors, boxes, scores

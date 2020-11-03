@@ -26,12 +26,10 @@ class RoINet(nn.Module):
         if self.training:
             proposals, target_labels, target_boxes = self.select_proposals(proposals, targets)
 
-        rois, proposals, inds= self.roi_align(features, proposals, strides)
+        rois = self.roi_align(features, proposals, strides)
 
         label_pre, bbox_pre = self.faster_rcnn_head(rois)
         if self.training:
-            target_labels = [target_label[ind] for target_label, ind in zip(target_labels, inds)]
-            target_boxes = [target_box[ind] for target_box, ind in zip(target_boxes, inds)]
 
             label_loss, bbox_loss = self.compute_loss(label_pre, bbox_pre, target_labels, target_boxes, proposals)
             losses = {
@@ -50,6 +48,9 @@ class RoINet(nn.Module):
         
     def inference_result(self, label_pre, bbox_pre, proposals):
         results = {'boxes':[], 'labels':[], 'scores':[]}
+        boxes_per_im = [len(proposal) for proposal in proposals]
+        label_pre = label_pre.split(boxes_per_im)
+        bbox_pre = bbox_pre.split(boxes_per_im)
         for label_pre_image, bbox_pre_image, proposal in zip(label_pre, bbox_pre, proposals):
             label_pre_image = F.softmax(label_pre_image, dim=1)
 
@@ -60,7 +61,7 @@ class RoINet(nn.Module):
             bbox_pre_image = bbox_pre_image.reshape(-1, 4)
             proposal = proposal.reshape(-1, 4)
             boxes = self.box_coder.decode_once(bbox_pre_image, proposal)
-            boxes = proposal
+            #boxes = proposal
             scores = label_pre_image[:, 1:]
             #scores = scores[:, 1:]
             labels = torch.arange(1, self.cfg.class_num+1).expand_as(scores)
@@ -93,17 +94,27 @@ class RoINet(nn.Module):
 
 
     def compute_loss(self, label_pre, bbox_pre, target_labels, target_boxes, proposals):
-        pos_inds = [torch.where(label>0)[0] for label in target_labels]
-        proposals_pos = [proposal_im[ind] for proposal_im, ind in zip(proposals, pos_inds)]
-        target_boxes_pos = [boxes[ind] for boxes, ind in zip(target_boxes, pos_inds)]
-        bbox_pre_pos = [boxes[ind] for boxes, ind in zip(bbox_pre, pos_inds)]
-        label_pos = [label[ind] for label, ind in zip(target_labels, pos_inds)]
-
-        target_boxes = self.box_coder.encode(proposals_pos, target_boxes_pos)
+        target_labels = torch.cat(target_labels, dim=0)
+        proposals = torch.cat(proposals, dim=0)
         target_boxes = torch.cat(target_boxes, dim=0)
+
+        pos_ind = torch.where(target_labels>0)[0]
+        proposals_pos = proposals[pos_ind]
+        target_boxes_pos = target_boxes[pos_ind]
+        bbox_pre_pos = bbox_pre[pos_ind]
+        label_pos = target_labels[pos_ind]
+
+        #pos_inds = [torch.where(label>0)[0] for label in target_labels]
+        #proposals_pos = [proposal_im[ind] for proposal_im, ind in zip(proposals, pos_inds)]
+        #target_boxes_pos = [boxes[ind] for boxes, ind in zip(target_boxes, pos_inds)]
+        #bbox_pre_pos = [boxes[ind] for boxes, ind in zip(bbox_pre, pos_inds)]
+        #label_pos = [label[ind] for label, ind in zip(target_labels, pos_inds)]
+
+        target_boxes = self.box_coder.encode_once(proposals_pos, target_boxes_pos)
+        #target_boxes = torch.cat(target_boxes, dim=0)
         
-        bbox_pre_pos = torch.cat(bbox_pre_pos, dim=0)
-        label_pos = torch.cat(label_pos, dim=0)
+        #bbox_pre_pos = torch.cat(bbox_pre_pos, dim=0)
+        #label_pos = torch.cat(label_pos, dim=0)
         bbox_pre_pos = bbox_pre_pos.view(bbox_pre_pos.shape[0], -1, 4)
         #print('bboxe pre pos shape:', bbox_pre_pos.shape)
         ind0 = torch.arange(bbox_pre_pos.shape[0])
@@ -114,8 +125,7 @@ class RoINet(nn.Module):
         #print('bboxe pre pos shape:', bbox_pre_pos.shape)
 
 
-        target_labels = torch.cat(target_labels, dim=0)
-        label_pre = torch.cat(label_pre, dim=0)
+        #label_pre = torch.cat(label_pre, dim=0)
         #print('label pre', label_pre.shape)
         #print('target labels', target_labels.shape)
 

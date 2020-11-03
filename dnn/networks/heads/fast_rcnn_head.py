@@ -28,16 +28,16 @@ class FastRCNNHead(nn.Module):
     def forward(self, rois ):
 
         # concat the rois and targets and then split them
-        rois_per_im = [len(roi) for roi in rois]
-        rois = torch.cat(rois, dim=0)
+        #rois_per_im = [len(roi) for roi in rois]
+        #rois = torch.cat(rois, dim=0)
         features = self.feature_head(rois)
         label_pre = self.label_head(features)
         label_pre = label_pre.view(label_pre.shape[:2])
         bbox_pre = self.bbox_head(features)
         bbox_pre = bbox_pre.view(bbox_pre.shape[:2])
 
-        label_pre = torch.split(label_pre, rois_per_im)
-        bbox_pre = torch.split(bbox_pre, rois_per_im)
+        #label_pre = torch.split(label_pre, rois_per_im)
+        #bbox_pre = torch.split(bbox_pre, rois_per_im)
 
         return label_pre, bbox_pre
 

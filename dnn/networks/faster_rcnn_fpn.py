@@ -1,33 +1,40 @@
 import torch
+import time
 from collections import OrderedDict
 from .pooling import RoiAliagnFPN
 from .general_detector import GeneralDetector
 from torchvision.ops import roi_align, nms
 
 class FasterRCNNFPN(GeneralDetector):
-    def __init__(self, backbone, neck=None, heads=None, cfg=None, training=True):
+    def __init__(self, backbone, neck=None, heads=None, cfg=None, training=True, debug_time=False):
         super(GeneralDetector, self).__init__()
         self.backbone = backbone
         self.neck = neck
         self.rpn = heads['rpn']
         self.roi_head = heads['bbox']
         self.training = training
-        #self.feature_names = ['0', '1', '2', '3']
+        self.feature_names = ['0', '1', '2', '3']
+        self.strides = None
+
+        if debug_time:
+            self.total_time = {'feature':0.0, 'rpn':0.0, 'roi_head':0.0}
+        self.debug_time = debug_time
         
 
     def forward(self, inputs, targets=None):
+        debug_time = self.debug_time
+        if debug_time:
+            start = time.time()
         features = self.backbone(inputs['data'])
+        if debug_time:
+            feature_time = time.time()
+            self.total_time['feature'] += feature_time - start
         #print('feature keys:', features.keys())
         #for k,v in features.items():
         #    print('{}:{}'.format(k, v.shape))
         if self.neck is not None:
             features = self.neck(features)
-        #features_new = OrderedDict()
-        #for k in self.feature_names:
-        #    features_new[k] = features[k]
-        #features = features_new
 
-        strides = self.get_strides(inputs, features)
         #print('strides', strides)
 
         if self.training:
@@ -35,16 +42,35 @@ class FasterRCNNFPN(GeneralDetector):
         else:
             proposals, scores = self.rpn(inputs, features, targets)
 
+        if debug_time:
+            rpn_time = time.time()
+            self.total_time['rpn'] += rpn_time - feature_time 
+
+
+        features_new = OrderedDict()
+        for k in self.feature_names:
+            features_new[k] = features[k]
+        features = features_new
+        if self.strides is None:
+            strides = self.get_strides(inputs, features)
+        else:
+            strides = self.strides
         #for proposal in proposals:
         #    print('proposal shape', proposal.shape)
 
         if self.training:
             losses_roi = self.roi_head(proposals, features, strides, targets=targets)
             losses = {**losses_rpn, **losses_roi}
+            if debug_time:
+                roi_head_time = time.time()
+                self.total_time['roi_head'] += roi_head_time - rpn_time 
             return losses
         else:
             results = self.roi_head(proposals, features, strides, targets=targets)
             results = self.post_process(results, inputs)
+            if debug_time:
+                roi_head_time = time.time()
+                self.total_time['roi_head'] += roi_head_time - rpn_time 
             return results
 
     def post_process(self, results, inputs):
@@ -80,4 +106,7 @@ class FasterRCNNFPN(GeneralDetector):
         image_size = inputs['data'].shape[-2:]
         strides = tuple((image_size[0] / g[0] + image_size[1] / g[1])/2 for g in grid_sizes)
         return strides
+
+    def reset_time(self):
+        self.total_time = {'feature':0.0, 'rpn':0.0, 'roi_head':0.0}
 

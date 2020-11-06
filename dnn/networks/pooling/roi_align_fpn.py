@@ -1,5 +1,6 @@
 from collections import OrderedDict
 import torch
+import math
 from torch import nn
 from torchvision.ops import roi_align, RoIAlign
 
@@ -12,6 +13,8 @@ class RoiAliagnFPN(nn.Module):
         # scale is the spacial scale, which is equal to 1/stride
         # here we use list of scale as scales
         self.sampling = sampling
+        self.k_max = None
+        self.k_min = None
 
     def forward_old(self, features, boxes, strides):
         feature_keys = list(features.keys())
@@ -37,6 +40,8 @@ class RoiAliagnFPN(nn.Module):
 
     def forward(self, features, boxes, strides):
         feature_keys = list(features.keys())
+        if self.k_min is None:
+            self.setup_scale(strides)
         inds = self.split_boxes_by_size(boxes, feature_keys)
         assert len(feature_keys) == len(strides)
         rois = self.add_batch_number_to_boxes(boxes)
@@ -58,11 +63,11 @@ class RoiAliagnFPN(nn.Module):
         return rois_out
 
     def split_boxes_by_size(self, boxes, feature_keys, k0=4):
-        feature_num = len(feature_keys)
         boxes = torch.cat(boxes, dim=0)
         area = (boxes[:,3]-boxes[:,1]) * (boxes[:,2]-boxes[:,0])
         k = torch.floor(k0 + torch.log2(torch.sqrt(area) / 224))
-        k = k.clamp(min=0, max=feature_num-1)
+        k = k.clamp(min=self.k_min, max=self.k_max)
+        k = k-self.k_min
         return k
 
     def add_batch_number_to_boxes(self, boxes):
@@ -99,3 +104,9 @@ class RoiAliagnFPN(nn.Module):
                 rois_batch[i].append(v_level)
         rois_batch = [torch.cat(v) for v in rois_batch]
         return rois_batch
+
+    def setup_scale(self, strides):
+        max_stride = max(strides)
+        min_stride = min(strides)
+        self.k_min = round(math.log2(min_stride))
+        self.k_max = round(math.log2(max_stride))

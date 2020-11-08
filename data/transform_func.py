@@ -80,6 +80,20 @@ def resize(img, size, interpolation=Image.BILINEAR, smaller_edge=None):
         scale_h = size[0] / h
         return img.resize(size[::-1], interpolation), (scale_w, scale_h)
 
+def resize_tensor_min_max(image, min_size, max_size):
+    h, w = image.shape[-2:]
+    min_side=min(w,h) 
+    max_side=max(w,h) 
+    if min_size / min_side * max_side > max_size:
+        scale = max_size / max_side
+    else:
+        scale = min_size / min_side
+    image = torch.nn.functional.interpolate(
+        image[None], scale_factor=scale, mode='bilinear', recompute_scale_factor=True,
+        align_corners=False)[0]
+        
+    return image, scale
+
 def resize_boxes(boxes, scale):
     r"""Resize the input boxes (each box is [x1,y1,x2,y2] format) to the given size.
     Args:

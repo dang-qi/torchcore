@@ -83,6 +83,25 @@ class ResizeMinMax(object):
                 targets['boxes'] = F.resize_boxes(targets['boxes'], self.scale)
         return inputs, targets
 
+# Torchvision similar version Min Max Resize
+class ResizeMinMaxTV(object):
+    '''Resize and Pandding function for Rcnn'''
+    def __init__(self, min_size, max_size, interplotation=Image.BILINEAR):
+        assert isinstance(min_size, int)
+        assert isinstance(max_size, int)
+        assert max_size >= min_size
+        self.min_size = min_size
+        self.max_size = max_size
+
+    def __call__(self, inputs, targets=None):
+        inputs['data'], self.scale = F.resize_tensor_min_max(inputs['data'], self.min_size, self.max_size)
+        inputs['scale'] = self.scale
+        
+        if targets is not None:
+            if 'boxes' in targets:
+                targets['boxes'] = F.resize_boxes(targets['boxes'], self.scale)
+        return inputs, targets
+
 class ToTensor(object):
     def __init__(self):
         pass
@@ -181,6 +200,67 @@ class GeneralRCNNTransform(object):
 
             # normalize after resize, which might be slower 
             ainput, target = self.to_tensor(ainput, target)
+            # set the tensor to device before normalize
+            #ainput['data'].to(self.device)
+            scales[i] = ainput['scale']
+            ainput, target = self.normalize(ainput, target)
+            images.append(ainput['data'])
+
+            if 'path' in ainput:
+                image_path.append(ainput['path'])
+            if 'dataset_label' in ainput:
+                dataset_label.append(ainput['dataset_label'])
+
+        max_size = tuple(max(s) for s in zip(*[img.shape for img in images]))
+        _, height, width = max_size
+
+        image_sizes = [img.shape[-2:] for img in images]
+        self.group_padding = GroupPadding(width, height, size_devidable=32)
+        im_tensor = self.group_padding(images)
+
+        inputs = {}
+        inputs['data'] = im_tensor
+        inputs['scale'] = scales
+        inputs['image_sizes'] = image_sizes
+        if len(image_path) > 0:
+            inputs['path'] = image_path
+        if len(dataset_label) > 0:
+            inputs['dataset_label'] = torch.tensor(dataset_label)
+        return inputs, targets
+
+# a version similar to torchvision
+class GeneralRCNNTransformTV(object): 
+    def __init__(self, min_size, max_size, image_mean=None, image_std=None):
+        self.min_size = min_size
+        self.max_size = max_size
+        self.image_mean = image_mean
+        self.image_std = image_std
+        self.resize_min_max = ResizeMinMaxTV(min_size, max_size)
+        self.normalize = Normalize(mean=image_mean, std=image_std)
+        self.to_tensor = ToTensor()
+        #self.device = device
+        #self.transforms = Compose(self.resize_min_max, self.to_tensor)
+
+    def __call__(self, inputs, targets=None):
+        '''
+        Arguments:
+            inputs(list[dict{'data':PIL.Image,...}])
+            targets(list[dict{'boxes':x1y1x2y2, 'cat_labels':}])
+        '''
+        images = []
+        image_path = []
+        dataset_label = []
+        scales = np.zeros(len(inputs))
+        if targets is None:
+            targets=[None]*len(inputs)
+
+        for i, (ainput, target) in enumerate(zip(inputs, targets)):
+            # this is operated in
+            #ainput, target = self.resize_min_max(ainput, target)
+
+            # normalize after resize, which might be slower 
+            ainput, target = self.to_tensor(ainput, target)
+            ainput, target = self.resize_min_max(ainput, target)
             # set the tensor to device before normalize
             #ainput['data'].to(self.device)
             scales[i] = ainput['scale']

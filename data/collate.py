@@ -1,5 +1,5 @@
 from .transforms import ResizeAndPadding, ToTensor, Compose
-from .transforms import GeneralRCNNTransform
+from .transforms import GeneralRCNNTransform, GeneralRCNNTransformTV
 import torch
 from torch.utils.data._utils.collate import default_collate
 import numpy as np
@@ -145,12 +145,14 @@ class CollateFnRCNN(object):
     '''apply general rcnn transform to batchs'''
     def __init__(self, min_size, max_size, image_mean=None, image_std=None):
         if isinstance(min_size, (list, tuple)):
-            self.transforms = [GeneralRCNNTransform(min_size_i, max_size, image_mean=image_mean, image_std=image_std) for min_size_i in min_size]
+            #self.transforms = [GeneralRCNNTransform(min_size_i, max_size, image_mean=image_mean, image_std=image_std) for min_size_i in min_size]
+            self.transforms = [GeneralRCNNTransformTV(min_size_i, max_size, image_mean=image_mean, image_std=image_std) for min_size_i in min_size]
             self.transform_num = len(min_size)
             self.multi_scale = True
         else:
-            self.transforms = GeneralRCNNTransform(min_size, max_size,  
-                                               image_mean=image_mean, image_std=image_std)
+            #self.transforms = GeneralRCNNTransform(min_size, max_size,  
+            #                                   image_mean=image_mean, image_std=image_std)
+            self.transforms = GeneralRCNNTransformTV(min_size, max_size, image_mean=image_mean, image_std=image_std)
             self.multi_scale = False
 
     def __call__(self, batch):

@@ -38,7 +38,7 @@ class MyAnchorGenerator(AnchorGenerator):
     def forward(self, inputs, feature_maps):
         grid_sizes = tuple([feature_map.shape[-2:] for feature_map in feature_maps])
         image_size = inputs['data'].shape[-2:]
-        strides = tuple((image_size[0] / g[0], image_size[1] / g[1]) for g in grid_sizes)
+        strides = tuple((image_size[0] // g[0], image_size[1] // g[1]) for g in grid_sizes)
         try:
             # for earlier version torchvision
             self.set_cell_anchors(feature_maps[0].device)
@@ -80,6 +80,12 @@ class MyAnchorGenerator(AnchorGenerator):
             shifts_y = (torch.arange(
                 0, grid_height, dtype=torch.float32, device=device
             )+0.5) * stride_height
+            #shifts_x = (torch.arange(
+            #    0, grid_width, dtype=torch.float32, device=device
+            #)) * stride_width
+            #shifts_y = (torch.arange(
+            #    0, grid_height, dtype=torch.float32, device=device
+            #)) * stride_height
             shift_y, shift_x = torch.meshgrid(shifts_y, shifts_x)
             shift_x = shift_x.reshape(-1)
             shift_y = shift_y.reshape(-1)
@@ -158,7 +164,7 @@ class MyRegionProposalNetwork(RegionProposalNetwork):
             return boxes, scores
         else:
             losses = {}
-            ind_pos_anchor, ind_neg_anchor, ind_pos_boxes, ind_neg_boxes = self.assign_targets_to_anchors(anchors, targets)
+            ind_pos_anchor, ind_neg_anchor, ind_pos_boxes = self.assign_targets_to_anchors(anchors, targets)
             #print('matched pos anchor num is:', sum([len(ind) for ind in ind_pos_anchor]))
             #boxes = [target['boxes'] for target in targets]
             #print('all the boxes are:', boxes)
@@ -207,7 +213,9 @@ class MyRegionProposalNetwork(RegionProposalNetwork):
         #print('pred boxes shape:', pred_bbox_deltas.shape)
         #print('label pos shape:', label_pos.shape)
         #print('targets shape:', regression_targets.shape)
-        loss_box = self.smooth_l1_loss(pred_bbox_deltas, regression_targets) / label_pos.numel()
+        #loss_box = self.smooth_l1_loss(pred_bbox_deltas, regression_targets) / label_pos.numel()
+        # TODO this is the loss from torchvision, reduced the wight of box loss
+        loss_box = self.smooth_l1_loss(pred_bbox_deltas, regression_targets) / label_target.numel()
         #loss_box = self.smooth_l1_loss(pred_bbox_deltas, regression_targets) 
         #loss_box = det_utils.smooth_l1_loss(
         #    pred_bbox_deltas,
@@ -223,7 +231,6 @@ class MyRegionProposalNetwork(RegionProposalNetwork):
         ind_pos_anchor_all = []
         ind_neg_anchor_all = []
         ind_pos_boxes_all = []
-        ind_neg_boxes_all = []
         for anchor_image, target in zip(anchors, targets):
             boxes = target['boxes']
             if len(boxes) == 0:
@@ -232,14 +239,65 @@ class MyRegionProposalNetwork(RegionProposalNetwork):
                 iou_mat = box_iou(anchor_image, boxes) # anchor N and target boxes M, iou mat: NxM
                 # set up the max iou for each box as positive 
                 # set up the iou bigger than a value as positive
-                ind_pos_anchor, ind_pos_boxes, ind_neg_anchor, ind_neg_boxes = self.match_boxes(iou_mat, low_thresh=0.3, high_thresh=0.7)
+                ind_pos_anchor, ind_pos_boxes, ind_neg_anchor = self.match_boxes(iou_mat, low_thresh=0.3, high_thresh=0.7)
                 ind_pos_anchor_all.append(ind_pos_anchor)
                 ind_neg_anchor_all.append(ind_neg_anchor)
                 ind_pos_boxes_all.append(ind_pos_boxes)
-                ind_neg_boxes_all.append(ind_neg_boxes)
-        return ind_pos_anchor_all, ind_neg_anchor_all, ind_pos_boxes_all, ind_neg_boxes_all
+        return ind_pos_anchor_all, ind_neg_anchor_all, ind_pos_boxes_all
 
     def match_boxes(self, iou_mat, low_thresh, high_thresh):
+        # according to faster RCNN paper, the max iou and the one bigger than 
+        # high_thresh are positive matches, lower than low_thresh are negtive matches
+        # the iou in between are ignored during the training
+        # iou mat NxM, N anchor and M target boxes
+        #N, M = iou_mat.shape
+
+        # set up the possible weak but biggest anchors that cover boxes
+        # There are possible more than one anchors have same biggest 
+        # value with the boxes  
+
+        match_box_ind = torch.full_like(iou_mat[:,0], -1, dtype=torch.int64)
+        index_neg_anchor, _ = torch.where(iou_mat<low_thresh)
+        match_box_ind[index_neg_anchor] = -2 # -2 means negtive anchors
+
+        max_val, _ = iou_mat.max(dim=0)
+        inds_anchor, ind_box = torch.where(iou_mat==max_val.expand_as(iou_mat))
+        match_box_ind[inds_anchor] = ind_box
+
+        ##TODO stuff added, maybe need to delete these
+        #max_val, max_box_ind = iou_mat.max(dim=1)
+        #match_box_ind[inds_anchor] = max_box_ind[inds_anchor]
+        
+
+
+        #index_mat = torch.zeros_like(iou_mat)
+        #ind1 = torch.arange(M)
+        #print('index mat shape:', index_mat.shape)
+        #print('ind1 shape:', ind1.shape)
+        #print('indexes shape:', indexes.shape)
+        #print('iou mat', iou_mat[inds_max])
+        #index_mat[inds_max] = 1
+        inds_anchor_above, inds_box_above = torch.where(iou_mat>=high_thresh)
+        match_box_ind[inds_anchor_above] = inds_box_above
+        #index_mat[index_above_thre] = 1
+
+        # the whole thing here is to make sure each anchor only map to one box (not two or more)
+        # otherwise we can use: index_pos_anchor, index_pos_boxes = torch.where(index_mat==1)
+        #max_val_new, index_pos_boxes = index_mat.max(dim=1)
+        #max_val_new = max_val_new > 0
+        #index_pos_anchor = index_pos_anchor[max_val_new]
+        #index_pos_boxes = index_pos_boxes[max_val_new]
+       
+        pos_ind = match_box_ind>= 0
+        index_pos_boxes = match_box_ind[pos_ind]
+        index_pos_anchor = torch.where(pos_ind)[0]
+        index_neg_anchor = torch.where(match_box_ind==-2)[0]
+        #index_pos_anchor, index_pos_boxes = torch.where(index_mat==1)
+        #print('index pos boxes:', index_pos_boxes)
+        #print('index pos anchor:', index_pos_anchor)
+        return index_pos_anchor, index_pos_boxes, index_neg_anchor
+
+    def match_boxes_old(self, iou_mat, low_thresh, high_thresh):
         # according to faster RCNN paper, the max iou and the one bigger than 
         # high_thresh are positive matches, lower than low_thresh are negtive matches
         # the iou in between are ignored during the training
@@ -255,7 +313,7 @@ class MyRegionProposalNetwork(RegionProposalNetwork):
         index_above_thre = torch.where(iou_mat>=high_thresh)
         index_mat[index_above_thre] = 1
         index_pos_anchor, index_pos_boxes = torch.where(index_mat==1)
-        index_neg_anchor, index_neg_boxes = torch.where(iou_mat<=low_thresh)
+        index_neg_anchor, index_neg_boxes = torch.where(iou_mat<low_thresh)
         #print('index pos boxes:', index_pos_boxes)
         #print('index pos anchor:', index_pos_anchor)
         return index_pos_anchor, index_pos_boxes, index_neg_anchor, index_neg_boxes
@@ -349,11 +407,7 @@ class MyRegionProposalNetwork(RegionProposalNetwork):
         boxes_width = boxes[:,2] - boxes[:,0]
         boxes_height = boxes[:,3] - boxes[:,1]
         keep = (boxes_width >= min_size) & (boxes_height >= min_size)
-        try:
-            keep = torch.where(keep)[0]
-        except RuntimeError:
-            print('keep', keep)
-            raise RuntimeError
+        keep = torch.where(keep)[0]
         return keep
 
     def crop_boxes(self, boxes, image_size):

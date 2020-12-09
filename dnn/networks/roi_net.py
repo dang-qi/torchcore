@@ -12,6 +12,11 @@ class RoINet(nn.Module):
         super().__init__()
         self.cfg = cfg
 
+        if hasattr(cfg.roi_head, 'dataset_label'):
+            self.dataset_label = cfg.roi_head.dataset_label
+        else:
+            self.dataset_label = None
+
         self.pos_neg_sampler = PosNegSampler(pos_num=cfg.roi_head.pos_sample_num, neg_num=cfg.roi_head.neg_sample_num)
         self.roi_align = RoiAliagnFPN(cfg.roi_pool.pool_h,
                                       cfg.roi_pool.pool_w,
@@ -22,7 +27,7 @@ class RoINet(nn.Module):
         self.smooth_l1_loss = nn.SmoothL1Loss(reduction='sum', beta= 1.0 / 9) 
         self.label_loss = nn.CrossEntropyLoss(reduction='mean')
 
-    def forward(self, proposals, features, strides, targets=None):
+    def forward(self, proposals, features, strides, targets=None, inputs=None):
         if self.training:
             proposals, target_labels, target_boxes = self.select_proposals(proposals, targets)
 
@@ -30,6 +35,10 @@ class RoINet(nn.Module):
 
         label_pre, bbox_pre = self.faster_rcnn_head(rois)
         if self.training:
+            if self.dataset_label is not None:
+                # just select the stuff that equals the dataset label to compute loss
+                losses, human_box_proposals = self.compute_partial_loss(label_pre, bbox_pre, target_labels, target_boxes, proposals, inputs)
+                return losses, human_box_proposals
 
             label_loss, bbox_loss = self.compute_loss(label_pre, bbox_pre, target_labels, target_boxes, proposals)
             losses = {
@@ -40,6 +49,41 @@ class RoINet(nn.Module):
         else:
             results = self.inference_result(label_pre, bbox_pre, proposals)
             return results
+
+    def compute_partial_loss(self, label_pre, bbox_pre, target_labels, target_boxes, proposals, inputs):
+        dataset_ind = self.get_dataset_ind(inputs)
+        box_num_per_im = [len(box) for box in target_boxes] 
+        label_pre = torch.split(label_pre, box_num_per_im, dim=0)
+        bbox_pre = torch.split(bbox_pre, box_num_per_im, dim=0)
+        label_pre_loss =[target for target,label in zip(label_pre, dataset_ind) if label ]
+        bbox_pre_loss =[target for target,label in zip(bbox_pre, dataset_ind) if label ]
+        target_boxes =[target for target,label in zip(target_boxes, dataset_ind) if label ]
+        target_labels =[target for target,label in zip(target_labels, dataset_ind) if label ]
+        proposals_loss =[target for target,label in zip(proposals, dataset_ind) if label ]
+        label_pre_loss = torch.cat(label_pre_loss, dim=0)
+        bbox_pre_loss = torch.cat(bbox_pre_loss, dim=0)
+
+        label_loss, bbox_loss = self.compute_loss(label_pre_loss, bbox_pre_loss, target_labels, target_boxes, proposals_loss)
+
+        losses = {
+            'loss_label': label_loss,
+            'loss_roi_bbox': bbox_loss
+        }
+
+        label_pre_infer =[target for target,label in zip(label_pre, dataset_ind) if not label ]
+        bbox_pre_infer =[target for target,label in zip(bbox_pre, dataset_ind) if not label ]
+        proposals_infer =[target for target,label in zip(proposals, dataset_ind) if not label ]
+
+        label_pre_infer = torch.cat(label_pre_infer, dim=0)
+        bbox_pre_infer = torch.cat(bbox_pre_infer, dim=0)
+
+        results = self.inference_result(label_pre_infer, bbox_pre_infer, proposals_infer)
+
+        return losses, results['boxes']
+
+
+    def get_dataset_ind(self, inputs):
+        return inputs['dataset_label'] == self.dataset_label
 
     def remove_small_boxes(self, boxes, min_area=0.1):
         area = (boxes[:,3]-boxes[:,1]) * (boxes[:,2]-boxes[:,0])
@@ -94,6 +138,13 @@ class RoINet(nn.Module):
 
 
     def compute_loss(self, label_pre, bbox_pre, target_labels, target_boxes, proposals):
+        #print('label pre:', label_pre.shape)
+        #print('bbox pre:', bbox_pre.shape)
+        #print('target labels:', len(target_labels))
+        #print('target boxes:', len(target_boxes))
+        #print('proposals:', len(proposals))
+        #for i in range(len(proposals)):
+        #    print('proposals {}:'.format(i), proposals[i].shape)
         target_labels = torch.cat(target_labels, dim=0)
         proposals = torch.cat(proposals, dim=0)
         target_boxes = torch.cat(target_boxes, dim=0)
@@ -129,7 +180,10 @@ class RoINet(nn.Module):
         #print('label pre', label_pre.shape)
         #print('target labels', target_labels.shape)
 
-        bbox_loss = self.smooth_l1_loss(bbox_pre_pos, target_boxes) / label_pos.numel()
+        #bbox_loss = self.smooth_l1_loss(bbox_pre_pos, target_boxes) / label_pos.numel()
+        #weight=torch.tensor([10,10,5,5], dtype=bbox_pre_pos.dtype, device=bbox_pre_pos.device).expand_as(bbox_pre_pos)
+        #bbox_loss = self.smooth_l1_loss(bbox_pre_pos*weight, target_boxes*weight) / target_labels.numel()
+        bbox_loss = 10*self.smooth_l1_loss(bbox_pre_pos, target_boxes) / target_labels.numel()
         #bbox_loss = self.smooth_l1_loss(bbox_pre_pos, target_boxes) 
         label_loss = self.label_loss(label_pre, target_labels)
         return label_loss, bbox_loss

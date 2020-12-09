@@ -112,6 +112,10 @@ class MyRegionProposalNetwork(RegionProposalNetwork):
         self.cfg = cfg
 
         self.nms_thresh = cfg.nms_thresh
+        if hasattr(cfg, 'dataset_label'):
+            self.dataset_label = cfg.dataset_label
+        else:
+            self.dataset_label = None
         #self._pre_nms_top_n = cfg.pre_nms_top_n
         #self._post_nms_top_n = cfg.post_nms_top_n
 
@@ -164,6 +168,13 @@ class MyRegionProposalNetwork(RegionProposalNetwork):
             return boxes, scores
         else:
             losses = {}
+            if self.dataset_label is not None:
+                dataset_ind = self.get_dataset_ind(inputs)
+                anchors = [anchor for anchor,label in zip(anchors, dataset_ind) if label]
+                targets =[target for target,label in zip(targets, dataset_ind) if label ]
+                pred_bbox_deltas = pred_bbox_deltas[dataset_ind]
+                pred_class = pred_class[dataset_ind]
+
             ind_pos_anchor, ind_neg_anchor, ind_pos_boxes = self.assign_targets_to_anchors(anchors, targets)
             #print('matched pos anchor num is:', sum([len(ind) for ind in ind_pos_anchor]))
             #boxes = [target['boxes'] for target in targets]
@@ -182,6 +193,9 @@ class MyRegionProposalNetwork(RegionProposalNetwork):
                 "loss_rpn_box_reg": loss_rpn_box_reg,
             }
             return boxes, losses
+
+    def get_dataset_ind(self, inputs):
+        return inputs['dataset_label'] == self.dataset_label
 
     def compute_loss(self, pred_class, pred_bbox_deltas, ind_pos_anchor, ind_neg_anchor, regression_targets):
         keep_pos, keep_neg = self.pos_neg_sampler.sample_batch(ind_pos_anchor, ind_neg_anchor)

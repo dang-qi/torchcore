@@ -20,10 +20,10 @@ class FastRCNNHead(nn.Module):
         self.label_head = nn.Linear(feature_num, class_num+1)
         self.bbox_head = nn.Linear(feature_num, 4*(class_num+1))
 
-        for m in self.modules():
-            if isinstance(m, nn.Linear):
-                nn.init.normal_(m.weight, std=0.01)
-                nn.init.constant_(m.bias, 0)
+        #for m in self.modules():
+        #    if isinstance(m, nn.Linear):
+        #        nn.init.normal_(m.weight, std=0.01)
+        #        nn.init.constant_(m.bias, 0)
 
     def forward(self, rois ):
 

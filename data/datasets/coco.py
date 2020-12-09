@@ -103,8 +103,3 @@ class COCODataset(Dataset):
         if wrong_im_num > 0:
             print('{} images are deleted.'.format(wrong_im_num))
     
-    def convert_to_xyxy(self):
-        for image in self._images:
-            for obj in image['objects']:
-                obj['bbox'][2]+=obj['bbox'][0]
-                obj['bbox'][3]+=obj['bbox'][1]

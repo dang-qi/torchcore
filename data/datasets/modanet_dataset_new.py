@@ -6,13 +6,16 @@ import os
 
 class ModanetDataset(Dataset):
     '''Modanet dataset'''
-    def __init__( self, root, anno, part, transforms=None ):
+    def __init__( self, root, anno, part, transforms=None, xyxy=True ):
         super().__init__( root, transforms )
         self._part = part
 
         # load annotations
         with open(anno, 'rb') as f:
             self._images = pickle.load(f)[part] 
+        self.xyxy = xyxy
+        if xyxy:
+            self.convert_to_xyxy()
 
     def __len__(self):
         return len(self._images)
@@ -30,16 +33,11 @@ class ModanetDataset(Dataset):
         boxes = []
         labels = []
         for obj in image['objects']:
-            # convert the bbox from xywh to xyxy
-            obj['bbox'][2]+=obj['bbox'][0]
-            obj['bbox'][3]+=obj['bbox'][1]
             boxes.append(obj['bbox'])
             labels.append(obj['category_id'])
         boxes = np.array(boxes, dtype=np.float32)
         labels = np.array(labels, dtype=np.int64)
 
-        #images (list[Tensor]): images to be processed
-        #targets (list[Dict[Tensor]]): ground-truth boxes present in the image (optional)
         inputs = {}
         inputs['data'] = img
         inputs['ori_image'] = ori_image
@@ -56,3 +54,8 @@ class ModanetDataset(Dataset):
 
         return inputs, targets
 
+    def convert_to_xyxy(self):
+        for image in self._images:
+            for obj in image['objects']:
+                obj['bbox'][2]+=obj['bbox'][0]
+                obj['bbox'][3]+=obj['bbox'][1]

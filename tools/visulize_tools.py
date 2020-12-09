@@ -216,6 +216,7 @@ def visulize_heatmaps(heatmap):
     heatmap = np.amax(heatmap,axis=0)
     heatmap = Image.fromarray((heatmap*255).astype(np.uint8)).convert('RGB')
     heatmap.show()
+    return heatmap
 
 def visulize_colored_heatmaps_with_image(heatmap, image):
     fig = plt.figure(frameon=False)

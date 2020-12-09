@@ -26,3 +26,9 @@ class Dataset:
 
     def extra_repr(self):
         return ""
+
+    def convert_to_xyxy(self):
+        for image in self._images:
+            for obj in image['objects']:
+                obj['bbox'][2]+=obj['bbox'][0]
+                obj['bbox'][3]+=obj['bbox'][1]

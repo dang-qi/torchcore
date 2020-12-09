@@ -7,7 +7,7 @@ import os
 # THIS DATASET IS WRONG, NEED CHANGE the convert xyxy in initial stage
 class COCOPersonDataset(Dataset):
     '''COCO dataset only contarin person class'''
-    def __init__( self, root, anno, part, transforms=None ):
+    def __init__( self, root, anno, part, transforms=None, xyxy=True, dataset_label=None ):
         super().__init__( root, transforms )
         self._part = part
 
@@ -15,6 +15,10 @@ class COCOPersonDataset(Dataset):
         with open(anno, 'rb') as f:
             self._images = pickle.load(f)[part] 
         self.remove_wrong_labels()
+        self.xyxy = xyxy
+        self.dataset_label = dataset_label
+        if xyxy:
+            self.convert_to_xyxy()
 
     def __len__(self):
         return len(self._images)
@@ -32,9 +36,9 @@ class COCOPersonDataset(Dataset):
         boxes = []
         labels = []
         for obj in image['objects']:
-            # convert the bbox from xywh to xyxy
-            obj['bbox'][2]+=obj['bbox'][0]
-            obj['bbox'][3]+=obj['bbox'][1]
+            ## convert the bbox from xywh to xyxy
+            #obj['bbox'][2]+=obj['bbox'][0]
+            #obj['bbox'][3]+=obj['bbox'][1]
             boxes.append(obj['bbox'])
             labels.append(obj['category_id'])
         boxes = np.array(boxes, dtype=np.float32)
@@ -45,6 +49,8 @@ class COCOPersonDataset(Dataset):
         inputs = {}
         inputs['data'] = img
         inputs['ori_image'] = ori_image
+        if self.dataset_label is not None:
+            inputs['dataset_label'] = self.dataset_label
 
         targets = {}
         targets["boxes"] = boxes

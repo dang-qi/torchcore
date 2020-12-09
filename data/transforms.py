@@ -260,11 +260,11 @@ class GeneralRCNNTransformTV(object):
 
             # normalize after resize, which might be slower 
             ainput, target = self.to_tensor(ainput, target)
+            ainput, target = self.normalize(ainput, target)
             ainput, target = self.resize_min_max(ainput, target)
             # set the tensor to device before normalize
             #ainput['data'].to(self.device)
             scales[i] = ainput['scale']
-            ainput, target = self.normalize(ainput, target)
             images.append(ainput['data'])
 
             if 'path' in ainput:

@@ -4,6 +4,7 @@ import torch.nn as nn
 from .one_stage_detector import OneStageDetector
 from .heads import CommonHead, ComposedHead, CommonHeadWithSigmoid
 from .losses import FocalLossHeatmap, L1LossWithMask, L1LossWithInd
+from .common import init_focal_loss_head, init_head_gaussian
 
 class CenterNet(OneStageDetector):
     def __init__(self, backbone, num_classes, parts=['heatmap'], cfg=None, neck=None, pred_heads=None, loss_weight=None):
@@ -105,8 +106,14 @@ class CenterNetLoss(nn.Module):
 def get_center_head(in_channel, num_classes):
     head_names = ['heatmap', 'offset', 'width_height']
     heatmap_head = CommonHead(num_classes, in_channel, head_conv_channel=64)
+    init_focal_loss_head(heatmap_head)
+
     offset_head = CommonHead(2, in_channel, head_conv_channel=64)
+    init_head_gaussian(offset_head)
+
     witdh_height_head = CommonHead(2, in_channel, head_conv_channel=64)
+    init_head_gaussian(witdh_height_head)
+
     heads = [heatmap_head, offset_head, witdh_height_head]
     return ComposedHead(head_names, heads)
 

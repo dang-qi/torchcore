@@ -1,4 +1,5 @@
 import torch
+import random
 import numpy as np
 from torch import nn
 import torch.nn.functional as F
@@ -76,16 +77,20 @@ class RoICenterNet(nn.Module):
             centernet_targets = self.generate_targets(proposals, targets)
             #return proposals, centernet_targets
             #return proposals
-            
-
+        elif proposals is None:
+            proposals = self.select_proposals(proposals, targets, image_sizes)
 
         # rois: tuple(Tensor_image1, Tensor_image2)
-        #print('feature size', features.shape)
-        #print('proposals', len(proposals))
         rois = self.roi_align(features, proposals, stride)
         rois = torch.cat(rois, dim=0)
+        #print('proposals',proposals)
+        #print('rois',rois)
+        #print('features',features)
+        #print('rois-features',(rois-features[:,:,:,:69]).sum())
+        #print('rois-features',rois-features)
 
         pred = self.centernet_heads(rois)
+        #return pred['heatmap'].sigmoid_()
         #label_pre, bbox_pre = self.faster_rcnn_head(rois)
         if self.training:
             device = rois.device
@@ -96,6 +101,8 @@ class RoICenterNet(nn.Module):
         else:
             #results = self.inference_result(label_pre, bbox_pre, proposals)
             results = self.postprocess(pred, proposals)
+            # for debug
+            #return proposals, results
             return results
 
     @torch.no_grad()
@@ -225,6 +232,7 @@ class RoICenterNet(nn.Module):
         roi_per_pic = [len(roi) for roi in roi_boxes_batch]
         boxes = recover_roi_boxes(xs, ys, offset, width_height, self.stride, roi_boxes_batch, self.cfg.centernet_head.roi_pool_h, self.cfg.centernet_head.roi_pool_w)
         boxes = torch.split(boxes, roi_per_pic)
+        categories = categories+1
         categories = torch.split(categories, roi_per_pic)
         scores = torch.split(scores, roi_per_pic)
         boxes, categories, scores = merge_roi_boxes(boxes, categories, scores, iou_threshold=self.cfg.centernet_head.nms_thresh)
@@ -240,11 +248,18 @@ class RoICenterNet(nn.Module):
 
     @torch.no_grad()
     def select_proposals(self, proposals, targets, image_sizes):
-        # remove small human proposals
-        proposals = self.remove_small_boxes_batch(proposals, min_area=self.min_area)
+        if proposals is not None:
+            # remove small human proposals
+            proposals = self.remove_small_boxes_batch(proposals, min_area=self.min_area)
 
-        # add gt human box
-        proposals = self.add_gt_boxes( proposals, targets)
+            # add gt human box
+            proposals = self.add_gt_boxes( proposals, targets)
+        else:
+            proposals = self.gen_gt_boxes(targets)
+            #proposals = self.gen_gt_boxes_debug(targets)
+
+        ## TODO this is for debug and need to be deleted!!!
+        #image_sizes = [(h,w-1) for h,w in image_sizes]
 
         # make proposals inside the image
         proposals = [self.crop_boxes(proposal, image_size) for proposal, image_size in zip(proposals, image_sizes)]
@@ -277,8 +292,27 @@ class RoICenterNet(nn.Module):
             proposal_out.append(proposal_image)
         return proposal_out
 
+    def gen_gt_boxes(self, targets):
+        proposal_out = []
+        for target in targets:
+            if 'human_box' in target:
+                human_box = target['human_box']
+            else:
+                human_box = gen_human_box(target['boxes'])
+            proposal_out.append(human_box)
+        return proposal_out
+
+    def gen_gt_boxes_debug(self, targets):
+        proposal_out = []
+        for target in targets:
+            human_box = torch.tensor([[0, 0, 416,  416]], dtype=target['boxes'].dtype, device=target['boxes'].device)
+            proposal_out.append(human_box)
+        return proposal_out
+
         
-def gen_human_box( boxes, x_margin=5, y_margin=20):
+def gen_human_box( boxes, x_margin_min=5, x_margin_max=20, y_margin_min=20, y_margin_max=40):
+    x_margin = random.randint(x_margin_min, x_margin_max)
+    y_margin = random.randint(y_margin_min, y_margin_max)
     x1 = min(boxes[:,0]) - x_margin
     y1 = min(boxes[:,1]) - y_margin
     x2 = max(boxes[:,2]) + x_margin
@@ -301,6 +335,8 @@ def recover_roi_boxes(xs, ys, offset, width_height, down_stride, roi_boxes_batch
     #ys = (ys )*down_stride*h_scale
     width = width_height[:,0,:]*w_scale
     height = width_height[:,1,:]*h_scale
+    #width = width_height[:,0,:]*w_scale*down_stride
+    #height = width_height[:,1,:]*h_scale*down_stride
     x1 = xs - width/2 + roi_boxes[:,0][:,None]
     x2 = xs + width/2 + roi_boxes[:,0][:,None]
     y1 = ys - height/2 + roi_boxes[:,1][:,None]

@@ -37,6 +37,27 @@ def init( m ):
         return
     #print('{} is already initialized'.format(type(m)))
 
+def init_focal_loss_head(head):
+    pi = 0.01
+    b_value = -1 * math.log((1-pi)/pi)
+    last_conv = None
+    for m in head.modules():
+        if isinstance(m, nn.Conv2d):
+            last_conv = m
+            nn.init.normal_(m.weight, std=0.001)
+            nn.init.constant_(m.bias, 0)
+    if last_conv is not None:
+        nn.init.constant_(last_conv.bias, b_value)
+    else:
+        print('no last conv')
+
+def init_head_gaussian(head):
+    for m in head.modules():
+        if isinstance(m, nn.Conv2d):
+            nn.init.normal_(m.weight, std=0.001)
+            nn.init.constant_(m.bias, 0)
+
+
 def fill_up_weights(up):
     w = up.weight.data
     f = math.ceil(w.size(2) / 2)

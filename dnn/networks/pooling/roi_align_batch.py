@@ -14,6 +14,6 @@ class ROIAlignBatch(Module):
     # feat: BxCxHxW,  rois: Kx4 (batch_idx, xmin, ymin, xmax, ymax) without normalize
     def forward(self, feat, roibatches, stride):
         roi_num_per_batch = [len(roi) for roi in roibatches]
-        rois_out = roi_align(feat, roibatches, (self.pool_h, self.pool_w), spatial_scale=1.0/stride, sampling_ratio=self.sampling)
+        rois_out = roi_align(feat, roibatches, (self.pool_h, self.pool_w), spatial_scale=1.0/stride, sampling_ratio=self.sampling, aligned=True)
         rois_out = torch.split(rois_out, roi_num_per_batch)
         return rois_out

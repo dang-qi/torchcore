@@ -30,7 +30,6 @@ class COCOTorchVisionDataset(Dataset):
         img_path = os.path.join(self._root, self._part, image['file_name'] )
         image_id=image['id']
         img = Image.open(img_path).convert('RGB')
-        img = to_tensor(img)
         ##if self.debug:
         ##    ori_image = img.copy()
 
@@ -66,6 +65,7 @@ class COCOTorchVisionDataset(Dataset):
         #target["iscrowd"] = iscrowd
         if self._transforms is not None:
             inputs, targets = self._transforms(inputs, targets)
+        img = to_tensor(inputs['data'])
 
         #if self.debug:
         #    inputs['ori_image'] = inputs['data'].copy()

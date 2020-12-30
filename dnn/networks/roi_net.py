@@ -12,14 +12,14 @@ class RoINet(nn.Module):
         super().__init__()
         self.cfg = cfg
 
-        if hasattr(cfg.roi_head, 'dataset_label'):
-            self.dataset_label = cfg.roi_head.dataset_label
+        if hasattr(cfg, 'dataset_label'):
+            self.dataset_label = cfg.dataset_label
         else:
             self.dataset_label = None
 
-        self.pos_neg_sampler = PosNegSampler(pos_num=cfg.roi_head.pos_sample_num, neg_num=cfg.roi_head.neg_sample_num)
-        self.roi_align = RoiAliagnFPN(cfg.roi_pool.pool_h,
-                                      cfg.roi_pool.pool_w,
+        self.pos_neg_sampler = PosNegSampler(pos_num=cfg.pos_sample_num, neg_num=cfg.neg_sample_num)
+        self.roi_align = RoiAliagnFPN(cfg.pool_h,
+                                      cfg.pool_w,
                                       sampling=2)
         self.faster_rcnn_head = FastRCNNHead(cfg)
         self.box_coder = AnchorBoxesCoder(box_code_clip=None)
@@ -113,7 +113,7 @@ class RoINet(nn.Module):
             scores = scores.reshape(-1)
             labels = labels.reshape(-1)
             #scores, labels = torch.max(label_pre_image, dim=1)
-            pos_label_ind = torch.where(scores > self.cfg.roi_head.score_thre)
+            pos_label_ind = torch.where(scores > self.cfg.score_thre)
             labels = labels[pos_label_ind]
             scores = scores[pos_label_ind]
             boxes = boxes[pos_label_ind]
@@ -126,7 +126,7 @@ class RoINet(nn.Module):
 
             # perform nms for each class
             keep = batched_nms(boxes, scores, labels, self.cfg.nms_thresh)
-            keep = keep[:self.cfg.roi_head.detection_per_image]
+            keep = keep[:self.cfg.detection_per_image]
             labels = labels[keep]
             scores = scores[keep]
             boxes = boxes[keep]
@@ -240,7 +240,7 @@ class RoINet(nn.Module):
                 iou_mat = box_iou(proposal_image, boxes) # proposal N and target boxes M, iou mat: NxM
                 # set up the max iou for each box as positive 
                 # set up the iou bigger than a value as positive
-                ind_pos_proposal, ind_pos_boxes, ind_neg_proposal, _ = self.match_boxes(iou_mat, low_thresh=self.cfg.roi_head.iou_low_thre, high_thresh=self.cfg.roi_head.iou_high_thre)
+                ind_pos_proposal, ind_pos_boxes, ind_neg_proposal, _ = self.match_boxes(iou_mat, low_thresh=self.cfg.iou_low_thre, high_thresh=self.cfg.iou_high_thre)
                 ind_pos_proposal_all.append(ind_pos_proposal)
                 ind_neg_proposal_all.append(ind_neg_proposal)
                 ind_pos_boxes_all.append(ind_pos_boxes)

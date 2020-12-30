@@ -9,8 +9,8 @@ class FastRCNNHead(nn.Module):
         class_num = cfg.class_num
         self.cfg = cfg
         feature_num = 1024
-        pool_h = cfg.roi_pool.pool_h
-        pool_w = cfg.roi_pool.pool_w
+        pool_h = cfg.pool_h
+        pool_w = cfg.pool_w
         self.feature_head = nn.Sequential( 
             nn.Linear(cfg.out_feature_num*pool_h*pool_w, feature_num),
             nn.ReLU(inplace=True),
@@ -44,8 +44,8 @@ class FastRCNNHeadConv(nn.Module):
         class_num = cfg.class_num
         self.cfg = cfg
         feature_num = 1024
-        pool_h = cfg.roi_pool.pool_h
-        pool_w = cfg.roi_pool.pool_w
+        pool_h = cfg.pool_h
+        pool_w = cfg.pool_w
         self.feature_head = nn.Sequential( 
             nn.Conv2d(in_channels=cfg.out_feature_num, out_channels=feature_num, kernel_size=(pool_h, pool_w), padding=0 ),
             nn.ReLU(inplace=True),

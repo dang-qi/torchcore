@@ -30,18 +30,18 @@ class RoICenterNet(nn.Module):
     def __init__(self,cfg):
         super().__init__()
         self.cfg = cfg
-        self.train_box_iou_thre = cfg.centernet_head.train_box_iou_thre
-        self.min_area = cfg.centernet_head.min_area
+        self.train_box_iou_thre = cfg.train_box_iou_thre
+        self.min_area = cfg.min_area
 
-        self.roi_align = ROIAlignBatch(cfg.centernet_head.roi_pool_h,
-                                      cfg.centernet_head.roi_pool_w,
+        self.roi_align = ROIAlignBatch(cfg.roi_pool_h,
+                                      cfg.roi_pool_w,
                                       sampling=-1)
         #self.faster_rcnn_head = FastRCNNHead(cfg)
         self.centernet_heads = get_center_head(cfg.out_feature_num, cfg.class_num)
-        self._max_obj = cfg.centernet_head.max_obj
+        self._max_obj = cfg.max_obj
 
-        loss_parts = cfg.centernet_head.loss_parts
-        loss_weight = cfg.centernet_head.loss_weight
+        loss_parts = cfg.loss_parts
+        loss_weight = cfg.loss_weight
         self.centernet_loss = CenterNetLoss(loss_parts, loss_weight=loss_weight)
         self.parts = loss_parts
 
@@ -49,8 +49,8 @@ class RoICenterNet(nn.Module):
         #self.smooth_l1_loss = nn.SmoothL1Loss(reduction='mean')
         #self.label_loss = nn.CrossEntropyLoss(reduction='mean')
 
-        if hasattr(cfg.centernet_head, 'dataset_label'):
-            self.dataset_label = cfg.centernet_head.dataset_label
+        if hasattr(cfg, 'dataset_label'):
+            self.dataset_label = cfg.dataset_label
         else:
             self.dataset_label = None
 
@@ -129,13 +129,13 @@ class RoICenterNet(nn.Module):
                 boxes_w = boxes_w * self.stride
                 boxes_h = boxes_h * self.stride
 
-                heatmaps = generate_ellipse_gaussian_heatmap(self.cfg.class_num, self.cfg.centernet_head.roi_pool_w ,self.cfg.centernet_head.roi_pool_h, center_x, center_y, boxes_w, boxes_h, labels)
+                heatmaps = generate_ellipse_gaussian_heatmap(self.cfg.class_num, self.cfg.roi_pool_w ,self.cfg.roi_pool_h, center_x, center_y, boxes_w, boxes_h, labels)
             
                 offset = generate_offset(center_x, center_y, self._max_obj)
                 width_height = generate_width_height(boxes, self._max_obj)
 
                 ind = np.zeros(self._max_obj, dtype=int)
-                ind = generate_ind(ind, center_x, center_y, self.cfg.centernet_head.roi_pool_w)
+                ind = generate_ind(ind, center_x, center_y, self.cfg.roi_pool_w)
                 ind_mask = np.zeros(self._max_obj, dtype=int)
                 ind_mask[:len(center_x)] = 1
 
@@ -174,8 +174,8 @@ class RoICenterNet(nn.Module):
         boxes = self.crop_boxes(boxes, (int(human_height), int(human_width)))
 
         # normalize the boxes using the roi size
-        roi_h = self.cfg.centernet_head.roi_pool_h
-        roi_w = self.cfg.centernet_head.roi_pool_w
+        roi_h = self.cfg.roi_pool_h
+        roi_w = self.cfg.roi_pool_w
 
         boxes[:,0] = boxes[:,0] / human_width * roi_w
         boxes[:,1] = boxes[:,1] / human_height * roi_h
@@ -230,12 +230,12 @@ class RoICenterNet(nn.Module):
         #print('offset shape', offset.shape)
         #print('width height shape', width_height.shape)
         roi_per_pic = [len(roi) for roi in roi_boxes_batch]
-        boxes = recover_roi_boxes(xs, ys, offset, width_height, self.stride, roi_boxes_batch, self.cfg.centernet_head.roi_pool_h, self.cfg.centernet_head.roi_pool_w)
+        boxes = recover_roi_boxes(xs, ys, offset, width_height, self.stride, roi_boxes_batch, self.cfg.roi_pool_h, self.cfg.roi_pool_w)
         boxes = torch.split(boxes, roi_per_pic)
         categories = categories+1
         categories = torch.split(categories, roi_per_pic)
         scores = torch.split(scores, roi_per_pic)
-        boxes, categories, scores = merge_roi_boxes(boxes, categories, scores, iou_threshold=self.cfg.centernet_head.nms_thresh)
+        boxes, categories, scores = merge_roi_boxes(boxes, categories, scores, iou_threshold=self.cfg.nms_thresh)
         result = {}
         result['heatmap'] = heatmap_out
         result['offset'] = offset

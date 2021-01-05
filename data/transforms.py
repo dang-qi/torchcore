@@ -345,3 +345,33 @@ class RandomScale(object):
         
         return inputs, targets
 
+class PadNumpyArray():
+    # pad zero to array
+    def __init__(self, input_len_dict=None, input_val_dict=None, target_len_dict=None, target_val_dict=None):
+        if input_len_dict is not None:
+            assert input_len_dict.keys() == input_val_dict.keys()
+        if target_len_dict is not None:
+            assert target_len_dict.keys() == target_val_dict.keys()
+        self.input_len_dict = input_len_dict
+        self.input_val_dict = input_val_dict
+        self.target_len_dict = target_len_dict
+        self.target_val_dict = target_val_dict
+
+    def __call__(self, inputs, targets):
+        if self.input_len_dict is not None:
+            inputs = self.pad_variable(inputs, self.input_len_dict, self.input_val_dict)
+        if self.target_len_dict is not None:
+            targets = self.pad_variable(targets, self.target_len_dict, self.target_val_dict)
+        return inputs, targets
+    
+    def pad_variable(self, targets, len_dict, val_dict):
+        for k in len_dict:
+            length = len_dict[k]
+            value = val_dict[k]
+            shape = (length,)+targets[k].shape[1:]
+            dtype = targets[k].dtype
+            pad_array = np.full(shape, value, dtype=dtype)
+            pad_array[:len(targets[k])] = targets[k]
+            targets[k] = pad_array
+        return targets
+

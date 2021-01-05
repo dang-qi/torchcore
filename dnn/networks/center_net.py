@@ -1,13 +1,15 @@
 import torch
 import torch.nn as nn
+import numpy as np
 
 from .one_stage_detector import OneStageDetector
 from .heads import CommonHead, ComposedHead, CommonHeadWithSigmoid
 from .losses import FocalLossHeatmap, L1LossWithMask, L1LossWithInd
 from .common import init_focal_loss_head, init_head_gaussian
+from ...data.datasets.coco_center import generate_ellipse_gaussian_heatmap, generate_ind, generate_offset, generate_width_height
 
 class CenterNet(OneStageDetector):
-    def __init__(self, backbone, num_classes, parts=['heatmap'], cfg=None, neck=None, pred_heads=None, loss_weight=None):
+    def __init__(self, backbone, num_classes, parts=['heatmap'], cfg=None, neck=None, pred_heads=None, loss_weight=None, max_obj=128):
         #super(OneStageDetector,self).__init__()
         if pred_heads is None:
             if neck is None:
@@ -17,6 +19,8 @@ class CenterNet(OneStageDetector):
             heads = get_center_head(in_channel, num_classes)
         self.parts = parts
         self.down_stride = 4
+        self.num_classes = num_classes
+        self._max_obj = max_obj
 
         losses = CenterNetLoss(parts, loss_weight=loss_weight)
 
@@ -35,9 +39,14 @@ class CenterNet(OneStageDetector):
         if self.neck is not None:
             features = self.neck(features)
         pred = self.pred_heads(features)
+        #return pred
 
         if self.training:
-            loss = self.losses(pred, targets)
+            device = pred['heatmap'].device
+            centernet_targets = self.generate_targets(inputs, targets, device)
+            #return centernet_targets
+            loss = self.losses(pred, centernet_targets)
+            # for debug
             return loss
         
         output = self.postprocess(pred, inputs)
@@ -72,6 +81,71 @@ class CenterNet(OneStageDetector):
         result['category'] = categories
 
         return result
+
+    @torch.no_grad()
+    def generate_targets(self, inputs, targets, device):
+        heatmaps_all = []
+        offset_all = []
+        width_height_all = []
+        ind_all = []
+        ind_mask_all = []
+        centernet_targets = {}
+
+        _,_, height, width = inputs['data'].shape
+        heatmap_w = width // self.down_stride
+        heatmap_h = height // self.down_stride
+
+        for boxes, labels in zip(targets['boxes'], targets['cat_labels']):
+            #boxes = target['boxes']
+            #boxes = self.normalize_boxes(human_box, boxes)
+            boxes = boxes.detach().cpu().numpy() / self.down_stride
+            #labels = target['labels']
+            keep = self.find_valid_boxes(boxes)
+            boxes  = boxes[keep]
+            labels = labels[keep]
+
+            center_x = (boxes[:,0] + boxes[:,2])/2 
+            center_y = (boxes[:,1] + boxes[:,3])/2 
+            boxes_w = boxes[:,2] - boxes[:,0]
+            boxes_h = boxes[:,3] - boxes[:,1]
+
+            # Follow the source code from centernet, radius calculate by original box size
+            boxes_w = boxes_w * self.down_stride
+            boxes_h = boxes_h * self.down_stride
+
+            heatmaps = generate_ellipse_gaussian_heatmap(self.num_classes, heatmap_w, heatmap_h, center_x, center_y, boxes_w, boxes_h, labels)
+        
+            offset = generate_offset(center_x, center_y, self._max_obj)
+            width_height = generate_width_height(boxes, self._max_obj)
+
+            ind = np.zeros(self._max_obj, dtype=int)
+            ind = generate_ind(ind, center_x, center_y, heatmap_w)
+            ind_mask = np.zeros(self._max_obj, dtype=int)
+            ind_mask[:len(center_x)] = 1
+
+            heatmaps_all.append(heatmaps)
+            offset_all.append(offset)
+            width_height_all.append(width_height)
+            ind_all.append(ind)
+            ind_mask_all.append(ind_mask)
+        centernet_targets['heatmap'] = np.stack(heatmaps_all)
+        centernet_targets['offset'] = np.stack(offset_all)
+        #targets['offset_map'] = offset_map
+        centernet_targets['width_height'] = np.stack(width_height_all)
+        #targets['width_height_map'] = width_height_map
+        centernet_targets['ind'] = np.stack(ind_all)
+        centernet_targets['ind_mask'] = np.stack(ind_mask_all)
+
+        for k,v in centernet_targets.items():
+            centernet_targets[k] = torch.from_numpy(v).to(device)
+        return centernet_targets
+
+    def find_valid_boxes(self, boxes):
+        if torch.is_tensor(boxes):
+            keep = torch.logical_and(boxes[:,2] > boxes[:,0], boxes[:,3] > boxes[:,1])
+        elif isinstance(boxes, (np.ndarray, np.generic) ):
+            keep = np.logical_and(boxes[:,2] > boxes[:,0], boxes[:,3] > boxes[:,1])
+        return keep
 
 class CenterNetLoss(nn.Module):
     def __init__(self, loss_parts, loss_weight=None):

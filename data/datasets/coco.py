@@ -30,8 +30,8 @@ class COCODataset(Dataset):
         img_path = os.path.join(self._root, self._part, image['file_name'] )
         image_id=image['id']
         img = Image.open(img_path).convert('RGB')
-        #if self.debug:
-        #    ori_image = img.copy()
+        if self.debug:
+            ori_image = img.copy()
 
         # Load targets
         boxes = []
@@ -65,7 +65,8 @@ class COCODataset(Dataset):
             inputs, targets = self._transforms(inputs, targets)
 
         if self.debug:
-            inputs['ori_image'] = inputs['data'].copy()
+            #inputs['ori_image'] = inputs['data'].copy()
+            inputs['ori_image'] = np.array(ori_image)
 
         return inputs, targets
 

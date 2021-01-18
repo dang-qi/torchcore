@@ -36,6 +36,11 @@ class FasterRCNNFPN(GeneralDetector):
             features = self.neck(features)
 
         #print('strides', strides)
+        # This is new place to try
+        features_new = OrderedDict()
+        for k in self.feature_names:
+            features_new[k] = features[k]
+        features = features_new
 
         if self.training:
             proposals, losses_rpn = self.rpn(inputs, features, targets)
@@ -47,10 +52,11 @@ class FasterRCNNFPN(GeneralDetector):
             self.total_time['rpn'] += rpn_time - feature_time 
 
 
-        features_new = OrderedDict()
-        for k in self.feature_names:
-            features_new[k] = features[k]
-        features = features_new
+        ## This is old place
+        #features_new = OrderedDict()
+        #for k in self.feature_names:
+        #    features_new[k] = features[k]
+        #features = features_new
         if self.strides is None:
             strides = self.get_strides(inputs, features)
         else:

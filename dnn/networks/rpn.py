@@ -37,8 +37,13 @@ class MyAnchorGenerator(AnchorGenerator):
 
     def forward(self, inputs, feature_maps):
         grid_sizes = tuple([feature_map.shape[-2:] for feature_map in feature_maps])
-        image_size = inputs['data'].shape[-2:]
-        strides = tuple((image_size[0] // g[0], image_size[1] // g[1]) for g in grid_sizes)
+        if 'data' not in inputs:
+            input_size = inputs['input_size']
+            batch_size = inputs['batch_size']
+        else:
+            input_size = inputs['data'].shape[-2:]
+            batch_size = len(inputs['data'])
+        strides = tuple((input_size[0] // g[0], input_size[1] // g[1]) for g in grid_sizes)
         try:
             # for earlier version torchvision
             self.set_cell_anchors(feature_maps[0].device)
@@ -47,7 +52,7 @@ class MyAnchorGenerator(AnchorGenerator):
 
         anchors_over_all_feature_maps = self.cached_grid_anchors(grid_sizes, strides)
         anchors = []
-        for _ in range(len(inputs['data'])):
+        for _ in range(batch_size):
             anchors_in_image = []
             for anchors_per_feature_map in anchors_over_all_feature_maps:
                 anchors_in_image.append(anchors_per_feature_map)
@@ -142,7 +147,10 @@ class MyRegionProposalNetwork(RegionProposalNetwork):
                 testing, it is an empty dict.
         """
         # RPN uses all feature maps that are available
-        features = list(features.values())
+        if isinstance(features, dict):
+            features = list(features.values())
+        elif torch.is_tensor(features):
+            features = [features]
         pred_out = self.head(features) # return list[(pred_obj, pred_bbox_deltas),...for each feature maps]
         anchors = self.anchor_generator(inputs, features) # [anchors_layer_one_all(shape:(anchor_num_all,4)), anchors_layer_two_all, ...],
         #for anchor in anchors:
@@ -371,7 +379,6 @@ class MyRegionProposalNetwork(RegionProposalNetwork):
                 print('proposal are 0')
             #print('proposal shape:', len(proposal))
             keep = self.remove_small_boxes(proposal, self.min_size)
-            #print('keep1', keep)
 
             scores = pred_class_image[:,0]
             proposal = proposal[keep]

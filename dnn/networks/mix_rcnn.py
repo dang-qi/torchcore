@@ -67,8 +67,11 @@ class MixRCNN(GeneralDetector):
             
             losses_second_roi = self.second_roi_head(human_proposal, feature_second, stride_second, inputs=inputs, targets=targets )
             #return losses_second_roi
+            losses_second_roi_new = {}
+            for k,v in losses_second_roi.items():
+                losses_second_roi_new['second_'+k] = v
 
-            losses = {**losses_rpn, **losses_roi, **losses_second_roi}
+            losses = {**losses_rpn, **losses_roi, **losses_second_roi_new}
             #losses = {**losses_rpn, **losses_roi }
             if debug_time:
                 roi_head_time = time.time()
@@ -84,6 +87,7 @@ class MixRCNN(GeneralDetector):
             #human_results['boxes'] = [human_box[torch.argmax(human_score)][None,:] for human_box, human_score in zip(human_results['boxes'], human_scores)]
             human_results_out = self.post_process(human_results, inputs)
             return human_results_out
+            #return results
             # for debug
             return human_boxes, results 
             if debug_time:

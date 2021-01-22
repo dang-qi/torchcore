@@ -6,7 +6,7 @@ from .general_detector import GeneralDetector
 from torchvision.ops import roi_align, nms
 
 class MixRCNN(GeneralDetector):
-    def __init__(self, backbone, neck=None, heads=None, cfg=None, training=True, debug_time=False):
+    def __init__(self, backbone, neck=None, heads=None, cfg=None, training=True, second_loss_weight=None, debug_time=False):
         super(GeneralDetector, self).__init__()
         self.backbone = backbone
         self.neck = neck
@@ -16,6 +16,7 @@ class MixRCNN(GeneralDetector):
         self.training = training
         self.feature_names = ['0', '1', '2', '3']
         self.strides = None
+        self.second_loss_weight = second_loss_weight
 
         if debug_time:
             self.total_time = {'feature':0.0, 'rpn':0.0, 'roi_head':0.0}
@@ -69,6 +70,8 @@ class MixRCNN(GeneralDetector):
             #return losses_second_roi
             losses_second_roi_new = {}
             for k,v in losses_second_roi.items():
+                if self.second_loss_weight is not None:
+                    v *= self.second_loss_weight
                 losses_second_roi_new['second_'+k] = v
 
             losses = {**losses_rpn, **losses_roi, **losses_second_roi_new}
@@ -81,7 +84,8 @@ class MixRCNN(GeneralDetector):
             human_results = self.roi_head(proposals, features, strides, targets=targets)
             human_boxes = human_results['boxes']
             human_scores = human_results['scores']
-            human_boxes = [human_box[torch.argmax(human_score)][None,:].clone() for human_box, human_score in zip(human_boxes, human_scores)]
+            #human_boxes = [human_box[torch.argmax(human_score)][None,:].clone() for human_box, human_score in zip(human_boxes, human_scores)]
+            human_boxes = [human_box[human_score>0.5].clone() if (human_score>0.5).any() else human_box[torch.argmax(human_score)][None,:].clone() for human_box, human_score in zip(human_boxes, human_scores)]
             results = self.second_roi_head(human_boxes, feature_second, stride_second, inputs=inputs, targets=targets)
             results = self.post_process(results, inputs)
             #human_results['boxes'] = [human_box[torch.argmax(human_score)][None,:] for human_box, human_score in zip(human_results['boxes'], human_scores)]
@@ -89,7 +93,7 @@ class MixRCNN(GeneralDetector):
             return human_results_out
             #return results
             # for debug
-            return human_boxes, results 
+            return human_results_out, results 
             if debug_time:
                 roi_head_time = time.time()
                 self.total_time['roi_head'] += roi_head_time - rpn_time 

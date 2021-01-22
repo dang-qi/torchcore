@@ -58,7 +58,7 @@ class RoiAliagnFPN(nn.Module):
             #print('level {}: stride{}'.format(level, stride))
             #print('feature level shape',feature_level.shape)
             #print('boxes in level', boxes_in_level)
-            roi_level = roi_align(feature_level, boxes_level, self.out_size, spatial_scale=1.0/stride, sampling_ratio=self.sampling)
+            roi_level = roi_align(feature_level, boxes_level, self.out_size, spatial_scale=1.0/stride, sampling_ratio=self.sampling,aligned=True)
             rois_out[ind_level] = roi_level
         return rois_out
 

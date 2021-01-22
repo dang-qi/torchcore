@@ -62,10 +62,9 @@ class RoIFrcnn(nn.Module):
 
         image_sizes = inputs['image_sizes']
         self.stride = stride
-        if self.dataset_label is not None:
+        if self.training and self.dataset_label is not None:
             dataset_ind = inputs['dataset_label'] == self.dataset_label
-            if self.training:
-                features = features[dataset_ind]
+            features = features[dataset_ind]
             #image_sizes = image_sizes[dataset_ind]
             image_sizes =[im_size for im_size,label in zip(image_sizes, dataset_ind) if label ]
             if targets is not None:
@@ -123,16 +122,51 @@ class RoIFrcnn(nn.Module):
             return losses
         else:
             results = self.roi_head(second_proposals, roi_features, strides )
-            results = self.post_process(results, proposals, proposal_per_im)
+            results = self.post_process(results, proposals, proposal_per_im, stride)
             return results
 
     @torch.no_grad()
-    def post_process(self, results, human_boxes_batch, human_per_im):
+    def post_process(self, results, human_boxes_batch, human_per_im, stride):
+        roi_boxes = torch.cat(human_boxes_batch, dim=0) # ROI_NUM_N x 4
+        roi_w = roi_boxes[:,2] - roi_boxes[:,0] # ROI_NUM_N
+        roi_h = roi_boxes[:,3] - roi_boxes[:,1]
+        w_scale = (roi_w / self.cfg.roi_pool_w / stride) # ROI_NUM_N 
+        h_scale = (roi_h / self.cfg.roi_pool_h / stride)
+        boxes_batch = results['boxes'] # list[DET_PER_IM x 4,...]
+        for i, boxes in enumerate(boxes_batch):
+            boxes[:,0] *= w_scale[i]
+            boxes[:,2] *= w_scale[i]
+            boxes[:,1] *= h_scale[i]
+            boxes[:,3] *= h_scale[i]
+
+            boxes[:,0] += roi_boxes[i,0]
+            boxes[:,2] += roi_boxes[i,0]
+            boxes[:,1] += roi_boxes[i,1]
+            boxes[:,3] += roi_boxes[i,1]
+
+        #results['boxes'] = [torch.cat(boxes[im_num:im_num+i], dim=0) for i, im_num in zip(accumulate_list,human_per_im)]
+        scores = []
+        labels = []
+        boxes = []
+
+        ind = 0
+        for human_num in human_per_im:
+            boxes.append(torch.cat(results['boxes'][ind:ind+human_num], dim=0))
+            labels.append(torch.cat(results['labels'][ind:ind+human_num], dim=0))
+            scores.append(torch.cat(results['scores'][ind:ind+human_num], dim=0))
+            ind+=human_num
+        results['boxes'] = boxes
+        results['labels'] = labels
+        results['scores'] = scores
+        return results
+
+    @torch.no_grad()
+    def post_process_old(self, results, human_boxes_batch, human_per_im, stride):
         roi_boxes = torch.cat(human_boxes_batch, dim=0) # ROI_NUM_N x 4
         roi_w = roi_boxes[:,2] - roi_boxes[:,0] # ROI_NUM_N x 1
         roi_h = roi_boxes[:,3] - roi_boxes[:,1]
-        w_scale = (roi_w / self.cfg.roi_pool_w)[:,None] # ROI_NUM_N x 1
-        h_scale = (roi_h / self.cfg.roi_pool_h)[:,None]
+        w_scale = (roi_w / self.cfg.roi_pool_w / stride)[:,None] # ROI_NUM_N x 1
+        h_scale = (roi_h / self.cfg.roi_pool_h / stride)[:,None]
         boxes_batch = results['boxes'] # list[DET_PER_IM x 4,...]
         boxes_all = torch.stack(boxes_batch, dim=0) # ROI_NUM_N x DET_PER_IM x 4
 

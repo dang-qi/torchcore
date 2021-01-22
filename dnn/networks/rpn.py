@@ -385,6 +385,8 @@ class MyRegionProposalNetwork(RegionProposalNetwork):
             scores = scores[keep]
             idxs = idxs[keep]
             #print('indx shape', idxs.shape)
+            if len(proposal) == 0:
+                print('proposal after small box removal are 0')
 
             # perform nms
             keep = batched_nms(proposal, scores, idxs, self.nms_thresh) 

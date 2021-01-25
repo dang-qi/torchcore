@@ -38,6 +38,10 @@ class MixRCNN(GeneralDetector):
             features = self.neck(features)
 
         #print('strides', strides)
+        features_new = OrderedDict()
+        for k in self.feature_names:
+            features_new[k] = features[k]
+        features = features_new
 
         if self.training:
             proposals, losses_rpn = self.rpn(inputs, features, targets)
@@ -49,10 +53,6 @@ class MixRCNN(GeneralDetector):
             self.total_time['rpn'] += rpn_time - feature_time 
 
 
-        features_new = OrderedDict()
-        for k in self.feature_names:
-            features_new[k] = features[k]
-        features = features_new
         if self.strides is None:
             strides = self.get_strides(inputs, features)
             self.strides = strides
@@ -65,6 +65,7 @@ class MixRCNN(GeneralDetector):
 
         if self.training:
             losses_roi, human_proposal = self.roi_head(proposals, features, strides, targets=targets, inputs=inputs)
+            return {**losses_rpn, **losses_roi}
             
             losses_second_roi = self.second_roi_head(human_proposal, feature_second, stride_second, inputs=inputs, targets=targets )
             #return losses_second_roi
@@ -82,6 +83,8 @@ class MixRCNN(GeneralDetector):
             return losses
         else:
             human_results = self.roi_head(proposals, features, strides, targets=targets)
+            human_results_out = self.post_process(human_results, inputs)
+            return human_results_out
             human_boxes = human_results['boxes']
             human_scores = human_results['scores']
             #human_boxes = [human_box[torch.argmax(human_score)][None,:].clone() for human_box, human_score in zip(human_boxes, human_scores)]

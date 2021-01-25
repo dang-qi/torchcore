@@ -8,6 +8,7 @@ class RoIFasterRCNNHeads(nn.Module):
         super(RoIFasterRCNNHeads, self).__init__()
         self.rpn = rpn
         self.roi_head = roi_head
+        self.cfg = cfg
         # used for partial network training
         if hasattr(cfg, 'dataset_label'):
             self.dataset_label = cfg.dataset_label

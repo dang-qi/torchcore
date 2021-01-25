@@ -56,6 +56,7 @@ class MixRCNN(torch.nn.Module):
 
         if self.training:
             losses_first, human_proposal = self.human_detection_head(features, inputs, targets)
+            return losses_first
 
             human_proposal, roi_features, targets_for_second = self.roi_pooler(human_proposal, feature_second, stride_second, inputs, targets)
             if self.inputs_converter is not None:
@@ -81,13 +82,20 @@ class MixRCNN(torch.nn.Module):
             return losses
         else:
             human_results = self.human_detection_head(features, inputs, targets=targets)
+            return human_results
             human_boxes = human_results['boxes']
             human_scores = human_results['scores']
             #human_boxes = [human_box[torch.argmax(human_score)][None,:].clone() for human_box, human_score in zip(human_boxes, human_scores)]
             human_boxes = [human_box[human_score>0.5].clone() if (human_score>0.5).any() else human_box[torch.argmax(human_score)][None,:].clone() for human_box, human_score in zip(human_boxes, human_scores)]
-            human_proposal, roi_features = self.roi_pooler(human_boxes, feature_second, stride_second, inputs, targets)
+            human_proposal, roi_features, targets_for_second = self.roi_pooler(human_boxes, feature_second, stride_second, inputs, targets)
+
+            if self.inputs_converter is not None:
+                second_inputs = self.inputs_converter(stride_second, len(roi_features))
+            else:
+                second_inputs = inputs
+
             roi_features = {'0':roi_features}
-            results = self.roi_detection_head(human_proposal, roi_features, stride_second, inputs=inputs, targets=targets)
+            results = self.roi_detection_head(human_proposal, roi_features, stride_second, inputs=second_inputs, targets=targets)
             results = self.post_process(results, inputs)
             #human_results['boxes'] = [human_box[torch.argmax(human_score)][None,:] for human_box, human_score in zip(human_results['boxes'], human_scores)]
             #human_results_out = self.post_process(human_results, inputs)

@@ -66,6 +66,14 @@ class MixBatchSampler(Sampler):
                 index_group.append(inds)
                 totol_data += data_len
             return index_group
+        elif self.mode == 'single':
+            data_len = self.dataset_len[0]
+            index_group = []
+            inds = np.arange(data_len)
+            if self.shuffle:
+                np.random.shuffle(inds)
+            index_group.append(inds)
+            return index_group
         else:
             raise ValueError('Unknow mode: {}'.format(self.mode))
 

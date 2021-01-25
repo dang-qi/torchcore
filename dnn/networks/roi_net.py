@@ -75,8 +75,9 @@ class RoINet(nn.Module):
         bbox_pre_infer =[target for target,label in zip(bbox_pre, dataset_ind) if not label ]
         proposals_infer =[target for target,label in zip(proposals, dataset_ind) if not label ]
 
-        label_pre_infer = torch.cat(label_pre_infer, dim=0)
-        bbox_pre_infer = torch.cat(bbox_pre_infer, dim=0)
+        if len(label_pre_infer) > 0:
+            label_pre_infer = torch.cat(label_pre_infer, dim=0)
+            bbox_pre_infer = torch.cat(bbox_pre_infer, dim=0)
 
         results = self.inference_result(label_pre_infer, bbox_pre_infer, proposals_infer)
 
@@ -93,6 +94,8 @@ class RoINet(nn.Module):
         
     def inference_result(self, label_pre, bbox_pre, proposals):
         results = {'boxes':[], 'labels':[], 'scores':[]}
+        if len(label_pre) == 0:
+            return results
         boxes_per_im = [len(proposal) for proposal in proposals]
         label_pre = label_pre.split(boxes_per_im)
         bbox_pre = bbox_pre.split(boxes_per_im)

@@ -14,6 +14,8 @@ class MixBatchSampler(Sampler):
 
 
     def __iter__(self):
+        if self.shuffle:
+            self.shuffle_once()
         batch = []
         for idx in self.sampler:
             batch.append(idx)
@@ -28,6 +30,10 @@ class MixBatchSampler(Sampler):
             return len(self.sampler) // self.batch_size
         else:
             return (len(self.sampler) + self.batch_size - 1) // self.batch_size
+    
+    def shuffle_once(self):
+        index_group = self.gen_index_group()
+        self.sampler = self.get_sampler(index_group)
 
     def gen_index_group(self):
         if self.mode=='balance':
@@ -43,9 +49,20 @@ class MixBatchSampler(Sampler):
                     np.random.shuffle(inds)
                 n_times = max_len // data_len
                 rest_num = max_len % data_len
-                rest = inds[:rest_num]
-                inds = np.tile(inds, n_times)
-                inds = np.concatenate((inds, rest))
+                inds_all = []
+                for _ in range(n_times):
+                    if self.shuffle:
+                        np.random.shuffle(inds)
+                    inds_all.append(inds.copy())
+                if rest_num > 0:
+                    if self.shuffle:
+                        np.random.shuffle(inds)
+                    inds_all.append(inds[:rest_num])
+                inds = np.concatenate(inds_all)
+
+                #rest = inds[:rest_num]
+                #inds = np.tile(inds, n_times)
+                #inds = np.concatenate((inds, rest))
                 index_group.append(inds)
                 totol_data += data_len
             return index_group

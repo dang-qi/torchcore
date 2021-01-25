@@ -52,6 +52,7 @@ class RoINet(nn.Module):
 
     def compute_partial_loss(self, label_pre, bbox_pre, target_labels, target_boxes, proposals, inputs):
         dataset_ind = self.get_dataset_ind(inputs)
+        assert len(dataset_ind) == len(target_boxes)
         box_num_per_im = [len(box) for box in target_boxes] 
         label_pre = torch.split(label_pre, box_num_per_im, dim=0)
         bbox_pre = torch.split(bbox_pre, box_num_per_im, dim=0)

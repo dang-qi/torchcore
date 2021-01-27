@@ -6,7 +6,7 @@ from .general_detector import GeneralDetector
 from torchvision.ops import roi_align, nms
 
 class MixRCNN(GeneralDetector):
-    def __init__(self, backbone, neck=None, heads=None, cfg=None, training=True, second_loss_weight=None, debug_time=False):
+    def __init__(self, backbone, neck=None, heads=None, cfg=None, training=True, second_loss_weight=None, test_mode='both', debug_time=False):
         super(GeneralDetector, self).__init__()
         self.backbone = backbone
         self.neck = neck
@@ -17,6 +17,7 @@ class MixRCNN(GeneralDetector):
         self.feature_names = ['0', '1', '2', '3']
         self.strides = None
         self.second_loss_weight = second_loss_weight
+        self.test_mode = test_mode
 
         if debug_time:
             self.total_time = {'feature':0.0, 'rpn':0.0, 'roi_head':0.0}
@@ -65,7 +66,7 @@ class MixRCNN(GeneralDetector):
 
         if self.training:
             losses_roi, human_proposal = self.roi_head(proposals, features, strides, targets=targets, inputs=inputs)
-            return {**losses_rpn, **losses_roi}
+            #return {**losses_rpn, **losses_roi}
             
             losses_second_roi = self.second_roi_head(human_proposal, feature_second, stride_second, inputs=inputs, targets=targets )
             #return losses_second_roi
@@ -83,24 +84,27 @@ class MixRCNN(GeneralDetector):
             return losses
         else:
             human_results = self.roi_head(proposals, features, strides, targets=targets)
-            human_results_out = self.post_process(human_results, inputs)
-            return human_results_out
-            human_boxes = human_results['boxes']
-            human_scores = human_results['scores']
-            #human_boxes = [human_box[torch.argmax(human_score)][None,:].clone() for human_box, human_score in zip(human_boxes, human_scores)]
-            human_boxes = [human_box[human_score>0.5].clone() if (human_score>0.5).any() else human_box[torch.argmax(human_score)][None,:].clone() for human_box, human_score in zip(human_boxes, human_scores)]
-            results = self.second_roi_head(human_boxes, feature_second, stride_second, inputs=inputs, targets=targets)
-            results = self.post_process(results, inputs)
+            if self.test_mode == 'first':
+                human_results_out = self.post_process(human_results, inputs)
+                return human_results_out
+            else:
+                human_boxes = human_results['boxes']
+                human_scores = human_results['scores']
+                #human_boxes = [human_box[torch.argmax(human_score)][None,:].clone() for human_box, human_score in zip(human_boxes, human_scores)]
+                human_boxes = [human_box[human_score>0.5].clone() if (human_score>0.5).any() else human_box[torch.argmax(human_score)][None,:].clone() for human_box, human_score in zip(human_boxes, human_scores)]
+                results = self.second_roi_head(human_boxes, feature_second, stride_second, inputs=inputs, targets=targets)
+                results = self.post_process(results, inputs)
+            if self.test_mode == 'second':
+                return results
+            elif self.test_mode == 'both':
+                human_results_out = self.post_process(human_results, inputs)
+                return human_results_out, results 
+            else:
+                raise ValueError('Unknow test mode {}'.format(self.test_mode))
             #human_results['boxes'] = [human_box[torch.argmax(human_score)][None,:] for human_box, human_score in zip(human_results['boxes'], human_scores)]
-            human_results_out = self.post_process(human_results, inputs)
-            return human_results_out
+            #return human_results_out
             #return results
             # for debug
-            return human_results_out, results 
-            if debug_time:
-                roi_head_time = time.time()
-                self.total_time['roi_head'] += roi_head_time - rpn_time 
-            return human_results_out
 
     def post_process(self, results, inputs):
         for i, (boxes, scores, labels) in enumerate(zip(results['boxes'], results['scores'], results['labels'])):

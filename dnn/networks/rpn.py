@@ -1,5 +1,7 @@
 import torch
 import math
+import traceback
+import sys
 from torch import nn
 
 from torchvision.models.detection.rpn import AnchorGenerator, RegionProposalNetwork
@@ -161,7 +163,6 @@ class MyRegionProposalNetwork(RegionProposalNetwork):
         num_images = len(anchors)
         num_anchors_per_level = [pred[0][0].numel() for pred in pred_out]
         pred_class, pred_bbox_deltas = self.combine_and_permute_predictions(pred_out)
-        #print('pred class shape:', pred_class.shape)
         #print('pred box shape:', pred_bbox_deltas.shape)
 
         # apply pred_bbox_deltas to anchors to obtain the decoded proposals
@@ -232,7 +233,6 @@ class MyRegionProposalNetwork(RegionProposalNetwork):
         label_target = torch.cat((label_pos, label_neg), dim=0)
 
         loss_class = F.binary_cross_entropy_with_logits(label_pred, label_target)
-        #print('pred boxes shape:', pred_bbox_deltas.shape)
         #print('label pos shape:', label_pos.shape)
         #print('targets shape:', regression_targets.shape)
         #loss_box = self.smooth_l1_loss(pred_bbox_deltas, regression_targets) / label_pos.numel()
@@ -387,6 +387,7 @@ class MyRegionProposalNetwork(RegionProposalNetwork):
             #print('indx shape', idxs.shape)
             if len(proposal) == 0:
                 print('proposal after small box removal are 0')
+                traceback.print_stack(file=sys.stdout)
 
             # perform nms
             keep = batched_nms(proposal, scores, idxs, self.nms_thresh) 

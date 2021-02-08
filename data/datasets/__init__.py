@@ -29,6 +29,8 @@ from .modanet_dataset_cv2 import ModanetCV2Dataset
 from .madanet_center import ModanetCenterDataset
 from .coco import COCODataset
 from .coco_torchvision import COCOTorchVisionDataset
+from .deepfashion2 import DeepFashion2Dataset
+from .multi_mix_dataset import MultiMixDataset
 
 selector = {}
 selector['coco'] = coco_dataset

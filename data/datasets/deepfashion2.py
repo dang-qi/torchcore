@@ -4,20 +4,19 @@ from .dataset_new import Dataset
 from PIL import Image
 import os
 
-# THIS DATASET IS WRONG, NEED CHANGE the convert xyxy in initial stage
-class COCOPersonDataset(Dataset):
-    '''COCO dataset only contarin person class'''
-    def __init__( self, root, anno, part, transforms=None, xyxy=True, dataset_label=None, debug=False ):
+class DeepFashion2Dataset(Dataset):
+    '''COCO dataset'''
+    def __init__( self, root, anno, part, transforms=None, debug=False, xyxy=True ):
         super().__init__( root, transforms )
         self._part = part
 
         # load annotations
         with open(anno, 'rb') as f:
-            self._images = pickle.load(f)[part] 
+            self._images = pickle.load(f)[0][part] 
         self.remove_wrong_labels()
-        self.xyxy = xyxy
-        self.dataset_label = dataset_label
+        #self.map_category_id_to_continous()
         self.debug = debug
+        self.xyxy = xyxy
         if xyxy:
             self.convert_to_xyxy()
 
@@ -28,7 +27,7 @@ class COCOPersonDataset(Dataset):
         image = self._images[idx]
 
         # Load image
-        img_path = os.path.join(self._root, self._part, image['file_name'] )
+        img_path = os.path.join(self._root, image['file_name'] )
         image_id=image['id']
         img = Image.open(img_path).convert('RGB')
         if self.debug:
@@ -38,9 +37,13 @@ class COCOPersonDataset(Dataset):
         boxes = []
         labels = []
         for obj in image['objects']:
-            ## convert the bbox from xywh to xyxy
-            #obj['bbox'][2]+=obj['bbox'][0]
-            #obj['bbox'][3]+=obj['bbox'][1]
+            # WARNING:
+            # DO NOT CHANGE objects here
+            # IT WILL change the data every time and you will keep getting wrong result
+            #if self.xyxy:
+            #    # convert the bbox from xywh to xyxy
+            #    obj['bbox'][2]+=obj['bbox'][0]
+            #    obj['bbox'][3]+=obj['bbox'][1]
             boxes.append(obj['bbox'])
             labels.append(obj['category_id'])
         boxes = np.array(boxes, dtype=np.float32)
@@ -50,10 +53,6 @@ class COCOPersonDataset(Dataset):
         #targets (list[Dict[Tensor]]): ground-truth boxes present in the image (optional)
         inputs = {}
         inputs['data'] = img
-        if self.debug:
-            inputs['ori_image'] = ori_image
-        if self.dataset_label is not None:
-            inputs['dataset_label'] = self.dataset_label
 
         targets = {}
         targets["boxes"] = boxes
@@ -65,23 +64,43 @@ class COCOPersonDataset(Dataset):
         if self._transforms is not None:
             inputs, targets = self._transforms(inputs, targets)
 
+        if self.debug:
+            #inputs['ori_image'] = inputs['data'].copy()
+            inputs['ori_image'] = ori_image
+
         return inputs, targets
 
+    #def map_category_id_to_continous(self):
+    #    id_set = set()
+    #    for image in self._images:
+    #        for obj in image['objects']:
+    #            id_set.add(obj['category_id'])
+    #    ids = sorted(list(id_set))
+    #    id_map = {aid:i+1 for i, aid in enumerate(ids)}
+    #    #print(id_map)
+    #    for image in self._images:
+    #        for obj in image['objects']:
+    #            obj['category_id'] = id_map[obj['category_id']]
 
     def remove_wrong_labels(self):
         i = 0
+        wrong_im_num=0
         while i < len(self._images):
             image = self._images[i]
             j = 0
             while j < len(image['objects']):
                 obj = image['objects'][j]
                 if obj['bbox'][2]<= 0 or obj['bbox'][3]<=0:
-                    print('delete one wrong object: {}'.format(image['objects'][j]['bbox']))
+                    #print('delete one wrong object: {}'.format(image['objects'][j]['bbox']))
                     del image['objects'][j]
                 else:
                     j += 1
             if len(image['objects']) == 0:
-                print('delete image {}'.format(image['id']))
+                #print('delete image {}'.format(image['id']))
+                wrong_im_num += 1
                 del self._images[i]
             else:
                 i += 1
+        if wrong_im_num > 0:
+            print('{} images are deleted.'.format(wrong_im_num))
+    

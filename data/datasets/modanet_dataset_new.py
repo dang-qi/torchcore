@@ -6,7 +6,7 @@ import os
 
 class ModanetDataset(Dataset):
     '''Modanet dataset'''
-    def __init__( self, root, anno, part, transforms=None, xyxy=True ):
+    def __init__( self, root, anno, part, transforms=None, xyxy=True, debug=False ):
         super().__init__( root, transforms )
         self._part = part
 
@@ -16,6 +16,7 @@ class ModanetDataset(Dataset):
         self.xyxy = xyxy
         if xyxy:
             self.convert_to_xyxy()
+        self.debug = debug
 
     def __len__(self):
         return len(self._images)
@@ -40,7 +41,8 @@ class ModanetDataset(Dataset):
 
         inputs = {}
         inputs['data'] = img
-        inputs['ori_image'] = ori_image
+        if self.debug:
+            inputs['ori_image'] = ori_image
 
         targets = {}
         targets["boxes"] = boxes

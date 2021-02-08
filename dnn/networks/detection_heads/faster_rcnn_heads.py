@@ -4,11 +4,12 @@ from torch import nn
 from collections import OrderedDict
 
 class FasterRCNNHeads(nn.Module):
-    def __init__(self, cfg, rpn, roi_head):
+    def __init__(self, cfg, rpn, roi_head, post_process=True):
         super(FasterRCNNHeads, self).__init__()
         self.rpn = rpn
         self.roi_head = roi_head
         self.strides = None
+        self._post_process = post_process
         # used for partial network training
         if hasattr(cfg, 'dataset_label'):
             self.dataset_label = cfg.dataset_label
@@ -40,7 +41,8 @@ class FasterRCNNHeads(nn.Module):
 
         else:
             results = self.roi_head(proposals, features, strides, targets=targets)
-            results = self.post_process(results, inputs)
+            if self._post_process:
+                results = self.post_process(results, inputs)
             return results
 
     def get_strides(self, inputs, features):

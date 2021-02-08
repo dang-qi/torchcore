@@ -1,12 +1,13 @@
 import torch
 import time
+import numpy as np
 from collections import OrderedDict
 from .pooling import RoiAliagnFPN
 from .general_detector import GeneralDetector
 from torchvision.ops import roi_align, nms
 
 class MultiHeadCNN(torch.nn.Module):
-    def __init__(self, backbone, heads, neck=None, cfg=None, training=True, loss_weights=None, test_mode='both', debug_time=False):
+    def __init__(self, backbone, heads, feature_names, neck=None, cfg=None, training=True, loss_weights=None, test_mode='both', debug_time=False):
         '''
             heads: list[head1, head2...]
         '''
@@ -16,8 +17,9 @@ class MultiHeadCNN(torch.nn.Module):
         #self.rpn = heads['rpn']
         #self.roi_head = heads['bbox']
         self.heads = heads
+        self.set_heads(heads)
         self.training = training
-        self.feature_names = [['0', '1', '2', '3'], ['0','1','2','3']]
+        self.feature_names = feature_names
         self.strides = None
         self.loss_weights = loss_weights
         self.test_mode = test_mode
@@ -26,11 +28,16 @@ class MultiHeadCNN(torch.nn.Module):
         if debug_time:
             self.total_time = {'feature':0.0, 'rpn':0.0, 'roi_head':0.0}
         self.debug_time = debug_time
+
+    def set_heads(self, heads):
+        for i, head in enumerate(heads):
+            self.__setattr__('head{}'.format(i+1), head)
         
 
     def forward(self, inputs, targets=None):
         '''
             get features -> first head -> roi pooler -> second head
+            targets should be list if not None
         '''
         debug_time = self.debug_time
         if debug_time:
@@ -59,63 +66,33 @@ class MultiHeadCNN(torch.nn.Module):
 
         if self.training:
             dataset_labels = inputs['dataset_label']
-            for i, head, features in enumerate(zip(self.heads, features_all)):
+            loss_all = {}
+            for i, (head, features) in enumerate(zip(self.heads, features_all)):
                 indexs = dataset_labels == i
                 # if there is no given label
                 if not indexs.any():
                     continue
 
                 # select the inputs, targets according to the dataset label 
-                for k,v in features:
+                for k,v in features.items():
                     features[k] = v[indexs]
+                
+                head_inputs = self.input_sampling(inputs, indexs)
+                head_targets = [target for target, label in zip(targets, indexs) if label]
+                
 
-                loss = head(features, inputs, targets)
-            losses_first, human_proposal = self.human_detection_head(features, inputs, targets)
-            #return losses_first
-
-            human_proposal, roi_features, targets_for_second = self.roi_pooler(human_proposal, feature_second, stride_second, inputs, targets)
-            if self.inputs_converter is not None:
-                second_inputs = self.inputs_converter(stride_second, len(roi_features))
-            else:
-                second_inputs = inputs
-            
-            # convert the targets according to the roi size and proposal
-            if self.targets_converter is not None:
-                second_targets = self.targets_converter(human_proposal, targets_for_second, stride_second)
-            else:
-                second_targets = targets
-            
-            roi_features = {'0':roi_features}
-            losses_second_roi = self.roi_detection_head(human_proposal, roi_features, stride_second, inputs=second_inputs, targets=second_targets )
-            #return losses_second_roi
-            losses_second= {}
-            for k,v in losses_second_roi.items():
-                if self.second_loss_weight is not None:
-                    v *= self.second_loss_weight
-                losses_second['second_'+k] = v
-
-            losses = {**losses_first, **losses_second}
-            return losses
+                loss = head(features, head_inputs, head_targets)
+                loss = convert_loss_name(loss, i+1)
+                loss_all.update(loss)
+            return loss_all
         else:
-            human_results = self.human_detection_head(features, inputs, targets=targets)
-            if self.test_mode == 'first':
-                return human_results
-            human_boxes = human_results['boxes']
-            human_scores = human_results['scores']
-            #human_boxes = [human_box[torch.argmax(human_score)][None,:].clone() for human_box, human_score in zip(human_boxes, human_scores)]
-            human_boxes = [human_box[human_score>0.5].clone() if (human_score>0.5).any() else human_box[torch.argmax(human_score)][None,:].clone() for human_box, human_score in zip(human_boxes, human_scores)]
-            if self.expand_ratio is not None:
-                human_boxes = self.expand_boxes_batch(human_boxes, inputs['image_sizes'], self.expand_ratio)
-            human_proposal, roi_features, targets_for_second = self.roi_pooler(human_boxes, feature_second, stride_second, inputs, targets)
-
-            if self.inputs_converter is not None:
-                second_inputs = self.inputs_converter(stride_second, len(roi_features))
-            else:
-                second_inputs = inputs
-
-            roi_features = {'0':roi_features}
-            results = self.roi_detection_head(human_proposal, roi_features, stride_second, inputs=second_inputs, targets=targets)
-            results = self.post_process(results, inputs)
+            resutls_all = []
+            for i, (head, features) in enumerate(zip(self.heads, features_all)):
+                result = head(features, inputs, targets=targets)
+                #result = self.post_process(result, inputs)
+                resutls_all.append(result)
+            return resutls_all
+            #return resutls_all[0]
             if self.test_mode == 'second':
                 return results
             elif self.test_mode == 'both':
@@ -136,6 +113,31 @@ class MultiHeadCNN(torch.nn.Module):
             results['labels'][i] = labels
         return results
 
+    def input_sampling(self, inputs, indexs):
+        '''
+            indexs: torch.tensor(bool)
+        '''
+        if isinstance(inputs, dict):
+            out_inputs = {}
+            for k,v in inputs.items():
+                out_inputs[k] = self.variable_sampling(v, indexs)
+        elif isinstance(inputs, list):
+            out_inputs = self.variable_sampling(inputs, indexs)
+        else:
+            raise ValueError('Not support inputs type: {}'.format(type(inputs)))
+        return out_inputs
+    
+    def variable_sampling(self, variable, indexs):
+        if isinstance(variable, list):
+            out_variable = [v for v,ind in zip(variable, indexs) if ind]
+        elif torch.is_tensor(variable):
+            out_variable = variable[indexs]
+        elif isinstance(variable, np.ndarray):
+            out_variable = variable[indexs.cpu().numpy()]
+        else:
+            raise ValueError('Not support sampling for {} variable'.format(type(variable)))
+        return out_variable
+        
     @torch.no_grad()
     def expand_boxes_batch(self, boxes_batch, image_sizes, ratio=0.2):
         new_boxes_batch = [self.expand_boxes(boxes, image_size, ratio) for boxes, image_size in zip(boxes_batch, image_sizes)]
@@ -181,3 +183,9 @@ class MultiHeadCNN(torch.nn.Module):
     def reset_time(self):
         self.total_time = {'feature':0.0, 'rpn':0.0, 'roi_head':0.0}
 
+
+def convert_loss_name(loss, i):
+    out_loss = {}
+    for k,v in loss.items():
+        out_loss[str(i)+k] = v
+    return out_loss

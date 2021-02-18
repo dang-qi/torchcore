@@ -7,9 +7,10 @@ from .general_detector import GeneralDetector
 from torchvision.ops import roi_align, nms
 
 class MultiHeadCNN(torch.nn.Module):
-    def __init__(self, backbone, heads, feature_names, neck=None, cfg=None, training=True, loss_weights=None, test_mode='both', debug_time=False):
+    def __init__(self, backbone, heads, feature_names, neck=None, cfg=None, training=True, loss_weights=None, test_mode=[0], debug_time=False):
         '''
             heads: list[head1, head2...]
+            test_mode: int or list[0,1,2...], the index of head that wanted to be tested
         '''
         super(MultiHeadCNN, self).__init__()
         self.backbone = backbone
@@ -22,7 +23,7 @@ class MultiHeadCNN(torch.nn.Module):
         self.feature_names = feature_names
         self.strides = None
         self.loss_weights = loss_weights
-        self.test_mode = test_mode
+        self.set_test_mode(test_mode)
         self.dataset_labels = list(range(len(heads)))
 
         if debug_time:
@@ -88,17 +89,15 @@ class MultiHeadCNN(torch.nn.Module):
         else:
             resutls_all = []
             for i, (head, features) in enumerate(zip(self.heads, features_all)):
+                if i not in self.test_mode:
+                    continue
                 result = head(features, inputs, targets=targets)
                 #result = self.post_process(result, inputs)
                 resutls_all.append(result)
-            return resutls_all
-            #return resutls_all[0]
-            if self.test_mode == 'second':
-                return results
-            elif self.test_mode == 'both':
-                return human_results, results 
+            if len(resutls_all) == 1:
+                return resutls_all[0]
             else:
-                raise ValueError('Unknow test mode {}'.format(self.test_mode))
+                return resutls_all
 
     def post_process(self, results, inputs):
         for i, (boxes, scores, labels) in enumerate(zip(results['boxes'], results['scores'], results['labels'])):
@@ -182,6 +181,14 @@ class MultiHeadCNN(torch.nn.Module):
 
     def reset_time(self):
         self.total_time = {'feature':0.0, 'rpn':0.0, 'roi_head':0.0}
+
+    def set_test_mode(self, mode):
+        if isinstance(mode, int):
+            self.test_mode = [mode]
+        elif isinstance(mode, (list, tuple)):
+            self.test_mode = mode
+        else:
+            raise ValueError('Not support test mode type {}'.format(type(mode)))
 
 
 def convert_loss_name(loss, i):

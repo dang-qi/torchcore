@@ -34,6 +34,16 @@ class TargetInRoIPool(nn.Module):
                 targets =[target for target,label in zip(targets, dataset_ind) if label ]
 
         if self.training or proposals is None:
+            # remove the proposals from other branch if there are any
+            if self.dataset_label is not None and proposals is not None:
+                non_human_ind = inputs['dataset_label'] != 0
+                other_labels = inputs['dataset_label'][non_human_ind]
+                proposal_ind = other_labels == self.dataset_label
+                assert len(proposal_ind) == len(proposals)
+                proposals = [prop for prop, label in zip(proposals, proposal_ind) if label]
+
+            assert len(proposals) == len(targets)
+
             proposals = self.select_proposals(proposals, targets, image_sizes)
         
         # rois: tuple(Tensor_image1, Tensor_image2)

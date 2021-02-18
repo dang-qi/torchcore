@@ -6,14 +6,18 @@ import os
 
 class DeepFashion2Dataset(Dataset):
     '''COCO dataset'''
-    def __init__( self, root, anno, part, transforms=None, debug=False, xyxy=True ):
+    def __init__( self, root, anno, part, transforms=None, debug=False, xyxy=True, only_contain_human=False ):
         super().__init__( root, transforms )
         self._part = part
 
         # load annotations
         with open(anno, 'rb') as f:
             self._images = pickle.load(f)[0][part] 
+
         self.remove_wrong_labels()
+
+        if only_contain_human:
+            self.remove_non_human_images()
         #self.map_category_id_to_continous()
         self.debug = debug
         self.xyxy = xyxy
@@ -104,3 +108,17 @@ class DeepFashion2Dataset(Dataset):
         if wrong_im_num > 0:
             print('{} images are deleted.'.format(wrong_im_num))
     
+    def remove_non_human_images(self):
+        i = 0
+        while i < len(self._images):
+            image = self._images[i]
+            has_human = False
+            for obj in image['objects']:
+                if int(obj['viewpoint']) > 1:
+                    has_human = True
+                    break
+            if has_human:
+                i += 1
+            else:
+                del self._images[i]
+                    

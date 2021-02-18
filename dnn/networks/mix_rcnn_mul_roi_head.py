@@ -1,6 +1,9 @@
 import torch
 import time
 from collections import OrderedDict
+from .pooling import RoiAliagnFPN
+from .general_detector import GeneralDetector
+from torchvision.ops import roi_align, nms
 
 class MixRCNNMulRoIHead(torch.nn.Module):
     def __init__(self, backbone, heads, roi_pooler, neck=None, targets_converter=None, inputs_converter=None, cfg=None, training=True, second_loss_weight=None,expand_ratio=None, test_mode='both', debug_time=False):
@@ -179,32 +182,9 @@ class MixRCNNMulRoIHead(torch.nn.Module):
 
     @torch.no_grad()
     def expand_boxes_batch(self, boxes_batch, image_sizes, ratio=0.2):
-        new_boxes_batch = [self.expand_boxes(boxes, image_size, ratio) for boxes, image_size in zip(boxes_batch, image_sizes)]
+        new_boxes_batch = [expand_boxes(boxes, image_size, ratio) for boxes, image_size in zip(boxes_batch, image_sizes)]
         return new_boxes_batch
 
-    @torch.no_grad()
-    def expand_boxes(self, boxes, image_size, ratio=0.2):
-        boxes_w = boxes[:,2] - boxes[:,0]
-        boxes_h = boxes[:,3] - boxes[:,1]
-
-        boxes_w_half = boxes_w * (ratio + 1) / 2
-        boxes_h_half = boxes_h * (ratio + 1) / 2
-
-        boxes_xc = (boxes[:,2] + boxes[:,0]) / 2
-        boxes_yc = (boxes[:,3] + boxes[:,1]) / 2
-
-        boxes_x1 = boxes_xc - boxes_w_half
-        boxes_y1 = boxes_yc - boxes_h_half
-        boxes_x2 = boxes_xc + boxes_w_half
-        boxes_y2 = boxes_yc + boxes_h_half
-
-        height, width = image_size
-        boxes_x1 = boxes_x1.clamp(min=0, max=width)
-        boxes_y1 = boxes_y1.clamp(min=0, max=height)
-        boxes_x2 = boxes_x2.clamp(min=0, max=width)
-        boxes_y2 = boxes_y2.clamp(min=0, max=height)
-
-        return torch.stack([boxes_x1, boxes_y1, boxes_x2, boxes_y2], dim=1)
 
 
     def get_strides(self, inputs, features):
@@ -228,3 +208,31 @@ class MixRCNNMulRoIHead(torch.nn.Module):
             losses_new[prefix+k] = v
         return losses_new
 
+
+@torch.no_grad()
+def expand_boxes(boxes, image_size, ratio=0.2):
+    '''
+    if image_size is None, no cliping conducted
+    '''
+    boxes_w = boxes[:,2] - boxes[:,0]
+    boxes_h = boxes[:,3] - boxes[:,1]
+
+    boxes_w_half = boxes_w * (ratio + 1) / 2
+    boxes_h_half = boxes_h * (ratio + 1) / 2
+
+    boxes_xc = (boxes[:,2] + boxes[:,0]) / 2
+    boxes_yc = (boxes[:,3] + boxes[:,1]) / 2
+
+    boxes_x1 = boxes_xc - boxes_w_half
+    boxes_y1 = boxes_yc - boxes_h_half
+    boxes_x2 = boxes_xc + boxes_w_half
+    boxes_y2 = boxes_yc + boxes_h_half
+
+    if image_size is not None:
+        height, width = image_size
+        boxes_x1 = boxes_x1.clamp(min=0, max=width)
+        boxes_y1 = boxes_y1.clamp(min=0, max=height)
+        boxes_x2 = boxes_x2.clamp(min=0, max=width)
+        boxes_y2 = boxes_y2.clamp(min=0, max=height)
+
+    return torch.stack([boxes_x1, boxes_y1, boxes_x2, boxes_y2], dim=1)

@@ -1,12 +1,12 @@
 import torch
 from torch.nn import Module
-from torchcore.dnn.networks.tools import AnchorBoxesCoder
+from torchcore.dnn.networks.tools import BBoxesCoder
 
 class GarmentBoxPredNet(Module):
     def __init__(self, roi_pooler, head, targets_converter=None, dataset_label=None, feature_name=None ) -> None:
         super().__init__()
         if targets_converter is None:
-            self.targets_converter = AnchorBoxesCoder()
+            self.targets_converter = BBoxesCoder()
         else:
             self.targets_converter = targets_converter
 
@@ -36,18 +36,19 @@ class GarmentBoxPredNet(Module):
             assert len(targets) == len(person_proposal)
             person_proposal = self.filter_proposals(targets, person_proposal)
             person_proposal = self.add_input_box_to_human_proposal(targets, person_proposal)
+            #print(person_proposal)
+            #print(targets)
 
         rois = self.roi_pooler(features, person_proposal, stride)
-        #print(rois)
         pred = self.head(rois)
 
         if self.training:
             target_boxes = [target['target_box'] for target in targets]
-            targets_code = self.targets_converter.encode(target_boxes, person_proposal)
-            batch_size = len(pred)
+            targets_code = self.targets_converter.encode(person_proposal, target_boxes)
+            box_num = len(pred)
             targets_code = torch.cat(targets_code, dim=0)
-            loss = self.loss(pred, targets_code) / batch_size
-            return {'garment box loss': loss}
+            loss = self.loss(pred, targets_code) / box_num
+            return {'garment_box_loss': loss}
         else:
             result = {}
             target_box = self.targets_converter.decode(pred, person_proposal)

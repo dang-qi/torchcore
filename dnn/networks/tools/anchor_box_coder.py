@@ -16,15 +16,15 @@ class AnchorBoxesCoder():
         return boxes
 
     def decode_once(self, code, anchor):
-        anchor_width = anchor[:,2] - anchor[:, 0]
-        anchor_height = anchor[:,3] - anchor[:, 1]
-        anchor_xc = anchor[:, 0] + anchor_width / 2
-        anchor_yc = anchor[:, 1] + anchor_height / 2
+        anchor_width = anchor[...,2] - anchor[..., 0]
+        anchor_height = anchor[...,3] - anchor[..., 1]
+        anchor_xc = anchor[..., 0] + anchor_width / 2
+        anchor_yc = anchor[..., 1] + anchor_height / 2
 
-        code_x = code[:,0]
-        code_y = code[:,1]
-        code_w = code[:,2]
-        code_h = code[:,3]
+        code_x = code[...,0]
+        code_y = code[...,1]
+        code_w = code[...,2]
+        code_h = code[...,3]
 
         if self.box_code_clip is not None:
             code_w = code_w.clamp_max(self.box_code_clip)
@@ -52,15 +52,15 @@ class AnchorBoxesCoder():
         return torch.split(targets, num_per_im, dim=0)
 
     def encode_once(self, pos_anchors, pos_boxes ):
-        w_anchor = pos_anchors[:,2] - pos_anchors[:,0]
-        h_anchor = pos_anchors[:,3] - pos_anchors[:,1]
-        xc_anchor = pos_anchors[:, 0] + w_anchor*0.5
-        yc_anchor = pos_anchors[:, 1] + h_anchor*0.5
+        w_anchor = pos_anchors[...,2] - pos_anchors[...,0]
+        h_anchor = pos_anchors[...,3] - pos_anchors[...,1]
+        xc_anchor = pos_anchors[..., 0] + w_anchor*0.5
+        yc_anchor = pos_anchors[..., 1] + h_anchor*0.5
 
-        w_boxes = pos_boxes[:,2] - pos_boxes[:,0]
-        h_boxes = pos_boxes[:,3] - pos_boxes[:,1]
-        xc_boxes = pos_boxes[:, 0] + w_boxes*0.5
-        yc_boxes = pos_boxes[:, 1] + h_boxes*0.5
+        w_boxes = pos_boxes[...,2] - pos_boxes[...,0]
+        h_boxes = pos_boxes[...,3] - pos_boxes[...,1]
+        xc_boxes = pos_boxes[..., 0] + w_boxes*0.5
+        yc_boxes = pos_boxes[..., 1] + h_boxes*0.5
 
         tx = ( xc_boxes - xc_anchor) / w_anchor
         ty = ( yc_boxes - yc_anchor) / h_anchor

@@ -1,5 +1,5 @@
 from .transforms import ResizeAndPadding, ToTensor, Compose
-from .transforms import GeneralRCNNTransform, GeneralRCNNTransformTV
+from .transforms import GeneralRCNNTransform, GeneralRCNNTransformTV, GroupPaddingWithBBox
 import torch
 from torch.utils.data._utils.collate import default_collate
 import numpy as np
@@ -166,6 +166,21 @@ class CollateFnRCNN(object):
         else:
             transform = self.transforms
         inputs, targets = transform(inputs, targets)
+        if ori_image is not None:
+            inputs['ori_image'] = ori_image
+        return inputs, targets
+
+class CollateFnPadding(object):
+    '''apply general rcnn transform to batchs'''
+    def __init__(self, image_mean=None, image_std=None):
+        self.transform = GroupPaddingWithBBox(image_mean, image_std)
+
+    def __call__(self, batch):
+        inputs, targets = [list(s) for s in zip(*batch)]
+        ori_image = None
+        if 'ori_image' in inputs[0]:
+            ori_image = [input['ori_image'] for input in inputs]
+        inputs, targets = self.transform(inputs, targets)
         if ori_image is not None:
             inputs['ori_image'] = ori_image
         return inputs, targets

@@ -6,7 +6,7 @@ from torchvision.ops import RoIAlign
 class ROIAlign(Module):
     def __init__(self, pool_h, pool_w, scale, sampling=-1):
         super().__init__()
-        self.op = RoIAlign( [pool_h, pool_w], scale, sampling )
+        self.op = RoIAlign( [pool_h, pool_w], scale, sampling, aligned=True )
 
     # feat: BxCxHxW,  rois: Kx4 (batch_idx, xmin, ymin, xmax, ymax) without normalize
     def forward(self, feat, rois, roibatches):

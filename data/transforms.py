@@ -110,12 +110,15 @@ class ToTensor(object):
         inputs['data'] = F.to_tensor(inputs['data'])
 
         if targets is not None:
-            if 'boxes' in targets:
-                targets['boxes'] = torch.from_numpy(targets['boxes'])
-            if 'labels' in targets:
-                targets['labels'] = torch.from_numpy(targets['labels'])
-            if 'cat_labels' in targets:
-                targets['labels'] = torch.from_numpy(targets['cat_labels'])
+            for k,v in targets.items():
+                if isinstance(v, np.ndarray):
+                    targets[k] = torch.from_numpy(targets[k])
+            #if 'boxes' in targets:
+            #    targets['boxes'] = torch.from_numpy(targets['boxes'])
+            #if 'labels' in targets:
+            #    targets['labels'] = torch.from_numpy(targets['labels'])
+            #if 'cat_labels' in targets:
+            #    targets['labels'] = torch.from_numpy(targets['cat_labels'])
 
         return inputs, targets
 
@@ -290,8 +293,10 @@ class GeneralRCNNTransformTV(object):
         return inputs, targets
 
 class RandomMirror(object):
-    def __init__(self, probability=0.5):
+    def __init__(self, probability=0.5, inputs_box_keys=[], targets_box_keys=['boxes']):
         self.probability = probability
+        self.inputs_box_keys = inputs_box_keys
+        self.targets_box_keys = targets_box_keys
 
     def __call__(self, inputs, targets):
         inputs['mirrored'] = False
@@ -299,9 +304,12 @@ class RandomMirror(object):
             inputs['mirrored'] = True
             inputs['data'] = F.mirror(inputs['data'])
             
-            if 'boxes' in targets:
-                im_width = inputs['data'].width
-                targets['boxes'] = F.mirror_boxes(targets['boxes'], im_width)
+            im_width = inputs['data'].width
+            for input_key in self.inputs_box_keys:
+                inputs[input_key] = F.mirror_boxes(inputs[input_key], im_width)
+
+            for target_key in self.targets_box_keys:
+                targets[target_key] = F.mirror_boxes(targets[target_key], im_width)
         
         return inputs, targets
 
@@ -327,21 +335,61 @@ class RandomCrop(object):
         return inputs, targets
 
 class RandomScale(object):
-    def __init__(self, low, high):
+    def __init__(self, low, high, inputs_box_keys=[], targets_box_keys=['boxes']):
         assert low > 0
         assert high > 0
         assert low<=high
         self.low =low
         self.high = high
+        self.inputs_box_keys = inputs_box_keys
+        self.targets_box_keys = targets_box_keys
 
     def __call__(self, inputs, targets):
         scale = random.uniform(self.low, self.high)
         image = inputs['data']
         inputs['data'] = F.scale(image, scale)
-        inputs['random_scale'] = scale
+        # in case scale already used in other operation
+        if 'scale' not in inputs:
+            inputs['scale'] = scale
+        else:
+            inputs['scale'] = scale * inputs['scale']
 
-        if 'boxes' in targets:
-            targets['boxes'] = F.scale_box(targets['boxes'], scale)
+        for input_key in self.inputs_box_keys:
+            inputs[input_key] = F.scale_box(inputs[input_key], scale)
+
+        for target_key in self.targets_box_keys:
+            targets[target_key] = F.scale_box[targets[target_key], scale]
+        
+        return inputs, targets
+
+class RandomAbsoluteScale(object):
+    def __init__(self, low, high, inputs_box_keys=[], targets_box_keys=['boxes']):
+        assert low > 0
+        assert high > 0
+        assert low<=high
+        self.low = int(low)
+        self.high = int(high)
+        self.inputs_box_keys = inputs_box_keys
+        self.targets_box_keys = targets_box_keys
+
+    def __call__(self, inputs, targets):
+        longgest_side = random.randint(self.low, self.high)
+        width, height = inputs['data'].width, inputs['data'].height
+        max_side = max(width, height)
+        scale = longgest_side / max_side
+        image = inputs['data']
+        inputs['data'] = F.scale(image, scale)
+        # in case scale already used in other operation
+        if 'scale' not in inputs:
+            inputs['scale'] = scale
+        else:
+            inputs['scale'] = scale * inputs['scale']
+
+        for input_key in self.inputs_box_keys:
+            inputs[input_key] = F.scale_box(inputs[input_key], scale)
+
+        for target_key in self.targets_box_keys:
+            targets[target_key] = F.scale_box(targets[target_key], scale)
         
         return inputs, targets
 
@@ -375,3 +423,56 @@ class PadNumpyArray():
             targets[k] = pad_array
         return targets
 
+
+class GroupPaddingWithBBox(object):
+    def __init__(self, image_mean=None, image_std=None):
+        self.image_mean = image_mean
+        self.image_std = image_std
+        self.normalize = Normalize(mean=image_mean, std=image_std)
+        self.to_tensor = ToTensor()
+        #self.device = device
+        #self.transforms = Compose(self.resize_min_max, self.to_tensor)
+
+    def __call__(self, inputs, targets=None):
+        '''
+        Arguments:
+            inputs(list[dict{'data':PIL.Image,...}])
+            targets(list[dict{'boxes':x1y1x2y2, 'cat_labels':}])
+        '''
+        images = []
+        image_path = []
+        dataset_label = []
+        scales = np.zeros(len(inputs))
+        if targets is None:
+            targets=[None]*len(inputs)
+
+        for i, (ainput, target) in enumerate(zip(inputs, targets)):
+            # normalize after resize, which might be slower 
+            ainput, target = self.to_tensor(ainput, target)
+            # set the tensor to device before normalize
+            #ainput['data'].to(self.device)
+            scales[i] = ainput['scale']
+            ainput, target = self.normalize(ainput, target)
+            images.append(ainput['data'])
+
+            if 'path' in ainput:
+                image_path.append(ainput['path'])
+            if 'dataset_label' in ainput:
+                dataset_label.append(ainput['dataset_label'])
+
+        max_size = tuple(max(s) for s in zip(*[img.shape for img in images]))
+        _, height, width = max_size
+
+        image_sizes = [img.shape[-2:] for img in images]
+        self.group_padding = GroupPadding(width, height, size_devidable=32)
+        im_tensor = self.group_padding(images)
+
+        inputs = {}
+        inputs['data'] = im_tensor
+        inputs['scale'] = scales
+        inputs['image_sizes'] = image_sizes
+        if len(image_path) > 0:
+            inputs['path'] = image_path
+        if len(dataset_label) > 0:
+            inputs['dataset_label'] = torch.tensor(dataset_label)
+        return inputs, targets

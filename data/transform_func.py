@@ -330,7 +330,7 @@ def mirror(image):
     return ImageOps.mirror(image)
 
 def mirror_boxes(boxes, im_width):
-    boxes[:,0], boxes[:,2] = im_width -boxes[:,2] - 1, im_width -boxes[:,0]-1
+    boxes[...,0], boxes[...,2] = im_width -boxes[...,2] - 1, im_width -boxes[...,0]-1
     #boxes[:,2] = im_width -boxes[:,2]
     return boxes
 

@@ -57,7 +57,7 @@ class MixRCNNBBox(torch.nn.Module):
         if self.training:
             losses_first, human_proposal = self.human_detection_head(features, inputs, targets)
 
-            losses_second_roi = self.bbox_head(features, human_proposal, stride_second, inputs=inputs, targets=targets )
+            losses_second_roi = self.bbox_head(features, human_proposal, self.strides, inputs=inputs, targets=targets )
             #return losses_second_roi
             losses_second= {}
             for k,v in losses_second_roi.items():
@@ -73,8 +73,9 @@ class MixRCNNBBox(torch.nn.Module):
                 return human_results
             human_boxes = human_results['boxes']
             human_scores = human_results['scores']
-            human_boxes = [human_box[torch.argmax(human_score)][None,:].clone() for human_box, human_score in zip(human_boxes, human_scores)]
-            #human_boxes = [human_box[human_score>0.5].clone() if (human_score>0.5).any() else human_box[torch.argmax(human_score)][None,:].clone() for human_box, human_score in zip(human_boxes, human_scores)]
+            #human_boxes = [human_box[torch.argmax(human_score)][None,:].clone() for human_box, human_score in zip(human_boxes, human_scores)]
+            human_thresh = 0.8
+            human_boxes = [human_box[human_score>human_thresh].clone() if (human_score>human_thresh).any() else human_box[torch.argmax(human_score)][None,:].clone() for human_box, human_score in zip(human_boxes, human_scores)]
             bbox_results = self.bbox_head(features, human_boxes, stride_second, inputs=inputs, targets=targets )
 
             if self.test_mode =='second':

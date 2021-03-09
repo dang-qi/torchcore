@@ -17,19 +17,23 @@ class GarmentBoxPredNet(Module):
         self.feature_name = feature_name
 
     def forward(self, features, person_proposal, stride, inputs=None, targets=None):
-        # get the features with tensor format 
-        if isinstance(features, dict):
-            if self.feature_name is not None:
-                features = features[self.feature_name]
-            elif len(features)==1:
-                name = list(features.keys())[0]
-                features = features[name]
-            else:
-                raise ValueError('Please setup feature name')
+        ## get the features with tensor format 
+        #if isinstance(features, dict):
+        #    if self.feature_name is not None:
+        #        features = features[self.feature_name]
+        #    elif len(features)==1:
+        #        name = list(features.keys())[0]
+        #        features = features[name]
+        #    else:
+        #        raise ValueError('Please setup feature name')
 
         if self.dataset_label is not None and self.training:
             ind = inputs['dataset_label'] == self.dataset_label
-            features = features[ind]
+            if isinstance(features, dict):
+                for k,v in features.items():
+                    features[k] = v[ind]
+            else:
+                raise ValueError('not support the feature type')
             targets = [target for target, i in zip(targets,ind) if i ]
         
         if self.training:

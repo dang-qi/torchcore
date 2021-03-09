@@ -76,7 +76,7 @@ class MixRCNNBBox(torch.nn.Module):
             #human_boxes = [human_box[torch.argmax(human_score)][None,:].clone() for human_box, human_score in zip(human_boxes, human_scores)]
             human_thresh = 0.8
             human_boxes = [human_box[human_score>human_thresh].clone() if (human_score>human_thresh).any() else human_box[torch.argmax(human_score)][None,:].clone() for human_box, human_score in zip(human_boxes, human_scores)]
-            bbox_results = self.bbox_head(features, human_boxes, stride_second, inputs=inputs, targets=targets )
+            bbox_results = self.bbox_head(features, human_boxes, self.strides, inputs=inputs, targets=targets )
 
             if self.test_mode =='second':
                 return bbox_results

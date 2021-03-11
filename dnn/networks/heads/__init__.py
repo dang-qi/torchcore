@@ -5,3 +5,4 @@ from .composed_list_head import ComposedListHead
 from .composed_list_indexed_head import ComposedListIndexedHead
 from .rpn_head import RPNHead
 from .fast_rcnn_head import FastRCNNHead
+from .multi_conv_head import MultiConvHead

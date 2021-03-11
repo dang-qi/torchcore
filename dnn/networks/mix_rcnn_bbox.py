@@ -1,4 +1,5 @@
 import torch
+import math
 import time
 from collections import OrderedDict
 from .pooling import RoiAliagnFPN
@@ -73,9 +74,9 @@ class MixRCNNBBox(torch.nn.Module):
                 return human_results
             human_boxes = human_results['boxes']
             human_scores = human_results['scores']
-            #human_boxes = [human_box[torch.argmax(human_score)][None,:].clone() for human_box, human_score in zip(human_boxes, human_scores)]
+            human_boxes = [human_box[torch.argmax(human_score)][None,:].clone() for human_box, human_score in zip(human_boxes, human_scores)]
             human_thresh = 0.8
-            human_boxes = [human_box[human_score>human_thresh].clone() if (human_score>human_thresh).any() else human_box[torch.argmax(human_score)][None,:].clone() for human_box, human_score in zip(human_boxes, human_scores)]
+            #human_boxes = [human_box[human_score>human_thresh].clone() if (human_score>human_thresh).any() else human_box[torch.argmax(human_score)][None,:].clone() for human_box, human_score in zip(human_boxes, human_scores)]
             bbox_results = self.bbox_head(features, human_boxes, self.strides, inputs=inputs, targets=targets )
 
             if self.test_mode =='second':
@@ -162,7 +163,8 @@ class MixRCNNBBox(torch.nn.Module):
             features = list(features.values())
         grid_sizes = tuple([feature_map.shape[-2:] for feature_map in features])
         image_size = inputs['data'].shape[-2:]
-        strides = tuple((image_size[0] / g[0] + image_size[1] / g[1])/2 for g in grid_sizes)
+        #strides = tuple((image_size[0] / g[0] + image_size[1] / g[1])/2 for g in grid_sizes)
+        strides = tuple(math.pow(2,math.ceil(math.log2((image_size[0] / g[0] + image_size[1] / g[1])/2))) for g in grid_sizes)
         return strides
 
     def set_strides(self, inputs, features):

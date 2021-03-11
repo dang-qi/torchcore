@@ -11,8 +11,8 @@ class FoveaHead(nn.Module):
         self.sigma = sigma
         self.eta = eta
         self.class_num = class_num
-        self.cls_head = MultiConvHead(out_channel=class_num, in_channel=in_feature_num, head_conv_channel=256, middle_layer_num=4 )
-        self.box_head = MultiConvHead(out_channel=4, in_channel=in_feature_num, head_conv_channel=256, middle_layer_num=4 )
+        self.cls_head = MultiConvHead(out_channel=class_num, in_channel=in_feature_num, head_conv_channel=256, middle_layer_num=4, init='focal_loss' )
+        self.box_head = MultiConvHead(out_channel=4, in_channel=in_feature_num, head_conv_channel=256, middle_layer_num=4, init='gaussion' )
         self.set_r_interval()
         
 

@@ -1,9 +1,9 @@
 import torch.nn as nn
 from torch.nn.modules import module
-from ..common import init
+from ..common import init, init_focal_loss_head, init_head_gaussian
 
 class MultiConvHead(nn.Module):
-    def __init__(self, out_channel, in_channel, head_conv_channel, middle_layer_num):
+    def __init__(self, out_channel, in_channel, head_conv_channel, middle_layer_num, init="gaussion"):
         super().__init__()
         modules = nn.Sequential()
         for i in range(middle_layer_num):
@@ -16,8 +16,12 @@ class MultiConvHead(nn.Module):
 
         self.fc = modules
 
-        for m in self.modules():
-            init(m)
+        if init == "gaussion":
+            init_head_gaussian(self.fc)
+        elif init == "focal_loss":
+            init_focal_loss_head(self.fc)
+        else:
+            raise ValueError('not support init method {}'.format(init))
 
     def forward(self, x):
         return self.fc(x)

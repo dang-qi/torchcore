@@ -44,17 +44,17 @@ def init_focal_loss_head(head):
     for m in head.modules():
         if isinstance(m, nn.Conv2d):
             last_conv = m
-            nn.init.normal_(m.weight, std=0.001)
+            nn.init.normal_(m.weight, std=0.01)
             nn.init.constant_(m.bias, 0)
     if last_conv is not None:
         nn.init.constant_(last_conv.bias, b_value)
     else:
         print('no last conv')
 
-def init_head_gaussian(head):
+def init_head_gaussian(head, std=0.01):
     for m in head.modules():
         if isinstance(m, nn.Conv2d):
-            nn.init.normal_(m.weight, std=0.001)
+            nn.init.normal_(m.weight, std=std)
             nn.init.constant_(m.bias, 0)
 
 

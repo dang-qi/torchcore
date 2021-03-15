@@ -47,6 +47,7 @@ class ModanetDataset(Dataset):
         targets = {}
         targets["boxes"] = boxes
         targets["cat_labels"] = labels
+        targets["labels"] = labels
         #target["masks"] = masks
         targets["image_id"] = image_id
         #target["area"] = area

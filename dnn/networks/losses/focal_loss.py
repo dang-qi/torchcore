@@ -58,12 +58,12 @@ class FocalLossSigmoid(nn.Module):
         # convert groundtruth to proper targets (one hot for non background, 
         # zero for background)
         N, C = pred.shape
-        non_zero_ind = groundtruth.nonzero()
+        non_zero_ind = groundtruth.nonzero(as_tuple=False)
         flatten_non_zero_ind = non_zero_ind.flatten()
-        target = groundtruth.new_zeros(pred.shape)
-        target[flatten_non_zero_ind] = target[flatten_non_zero_ind].scatter_(1, groundtruth[non_zero_ind], 1)
+        target = pred.new_zeros(pred.shape)
+        target[flatten_non_zero_ind] = target[flatten_non_zero_ind].scatter_(1, groundtruth[non_zero_ind].long()-1, 1)
 
-        loss = self._forword_impl(pred, groundtruth)
+        loss = self._forword_impl(pred, target)
         return loss
 
     def _forword_impl(self, pred, groundtruth):

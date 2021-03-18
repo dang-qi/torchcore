@@ -64,6 +64,9 @@ class MixRCNNBBoxDetector(torch.nn.Module):
             losses_second_bbox, outfit_boxes = self.bbox_head(features, human_proposal, self.strides, inputs=inputs, targets=targets )
 
             if self.second_loss_weight is not None:
+                for k,v in losses_second_bbox.items():
+                    v *= self.second_loss_weight
+                    losses_second_bbox['second_'+k] = v
                 losses_second_bbox = self.second_loss_weight * losses_second_bbox
 
             outfit_boxes, roi_features, targets_for_second = self.roi_pooler(outfit_boxes, feature_second, stride_second, inputs, targets)
@@ -85,7 +88,7 @@ class MixRCNNBBoxDetector(torch.nn.Module):
             for k,v in losses_second_roi.items():
                 if self.third_loss_weight is not None:
                     v *= self.third_loss_weight
-                losses_second['second_'+k] = v
+                losses_second['third_'+k] = v
 
             losses = {**losses_first, **losses_second, **losses_second_bbox}
             return losses

@@ -19,7 +19,7 @@ class FoveaNet(nn.Module):
         if self.training:
             return pred
         
-        output = self.postprocess(pred, inputs)
+        output = self.post_process(pred, inputs)
         return output
 
     def post_process(self, results, inputs):

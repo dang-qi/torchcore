@@ -3,7 +3,7 @@ from torch.nn import Module
 from torchcore.dnn.networks.tools import BBoxesCoder
 
 class GarmentBoxPredNet(Module):
-    def __init__(self, roi_pooler, head, targets_converter=None, dataset_label=None, feature_name=None ) -> None:
+    def __init__(self, roi_pooler, head, targets_converter=None, dataset_label=None, feature_name=None, middle_layer=False ) -> None:
         super().__init__()
         if targets_converter is None:
             self.targets_converter = BBoxesCoder()
@@ -14,6 +14,7 @@ class GarmentBoxPredNet(Module):
         self.loss = torch.nn.SmoothL1Loss(reduction='sum', beta= 1.0 / 9)
         self.roi_pooler = roi_pooler
         self.dataset_label = dataset_label
+        self.middle_layer = middle_layer
         self.feature_name = feature_name
 
     def forward(self, features, person_proposal, stride, inputs=None, targets=None):
@@ -52,13 +53,31 @@ class GarmentBoxPredNet(Module):
             box_num = len(pred)
             targets_code = torch.cat(targets_code, dim=0)
             loss = self.loss(pred, targets_code) / box_num
-            return {'garment_box_loss': loss}
+            if self.middle_layer:
+                target_box = self.targets_converter.decode(pred, person_proposal)
+                num_per_im = [len(prop) for prop in person_proposal]
+                outfit_boxes = torch.split(target_box, num_per_im)
+                return {'outfit_box_loss': loss}, outfit_boxes
+            else:
+                return {'outfit_box_loss': loss}
         else:
-            result = {}
             target_box = self.targets_converter.decode(pred, person_proposal)
             num_per_im = [len(prop) for prop in person_proposal]
-            result['target_box'] = torch.split(target_box, num_per_im)
-            return result
+            target_boxes = torch.split(target_box, num_per_im)
+            if self.middle_layer:
+                return target_boxes
+            else:
+                result = {}
+                result['target_box'] = target_boxes
+                return result
+
+    def compute_loss(self, pred, target_boxes, person_proposal):
+            targets_code = self.targets_converter.encode(person_proposal, target_boxes)
+            box_num = len(pred)
+            targets_code = torch.cat(targets_code, dim=0)
+            loss = self.loss(pred, targets_code) / box_num
+            return {'outfit_box_loss': loss}
+
         
         
 

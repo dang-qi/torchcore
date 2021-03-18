@@ -4,11 +4,12 @@ from torch import nn
 from collections import OrderedDict
 
 class RoIFasterRCNNHeads(nn.Module):
-    def __init__(self, cfg, rpn, roi_head):
+    def __init__(self, cfg, rpn, roi_head, just_rpn=False):
         super(RoIFasterRCNNHeads, self).__init__()
         self.rpn = rpn
         self.roi_head = roi_head
         self.cfg = cfg
+        self.just_rpn = just_rpn
         # used for partial network training
         if hasattr(cfg, 'dataset_label'):
             self.dataset_label = cfg.dataset_label
@@ -24,7 +25,10 @@ class RoIFasterRCNNHeads(nn.Module):
         else:
             proposals, scores = self.rpn(inputs, features, targets)
 
+
         if self.training:
+            if self.just_rpn:
+                return losses_rpn
             if self.dataset_label is None:
                 losses_roi = self.roi_head(proposals, features, strides, targets=targets)
                 losses = {**losses_rpn, **losses_roi}
@@ -35,6 +39,10 @@ class RoIFasterRCNNHeads(nn.Module):
                 return losses, human_proposals
 
         else:
+            if self.just_rpn:
+                results = {'boxes':proposals, 'scores':scores, 'labels':[torch.ones_like(score) for score in scores]}
+                results = self.post_process(results, roi_boxes, stride)
+                return results
             results = self.roi_head(proposals, features, strides, targets=targets)
             results = self.post_process(results,roi_boxes, stride)
             return results

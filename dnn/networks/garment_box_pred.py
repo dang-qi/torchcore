@@ -56,7 +56,7 @@ class GarmentBoxPredNet(Module):
             if self.middle_layer:
                 target_box = self.targets_converter.decode(pred, person_proposal)
                 num_per_im = [len(prop) for prop in person_proposal]
-                outfit_boxes = torch.split(target_box, num_per_im)
+                outfit_boxes = torch.split(target_box.detach_(), num_per_im)
                 return {'outfit_box_loss': loss}, outfit_boxes
             else:
                 return {'outfit_box_loss': loss}

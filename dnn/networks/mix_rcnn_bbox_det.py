@@ -121,11 +121,11 @@ class MixRCNNBBoxDetector(torch.nn.Module):
 
             roi_features = {'0':roi_features}
             results = self.roi_detection_head(outfit_proposal, roi_features, stride_second, inputs=second_inputs, targets=targets)
-            results = self.post_process(results, inputs)
+            #results = self.post_process(results, inputs)
             if self.test_mode == 'second':
                 return results
             elif self.test_mode == 'both':
-                return human_results, results 
+                return outfit_boxes, results 
             else:
                 raise ValueError('Unknow test mode {}'.format(self.test_mode))
 

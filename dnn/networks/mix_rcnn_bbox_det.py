@@ -7,7 +7,7 @@ from .general_detector import GeneralDetector
 from torchvision.ops import roi_align, nms
 
 class MixRCNNBBoxDetector(torch.nn.Module):
-    def __init__(self, backbone, heads, roi_pooler, neck=None, targets_converter=None, inputs_converter=None, cfg=None, second_loss_weight=None, third_loss_weight=None,expand_ratio=None, test_mode='both', debug_time=False):
+    def __init__(self, backbone, heads, roi_pooler, neck=None, targets_converter=None, inputs_converter=None, cfg=None, second_loss_weight=None, third_loss_weight=None,expand_ratio=None, test_mode='both', roi_post_process=False, debug_time=False):
         super().__init__()
         self.backbone = backbone
         self.neck = neck
@@ -25,6 +25,7 @@ class MixRCNNBBoxDetector(torch.nn.Module):
         self.third_loss_weight = third_loss_weight
         self.test_mode = test_mode
         self.expand_ratio = expand_ratio
+        self.roi_post_process_flag = roi_post_process
 
         if debug_time:
             self.total_time = {'feature':0.0, 'rpn':0.0, 'roi_head':0.0}
@@ -121,6 +122,8 @@ class MixRCNNBBoxDetector(torch.nn.Module):
 
             roi_features = {'0':roi_features}
             results = self.roi_detection_head(outfit_proposal, roi_features, stride_second, inputs=second_inputs, targets=targets)
+            if self.roi_post_process_flag:
+                results = self.roi_post_process(results, outfit_proposal, stride_second)
             #results = self.post_process(results, inputs)
             if self.test_mode == 'second':
                 return results
@@ -128,6 +131,41 @@ class MixRCNNBBoxDetector(torch.nn.Module):
                 return outfit_boxes, results 
             else:
                 raise ValueError('Unknow test mode {}'.format(self.test_mode))
+
+    def roi_post_process(self, results, roi_boxes_batch, stride):
+        roi_per_im = [len(proposal) for proposal in roi_boxes_batch]
+        roi_boxes = torch.cat(roi_boxes_batch, dim=0) # ROI_NUM_N x 4
+        roi_w = roi_boxes[:,2] - roi_boxes[:,0] # ROI_NUM_N
+        roi_h = roi_boxes[:,3] - roi_boxes[:,1]
+        w_scale = (roi_w / self.cfg.roi_pool_w / stride) # ROI_NUM_N 
+        h_scale = (roi_h / self.cfg.roi_pool_h / stride)
+        boxes_batch = results['boxes'] # list[DET_PER_IM x 4,...]
+        for i, boxes in enumerate(boxes_batch):
+            boxes[:,0] *= w_scale[i]
+            boxes[:,2] *= w_scale[i]
+            boxes[:,1] *= h_scale[i]
+            boxes[:,3] *= h_scale[i]
+
+            boxes[:,0] += roi_boxes[i,0]
+            boxes[:,2] += roi_boxes[i,0]
+            boxes[:,1] += roi_boxes[i,1]
+            boxes[:,3] += roi_boxes[i,1]
+
+        #results['boxes'] = [torch.cat(boxes[im_num:im_num+i], dim=0) for i, im_num in zip(accumulate_list,human_per_im)]
+        scores = []
+        labels = []
+        boxes = []
+
+        ind = 0
+        for human_num in roi_per_im:
+            boxes.append(torch.cat(results['boxes'][ind:ind+human_num], dim=0))
+            labels.append(torch.cat(results['labels'][ind:ind+human_num], dim=0))
+            scores.append(torch.cat(results['scores'][ind:ind+human_num], dim=0))
+            ind+=human_num
+        results['boxes'] = boxes
+        results['labels'] = labels
+        results['scores'] = scores
+        return results
 
     def post_process(self, results, inputs):
         for i, (boxes, scores, labels) in enumerate(zip(results['boxes'], results['scores'], results['labels'])):

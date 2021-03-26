@@ -8,7 +8,7 @@ from collections import OrderedDict
 from torchvision.ops import batched_nms
 
 class FoveaHead(nn.Module):
-    def __init__(self, class_num, in_feature_num, loss=None, sigma=0.4, eta=2, nms_pre=1000):
+    def __init__(self, class_num, in_feature_num, r_layer, loss=None, sigma=0.4, eta=2, nms_pre=1000):
         super().__init__()
         self.strides = None
         self.sigma = sigma
@@ -17,6 +17,7 @@ class FoveaHead(nn.Module):
         self.nms_pre = nms_pre
         self.cls_head = MultiConvHead(out_channel=class_num, in_channel=in_feature_num, head_conv_channel=256, middle_layer_num=4, init='focal_loss' )
         self.box_head = MultiConvHead(out_channel=4, in_channel=in_feature_num, head_conv_channel=256, middle_layer_num=4, init='gaussion' )
+        self.r_l = r_layer
         self.set_r_interval()
         if loss is None:
             self.class_loss = FocalLossSigmoid(alpha=0.4, beta=4, gamma=1.5)
@@ -215,11 +216,9 @@ class FoveaHead(nn.Module):
         return inds
 
     def set_r_interval(self):
-        r = [2^x for x in range(5,10)]
-        r_interval = [[x/self.eta, x*self.eta] for x in r]
+        r_interval = [[x/self.eta, x*self.eta] for x in self.r_l]
         r_interval[0][0] = 1
         r_interval[-1][1] = 10000 # just a very big value
-        self.r_l = r
         self.r_interval = r_interval
 
 

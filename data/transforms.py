@@ -94,12 +94,16 @@ class ResizeMinMaxTV(object):
         self.max_size = max_size
 
     def __call__(self, inputs, targets=None):
-        inputs['data'], self.scale = F.resize_tensor_min_max(inputs['data'], self.min_size, self.max_size)
-        inputs['scale'] = self.scale
+        inputs['data'], scale = F.resize_tensor_min_max(inputs['data'], self.min_size, self.max_size)
+        if 'scale' not in inputs:
+            inputs['scale'] = scale
+        else:
+            inputs['scale'] = scale * inputs['scale']
+        #inputs['scale'] = self.scale
         
         if targets is not None:
             if 'boxes' in targets:
-                targets['boxes'] = F.resize_boxes(targets['boxes'], self.scale)
+                targets['boxes'] = F.resize_boxes(targets['boxes'], scale)
         return inputs, targets
 
 class ToTensor(object):
@@ -233,11 +237,12 @@ class GeneralRCNNTransform(object):
 
 # a version similar to torchvision
 class GeneralRCNNTransformTV(object): 
-    def __init__(self, min_size, max_size, image_mean=None, image_std=None):
+    def __init__(self, min_size, max_size, image_mean=None, image_std=None, resized=False):
         self.min_size = min_size
         self.max_size = max_size
         self.image_mean = image_mean
         self.image_std = image_std
+        self.resized = resized
         self.resize_min_max = ResizeMinMaxTV(min_size, max_size)
         self.normalize = Normalize(mean=image_mean, std=image_std)
         self.to_tensor = ToTensor()
@@ -264,7 +269,8 @@ class GeneralRCNNTransformTV(object):
             # normalize after resize, which might be slower 
             ainput, target = self.to_tensor(ainput, target)
             ainput, target = self.normalize(ainput, target)
-            ainput, target = self.resize_min_max(ainput, target)
+            if not self.resized:
+                ainput, target = self.resize_min_max(ainput, target)
             # set the tensor to device before normalize
             #ainput['data'].to(self.device)
             scales[i] = ainput['scale']
@@ -318,20 +324,35 @@ class RandomCrop(object):
        Random crop to the image
        The padding will be added if the image is too samll
     '''
-    def __init__(self, size):
+    def __init__(self, size, box_inside):
         if isinstance(size, Iterable):
             self.size = size
         else:
             self.size = [size, size]
         assert len(self.size) == 2
+        self.box_inside = box_inside
 
     def __call__(self, inputs, targets):
         image = inputs['data']
-        inputs['data'], position = F.random_crop(image, self.size)
-        inputs['crop_position'] = position
+        while True:
+            inputs['data'], position = F.random_crop(image, self.size)
+            inputs['crop_position'] = position
 
-        if 'boxes' in targets:
-            targets['boxes'] = F.random_crop_boxes(targets['boxes'], position)
+            if 'boxes' in targets:
+                boxes = targets['boxes'].copy()
+                boxes = F.random_crop_boxes(boxes, position)
+                if not self.box_inside:
+                    break
+                else:
+                    if len(boxes)>0:
+                        targets['boxes']=boxes
+                        break
+                    else:
+                        print('recrop')
+                        continue
+            else:
+                break
+
         return inputs, targets
 
 class RandomScale(object):

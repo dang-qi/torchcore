@@ -363,6 +363,9 @@ def random_crop_boxes(boxes, position):
     boxes[:,2] = np.clip(boxes[:,2], 0, position[2]-position[0]-1)
     boxes[:,1] = np.clip(boxes[:,1], 0, position[3]-position[1]-1)
     boxes[:,3] = np.clip(boxes[:,3], 0, position[3]-position[1]-1)
+    # only keep the valid boxes
+    keep = np.logical_and(boxes[:,3]>boxes[:,1], boxes[:,2]>boxes[:,0])
+    boxes = boxes[keep]
     return boxes
 
 def scale(image, scale):

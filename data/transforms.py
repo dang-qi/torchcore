@@ -4,6 +4,7 @@ import torch
 import math
 import random
 import numpy as np
+import pickle
 try:
     import accimage
 except ImportError:
@@ -323,14 +324,27 @@ class RandomCrop(object):
     '''
        Random crop to the image
        The padding will be added if the image is too samll
+       The target_box_main_key is 'boxes' in detection task
+       other box_keys can be the additional boxes used in the process
+       targets_other_key can be labels, etc
+       After cropping, the invalid boxes and labels are deleted
     '''
-    def __init__(self, size, box_inside):
+    def __init__(self, size, box_inside, target_box_main_key='boxes', inputs_box_keys=[], targets_box_keys=[], targets_other_key=['labels']):
         if isinstance(size, Iterable):
             self.size = size
         else:
             self.size = [size, size]
         assert len(self.size) == 2
         self.box_inside = box_inside
+        self.inputs_box_keys = inputs_box_keys
+        self.targets_box_keys = targets_box_keys
+        self.targets_other_key = targets_other_key
+        self.targets_box_main_key = target_box_main_key
+        if box_inside:
+            assert target_box_main_key is not None
+        if target_box_main_key is not None:
+            assert isinstance(target_box_main_key, str)
+
 
     def __call__(self, inputs, targets):
         image = inputs['data']
@@ -338,18 +352,23 @@ class RandomCrop(object):
             inputs['data'], position = F.random_crop(image, self.size)
             inputs['crop_position'] = position
 
-            if 'boxes' in targets:
-                boxes = targets['boxes'].copy()
+            #if 'boxes' in targets:
+            if self.targets_box_main_key is not None:
+                boxes = targets[self.targets_box_main_key].copy()
                 boxes = F.random_crop_boxes(boxes, position)
-                if not self.box_inside:
+                # only keep the valid boxes
+                keep = np.logical_and(boxes[:,3]>boxes[:,1], boxes[:,2]>boxes[:,0])
+                if not self.box_inside or keep.any():
+                    targets[self.targets_box_main_key] = boxes[keep]
+                    for k in self.targets_other_key:
+                        targets[k] = targets[k][keep]
+                    for k in self.inputs_box_keys:
+                        inputs[k] = F.random_crop_boxes(inputs[k], position)
+                    for k in self.targets_box_keys:
+                        targets[k] = F.random_crop_boxes(targets[k], position)
                     break
                 else:
-                    if len(boxes)>0:
-                        targets['boxes']=boxes
-                        break
-                    else:
-                        print('recrop')
-                        continue
+                    continue
             else:
                 break
 
@@ -444,6 +463,29 @@ class PadNumpyArray():
             targets[k] = pad_array
         return targets
 
+class AddSurrandingBox(object):
+    def __init__(self, box_name='target_box') -> None:
+        self.box_name = box_name
+
+    def __call__(self, inputs, targets):
+        if targets is None:
+            return inputs, targets
+        targets[self.box_name] = F.surrounding_box(targets['boxes'])
+        return inputs, targets
+
+class AddPersonBox(object):
+    def __init__(self, anno_path, name='input_box'):
+        self.name = name
+        with open(anno_path, 'rb') as f:
+            self.anno = pickle.load(f)
+    
+    def __call__(self, inputs, targets):
+        im_id = targets['image_id']
+        input_box = self.anno[im_id][self.name]
+        #targets['input_box'] = np.expand_dims(np.array(input_box), axis=0)
+        targets['input_box'] = np.array(input_box)
+        return inputs, targets
+    
 
 class GroupPaddingWithBBox(object):
     def __init__(self, image_mean=None, image_std=None):

@@ -85,7 +85,10 @@ class GarmentBoxPredNet(Module):
     def filter_proposals(self, targets, person_proposal, thresh=0.3):
         person_proposal_out = []
         for target, persons in zip(targets, person_proposal):
+            #if 'input_box' in target:
             input_box = target['input_box']
+            #else:
+            #    input_box = target['target_box']
             ious = self.cal_iou(input_box, persons)
             keep = ious >= thresh
             person_proposal_out.append(persons[keep])
@@ -109,7 +112,10 @@ class GarmentBoxPredNet(Module):
     def add_input_box_to_human_proposal(self, targets, person_proposal):
         person_proposal_out = []
         for target, person_box in zip(targets, person_proposal):
+            #if 'input_box' in target:
             boxes = torch.cat((target['input_box'].unsqueeze(0), person_box), dim=0)
+            #else:
+            #    boxes = torch.cat((target['target_box'].unsqueeze(0), person_box), dim=0)
             person_proposal_out.append(boxes)
         return person_proposal_out
 

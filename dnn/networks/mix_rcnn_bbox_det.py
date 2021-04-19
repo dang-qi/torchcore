@@ -7,7 +7,7 @@ from .general_detector import GeneralDetector
 from torchvision.ops import roi_align, nms
 
 class MixRCNNBBoxDetector(torch.nn.Module):
-    def __init__(self, backbone, heads, roi_pooler, roi_pool_h, roi_pool_w, neck=None, targets_converter=None, inputs_converter=None, cfg=None, second_loss_weight=None, third_loss_weight=None,expand_ratio=None, test_mode='both', roi_post_process=False, test_with_gt_outfit_box=False, align_boxes=False, no_post_process=False, debug_time=False):
+    def __init__(self, backbone, heads, roi_pooler, roi_pool_h, roi_pool_w, neck=None, targets_converter=None, inputs_converter=None, cfg=None, second_loss_weight=None, third_loss_weight=None,expand_ratio=None, test_mode='both', roi_post_process=False, test_with_gt_outfit_box=False, align_boxes=False, no_post_process=False, debug_time=False, feature_names=['0','1','2','3']):
         super().__init__()
         self.backbone = backbone
         self.neck = neck
@@ -19,7 +19,7 @@ class MixRCNNBBoxDetector(torch.nn.Module):
         self.roi_pooler = roi_pooler
         self.targets_converter = targets_converter
         self.inputs_converter = inputs_converter
-        self.feature_names = ['0', '1', '2', '3']
+        self.feature_names = feature_names
         self.strides = None
         self.second_loss_weight = second_loss_weight
         self.third_loss_weight = third_loss_weight
@@ -108,6 +108,8 @@ class MixRCNNBBoxDetector(torch.nn.Module):
             human_thresh = 0.8
             human_boxes = [human_box[human_score>human_thresh].clone() if (human_score>human_thresh).any() else human_box[torch.argmax(human_score)][None,:].clone() for human_box, human_score in zip(human_boxes, human_scores)]
             outfit_boxes = self.bbox_head(features, human_boxes, self.strides, inputs=inputs, targets=targets )
+            if self.test_mode == 'outfit_box':
+                return outfit_boxes
 
             #if self.test_mode =='second':
             #    return bbox_results

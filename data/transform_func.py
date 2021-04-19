@@ -355,14 +355,14 @@ def random_crop(image, size):
     return cropped_im, (x1, y1, x2, y2)
 
 def random_crop_boxes(boxes, position):
-    boxes[:,0] -= position[0]
-    boxes[:,2] -= position[0]
-    boxes[:,1] -= position[1]
-    boxes[:,3] -= position[1]
-    boxes[:,0] = np.clip(boxes[:,0], 0, position[2]-position[0]-1)
-    boxes[:,2] = np.clip(boxes[:,2], 0, position[2]-position[0]-1)
-    boxes[:,1] = np.clip(boxes[:,1], 0, position[3]-position[1]-1)
-    boxes[:,3] = np.clip(boxes[:,3], 0, position[3]-position[1]-1)
+    boxes[...,0] -= position[0]
+    boxes[...,2] -= position[0]
+    boxes[...,1] -= position[1]
+    boxes[...,3] -= position[1]
+    boxes[...,0] = np.clip(boxes[...,0], 0, position[2]-position[0]-1)
+    boxes[...,2] = np.clip(boxes[...,2], 0, position[2]-position[0]-1)
+    boxes[...,1] = np.clip(boxes[...,1], 0, position[3]-position[1]-1)
+    boxes[...,3] = np.clip(boxes[...,3], 0, position[3]-position[1]-1)
     return boxes
 
 def scale(image, scale):
@@ -373,3 +373,12 @@ def scale(image, scale):
 
 def scale_box(boxes, scale):
     return boxes*scale
+
+def surrounding_box(boxes):
+    x1 = np.min(boxes[:,0])
+    y1 = np.min(boxes[:,1])
+    x2 = np.max(boxes[:,2])
+    y2 = np.max(boxes[:,3])
+    surrounding_box = np.array([x1,y1,x2,y2])
+    return surrounding_box
+

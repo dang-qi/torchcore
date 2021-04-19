@@ -7,14 +7,14 @@ from .general_detector import GeneralDetector
 from torchvision.ops import roi_align, nms
 
 class FasterRCNNFPN(GeneralDetector):
-    def __init__(self, backbone, neck=None, heads=None, cfg=None, training=True, debug_time=False, just_rpn=False):
+    def __init__(self, backbone, neck=None, heads=None, cfg=None, training=True, feature_names=['0','1','2','3'], debug_time=False, just_rpn=False):
         super(GeneralDetector, self).__init__()
         self.backbone = backbone
         self.neck = neck
         self.rpn = heads['rpn']
         self.roi_head = heads['bbox']
         self.training = training
-        self.feature_names = ['0', '1', '2', '3']
+        self.feature_names = feature_names
         self.strides = None
         self.just_rpn=just_rpn
 

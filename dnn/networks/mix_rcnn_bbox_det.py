@@ -7,7 +7,7 @@ from .general_detector import GeneralDetector
 from torchvision.ops import roi_align, nms
 
 class MixRCNNBBoxDetector(torch.nn.Module):
-    def __init__(self, backbone, heads, roi_pooler, roi_pool_h, roi_pool_w, neck=None, targets_converter=None, inputs_converter=None, cfg=None, second_loss_weight=None, third_loss_weight=None,expand_ratio=None, test_mode='both', roi_post_process=False, debug_time=False):
+    def __init__(self, backbone, heads, roi_pooler, roi_pool_h, roi_pool_w, neck=None, targets_converter=None, inputs_converter=None, cfg=None, second_loss_weight=None, third_loss_weight=None,expand_ratio=None, test_mode='both', roi_post_process=False, test_with_gt_outfit_box=False, align_boxes=False, no_post_process=False, debug_time=False):
         super().__init__()
         self.backbone = backbone
         self.neck = neck
@@ -28,6 +28,9 @@ class MixRCNNBBoxDetector(torch.nn.Module):
         self.roi_post_process_flag = roi_post_process
         self.roi_pool_w = roi_pool_w
         self.roi_pool_h = roi_pool_h
+        self.test_with_gt_outfit_box = test_with_gt_outfit_box
+        self.align_boxes = align_boxes
+        self.no_post_process = no_post_process
 
         if debug_time:
             self.total_time = {'feature':0.0, 'rpn':0.0, 'roi_head':0.0}
@@ -101,9 +104,9 @@ class MixRCNNBBoxDetector(torch.nn.Module):
                 return human_results
             human_boxes = human_results['boxes']
             human_scores = human_results['scores']
-            human_boxes = [human_box[torch.argmax(human_score)][None,:].clone() for human_box, human_score in zip(human_boxes, human_scores)]
+            #human_boxes = [human_box[torch.argmax(human_score)][None,:].clone() for human_box, human_score in zip(human_boxes, human_scores)]
             human_thresh = 0.8
-            #human_boxes = [human_box[human_score>human_thresh].clone() if (human_score>human_thresh).any() else human_box[torch.argmax(human_score)][None,:].clone() for human_box, human_score in zip(human_boxes, human_scores)]
+            human_boxes = [human_box[human_score>human_thresh].clone() if (human_score>human_thresh).any() else human_box[torch.argmax(human_score)][None,:].clone() for human_box, human_score in zip(human_boxes, human_scores)]
             outfit_boxes = self.bbox_head(features, human_boxes, self.strides, inputs=inputs, targets=targets )
 
             #if self.test_mode =='second':
@@ -115,6 +118,18 @@ class MixRCNNBBoxDetector(torch.nn.Module):
 
             if self.expand_ratio is not None:
                 outfit_boxes = self.expand_boxes_batch(outfit_boxes, inputs['image_sizes'], self.expand_ratio)
+            if hasattr(self, 'expand_by_human'):
+                if self.expand_by_human:
+                    outfit_boxes = self.expand_boxes_with_human_batch(outfit_boxes, human_boxes, inputs['image_sizes'])
+            if self.test_mode == 'outfit_box':
+                out = {}
+                out['target_box'] = outfit_boxes
+                return out
+
+            if self.test_with_gt_outfit_box:
+                outfit_boxes = [target['target_box'].unsqueeze(0) for target in targets]
+            if self.align_boxes:
+                outfit_boxes = self.align_outfit_boxes(outfit_boxes, stride=stride_second)
             outfit_proposal, roi_features, targets_for_second = self.roi_pooler(outfit_boxes, feature_second, stride_second, inputs, targets)
 
             if self.inputs_converter is not None:
@@ -126,13 +141,24 @@ class MixRCNNBBoxDetector(torch.nn.Module):
             results = self.roi_detection_head(outfit_proposal, roi_features, stride_second, inputs=second_inputs, targets=targets)
             if self.roi_post_process_flag:
                 results = self.roi_post_process(results, outfit_proposal, stride_second)
-            results = self.post_process(results, inputs)
+            if not self.no_post_process:
+                results = self.post_process(results, inputs)
             if self.test_mode == 'second':
                 return results
             elif self.test_mode == 'both':
                 return outfit_boxes, results 
             else:
                 raise ValueError('Unknow test mode {}'.format(self.test_mode))
+    
+    def align_outfit_boxes(self, boxes_batch, stride):
+        for boxes in boxes_batch:
+            for box in boxes:
+                box[0] = torch.floor_(box[0]/stride)*stride
+                box[1] = torch.floor_(box[1]/stride)*stride
+                box[2] = torch.ceil_(box[2]/stride)*stride
+                box[3] = torch.ceil_(box[3]/stride)*stride
+        return boxes_batch
+
 
     def roi_post_process(self, results, roi_boxes_batch, stride):
         roi_per_im = [len(proposal) for proposal in roi_boxes_batch]
@@ -221,6 +247,26 @@ class MixRCNNBBoxDetector(torch.nn.Module):
 
         return torch.stack([boxes_x1, boxes_y1, boxes_x2, boxes_y2], dim=1)
 
+    @torch.no_grad()
+    def expand_boxes_with_human_batch(self, boxes_batch, human_batch, image_sizes):
+        new_boxes_batch = [self.expand_boxes_with_human(boxes, human, image_size ) for boxes, human, image_size in zip(boxes_batch, human_batch, image_sizes)]
+        return new_boxes_batch
+
+    @torch.no_grad()
+    def expand_boxes_with_human(self, boxes, human_boxes, image_size):
+        assert len(boxes) == len(human_boxes)
+        boxes_x1 = boxes[:,0]
+        boxes_x2 = boxes[:,2]
+        boxes_y1 = torch.minimum(boxes[:,1], human_boxes[:,1])
+        boxes_y2 = torch.maximum(boxes[:,3], human_boxes[:,3])
+
+        height, width = image_size
+        boxes_x1 = boxes_x1.clamp(min=0, max=width)
+        boxes_y1 = boxes_y1.clamp(min=0, max=height)
+        boxes_x2 = boxes_x2.clamp(min=0, max=width)
+        boxes_y2 = boxes_y2.clamp(min=0, max=height)
+
+        return torch.stack([boxes_x1, boxes_y1, boxes_x2, boxes_y2], dim=1)
 
     def get_strides(self, inputs, features):
         if isinstance(features, dict):

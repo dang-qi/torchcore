@@ -7,15 +7,16 @@ from .general_detector import GeneralDetector
 from torchvision.ops import roi_align, nms
 
 class FasterRCNNFPN(GeneralDetector):
-    def __init__(self, backbone, neck=None, heads=None, cfg=None, training=True, debug_time=False):
+    def __init__(self, backbone, neck=None, heads=None, cfg=None, training=True, feature_names=['0','1','2','3'], debug_time=False, just_rpn=False):
         super(GeneralDetector, self).__init__()
         self.backbone = backbone
         self.neck = neck
         self.rpn = heads['rpn']
         self.roi_head = heads['bbox']
         self.training = training
-        self.feature_names = ['0', '1', '2', '3']
+        self.feature_names = feature_names
         self.strides = None
+        self.just_rpn=just_rpn
 
         if debug_time:
             self.total_time = {'feature':0.0, 'rpn':0.0, 'roi_head':0.0}
@@ -73,6 +74,9 @@ class FasterRCNNFPN(GeneralDetector):
                 self.total_time['roi_head'] += roi_head_time - rpn_time 
             return losses
         else:
+            if self.just_rpn:
+                results = {'boxes':proposals, 'scores':scores, 'labels':[torch.ones_like(score) for score in scores]}
+                return results
             results = self.roi_head(proposals, features, strides, targets=targets)
             results = self.post_process(results, inputs)
             if debug_time:

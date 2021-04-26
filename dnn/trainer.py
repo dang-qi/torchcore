@@ -172,7 +172,7 @@ class trainer :
             print('Chekpoint has been loaded from {}'.format(path))
 
 class trainer_dist(trainer):
-    def __init__( self, cfg, model, device, trainset, tag='', testset=None, dataset_name=None, train_sampler=None, rank=None, benchmark=None, criterias=None, log_print_iter=1000, evaluator=None ):
+    def __init__( self, cfg, model, device, trainset, tag='', testset=None, dataset_name=None, train_sampler=None, rank=None, benchmark=None, criterias=None, log_print_iter=1000, evaluator=None, clip_gradient=None ):
         self._cfg = cfg
         self._device = device
         self._optimizer = None
@@ -195,6 +195,7 @@ class trainer_dist(trainer):
         self._dataset_name = dataset_name
         self._epoch = 0
         self._niter = cfg.optimizer.n_iter
+        self._clip_gradient = clip_gradient
         if evaluator is None:
             self.evaluator = COCOEvaluator(dataset_name=dataset_name)
         else:
@@ -320,6 +321,10 @@ class trainer_dist(trainer):
 
             # Computing gradient and do SGD step
             loss_sum.backward()
+
+            if self._clip_gradient is not None:
+                torch.nn.utils.clip_grad_norm_(self._model.parameters(), self._clip_gradient)
+
             if idx % self._cfg.accumulation_step == 0:
                 self._optimizer.step()
                 self._optimizer.zero_grad()
@@ -403,6 +408,19 @@ class trainer_dist(trainer):
         if to_print:
             print('The checkpoint has been saved to {}'.format(path))
 
+    #def resume_training(self, path, device, to_print=True):
+    #    if isinstance(self._model, DDP):
+    #        dist.barrier()
+    #    checkpoint = torch.load(path, map_location=device)
+    #    self._epoch = checkpoint['epoch']
+    #    self._model.load_state_dict(checkpoint['model_state_dict'])
+    #    self._optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+    #    self._niter = self._niter
+    #    if 'scheduler' in checkpoint:
+    #        self._scheduler.load_state_dict(checkpoint['scheduler'])
+    #    if to_print:
+    #        print('Chekpoint has been loaded from {}'.format(path))
+
     def resume_training(self, path, device, to_print=True):
         if isinstance(self._model, DDP):
             dist.barrier()
@@ -410,8 +428,15 @@ class trainer_dist(trainer):
         self._epoch = checkpoint['epoch']
         self._model.load_state_dict(checkpoint['model_state_dict'])
         self._optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        self.move_optimizer_to_device(self._optimizer, device)
         self._niter = self._niter
         if 'scheduler' in checkpoint:
             self._scheduler.load_state_dict(checkpoint['scheduler'])
         if to_print:
             print('Chekpoint has been loaded from {}'.format(path))
+    
+    def move_optimizer_to_device(self, optimizer, device):
+        for state in optimizer.state.values():
+            for k, v in state.items():
+                if isinstance(v, torch.Tensor):
+                    state[k] = v.to(device)

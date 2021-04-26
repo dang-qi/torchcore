@@ -32,6 +32,7 @@ from .coco_torchvision import COCOTorchVisionDataset
 from .deepfashion2 import DeepFashion2Dataset
 from .multi_mix_dataset import MultiMixDataset
 from .fashion_pedia import FashionPediaDataset
+from .toy_dataset import ToyDataset
 
 selector = {}
 selector['coco'] = coco_dataset

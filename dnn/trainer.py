@@ -2,11 +2,18 @@ import torch
 import torch.optim as optim
 from torch import nn
 import numpy as np
-import time
+import os
 import progressbar
-import logging
+import tqdm
+import json
+import datetime
+import math
 
-from .data import data_feeder
+import torch.distributed as dist
+from torch.nn.parallel import DistributedDataParallel as DDP
+
+from ..tools.logger import Logger
+from ..evaluation import COCOEvaluator
 
 class trainer :
     def __init__( self, cfg, model, device, trainset, testset=None, optimizer=None, scheduler=None ):
@@ -161,5 +168,250 @@ class trainer :
         self._model['net'] = checkpoint['model_state_dict']
         self._optimizer = checkpoint['optimizer_state_dict']
         self._scheduler = checkpoint['scheduler_state_dict']
+        if to_print:
+            print('Chekpoint has been loaded from {}'.format(path))
+
+class trainer_dist(trainer):
+    def __init__( self, cfg, model, device, trainset, tag='', testset=None, dataset_name=None, train_sampler=None, rank=None, benchmark=None, criterias=None, log_print_iter=1000, evaluator=None ):
+        self._cfg = cfg
+        self._device = device
+        self._optimizer = None
+        self._model = model
+        self._tag = tag
+        self.log_print_iter = log_print_iter
+
+        if isinstance(self._model, DDP):
+            self.distributed = True
+        else:
+            self.distributed = False
+
+        self.rank = rank
+        self._train_sampler = train_sampler
+
+        self._trainset = trainset
+        self._testset = testset
+        self._benchmark = benchmark
+        self._criterias = criterias
+        self._dataset_name = dataset_name
+        self._epoch = 0
+        self._niter = cfg.optimizer.n_iter
+        if evaluator is None:
+            self.evaluator = COCOEvaluator(dataset_name=dataset_name)
+        else:
+            self.evaluator = evaluator
+
+        self._set_optimizer()
+        self._set_scheduler()
+        if cfg.resume:
+            path = os.path.join(os.path.dirname(cfg.path.CHECKPOINT), '{}_last.pth'.format(self._tag)) 
+            self.resume_training(path, device)
+
+        if self.is_main_process():
+            self.init_logger()
+
+    def is_main_process(self):
+        if self.rank == 0 or self.rank is None:
+            return True
+        else:
+            return False
+
+    def train( self, resume=False ):
+        #if self._testset is not None :
+        #    self._validate()
+
+        for i in range( self._epoch+1, self._niter+1 ):
+            if self._train_sampler is not None:
+                self._train_sampler.set_epoch(i)
+            if self.is_main_process():
+                print("Epoch %d/%d" % (i,self._niter))
+                self._logger.info('epoch {}\n'.format(i))
+            self._train()
+
+            if self._testset is not None and i%1 == 0 :
+                if self.distributed:
+                    dist.barrier()
+                #if not self.distributed or self.rank==0:
+                if self.is_main_process():
+                    self._validate()
+                if self.distributed:
+                    dist.barrier()
+            self._epoch = i
+            self.save_training(self._cfg.path.CHECKPOINT.format(self._epoch))
+            if hasattr(self, '_scheduler'):
+                self._scheduler.step()
+
+    def _validate( self ):
+        if isinstance(self._model, DDP):
+            if not self.is_main_process():
+                return
+        print('start to validate')
+        self._model.eval()
+
+        results = []
+        with torch.no_grad() :
+            for idx,(inputs, targets) in enumerate(tqdm.tqdm(self._testset, 'evaluating')):
+            #for idx,(inputs, targets) in enumerate(self._testset):
+                inputs = self._set_device( inputs )
+                output = self._model.module( inputs)
+                batch_size = len(output['boxes'])
+                #for i, im in enumerate(output):
+                for i in range(batch_size):
+                    if len(output['boxes'][i]) == 0:
+                        continue
+                    # convert to xywh
+                    output['boxes'][i][:,2] -= output['boxes'][i][:,0]
+                    output['boxes'][i][:,3] -= output['boxes'][i][:,1]
+                    for j in range(len(output['boxes'][i])):
+                        results.append({'image_id':int(targets[i]['image_id']), 
+                                        'category_id':output['labels'][i][j].cpu().numpy().tolist(), 
+                                        'bbox':output['boxes'][i][j].cpu().numpy().tolist(), 
+                                        'score':output['scores'][i][j].cpu().numpy().tolist()})
+                #if idx == 10:
+                #    break
+                #output = self._model['net']( inputs, just_embedding=True) # debug
+                #bench.update( targets, output )
+        result_path = '{}temp_result.json'.format(self._tag)
+        with open(result_path,'w') as f:
+            json.dump(results,f)
+        #self.eval_result(dataset=self._dataset_name)
+        self.evaluator.evaluate(result_path)
+
+    def eval_result(self, dataset='coco_person'):
+        raise NotImplementedError
+
+    def _train( self ):
+        self._model.train()
+
+        loss_values = []
+        average_losses = {}
+
+        self._optimizer.zero_grad()
+        for idx, (inputs, targets) in enumerate(tqdm.tqdm(self._trainset, desc='Training')):
+            #print('inputs:', inputs)
+            #print('targets:', targets)
+
+            inputs = self._set_device( inputs )
+            targets = self._set_device( targets )
+            #print('input device:', inputs[0].device)
+
+            loss_dict = self._model(inputs, targets)
+
+            # add the losses for each part
+            #loss_sum = sum(loss for loss in loss_dict.values())
+            loss_sum=0
+            for single_loss in loss_dict:
+                loss_sum = loss_sum + loss_dict[single_loss]
+                #if self.rank==0 or not self.distributed:
+                if self.is_main_process():
+                    if single_loss in average_losses:
+                        average_losses[single_loss]+= loss_dict[single_loss].mean()
+                    else:
+                        average_losses[single_loss] = loss_dict[single_loss].mean()
+
+            loss_sum = loss_sum.mean()
+            if not math.isfinite(loss_sum):
+                #print("Loss is {}, stopping training".format(loss_sum))
+                self._optimizer.zero_grad()
+                print('wrong targets:',targets)
+                print("Loss is {}, skip this batch".format(loss_sum))
+                print(loss_dict)
+                continue
+                #sys.exit(1)
+
+            # Computing gradient and do SGD step
+            loss_sum.backward()
+            if idx % self._cfg.accumulation_step == 0:
+                self._optimizer.step()
+                self._optimizer.zero_grad()
+            loss_values.append( loss_sum.cpu().detach().numpy() )
+
+            if idx%self.log_print_iter == 0:
+                #if self.rank == 0 or not self.distributed:
+                if self.is_main_process():
+                    self._logger.info('{} '.format(idx+1))
+                    loss_str = ''
+                    for loss in average_losses:
+                        if idx==0:
+                            loss_num = average_losses[loss]
+                        else:
+                            loss_num = average_losses[loss] / self.log_print_iter
+                        self._logger.info('{} '.format(loss_num))
+                        loss_str += (' {} loss:{}, '.format(loss, loss_num))
+                    print(loss_str[:-2])
+                    average_losses = {}
+                    self._logger.info('\n')
+
+            #if idx > 20:
+            #    break
+            
+        print('Average loss : ', np.mean(loss_values))
+
+    def _set_device( self, blobs ):
+        if type(blobs) == list:
+            for i in range(len(blobs)):
+                blobs[i] = self._set_device(blobs[i])
+        elif type(blobs) == dict:
+            for key, data in blobs.items():
+                blobs[key] = self._set_device(data)
+        elif torch.is_tensor(blobs):
+            blobs = blobs.to(self._device, non_blocking=True)
+        return blobs
+
+    def _set_scheduler(self):
+        scheduler = self._cfg.scheduler
+        if scheduler.type == 'multi_step':
+            self._scheduler = optim.lr_scheduler.MultiStepLR( self._optimizer,
+                                                            milestones=scheduler['milestones'],
+                                                            gamma=scheduler.get('gamma', 0.1))
+        else:
+            raise ValueError('unknow scheduler {}'.format(scheduler.type))
+
+    def init_logger(self):
+        train_path = self._cfg.path['LOG']
+
+        console_formatter = '{} {{}}'.format(datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+        self._logger = Logger(level='info', file=train_path, console=False, console_formatter=console_formatter)
+
+        print('Loss log path is: {}'.format(train_path))
+
+    def save_training(self, path, to_print=True):
+        if isinstance(self._model, DDP):
+            #if self.rank == 0:
+            if self.is_main_process():
+                state_dict = self._model.state_dict()
+            else:
+                return
+        elif isinstance(self._model, torch.nn.DataParallel):
+            state_dict = self._model.module.state_dict()
+        else:
+            state_dict =self._model.state_dict()
+        torch.save({
+            'epoch': self._epoch,
+            'model_state_dict': state_dict,
+            'optimizer_state_dict': self._optimizer.state_dict(),
+            'scheduler':self._scheduler.state_dict(),
+            'niter':self._niter
+        }, path)
+        folder = os.path.dirname(path)
+        torch.save({
+            'epoch': self._epoch,
+            'model_state_dict': state_dict,
+            'optimizer_state_dict': self._optimizer.state_dict(),
+            'scheduler':self._scheduler.state_dict(),
+            'niter':self._niter
+        }, os.path.join(folder, '{}_last.pth'.format(self._tag)))
+        if to_print:
+            print('The checkpoint has been saved to {}'.format(path))
+
+    def resume_training(self, path, device, to_print=True):
+        if isinstance(self._model, DDP):
+            dist.barrier()
+        checkpoint = torch.load(path, map_location=device)
+        self._epoch = checkpoint['epoch']
+        self._model.load_state_dict(checkpoint['model_state_dict'])
+        self._optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        self._niter = self._niter
+        if 'scheduler' in checkpoint:
+            self._scheduler.load_state_dict(checkpoint['scheduler'])
         if to_print:
             print('Chekpoint has been loaded from {}'.format(path))

@@ -216,7 +216,7 @@ class trainer_dist(trainer):
         else:
             return False
 
-    def train( self, resume=False ):
+    def train( self ):
         #if self._testset is not None :
         #    self._validate()
 

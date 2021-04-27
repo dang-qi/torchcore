@@ -6,6 +6,7 @@ from pycocotools.cocoeval import COCOeval
 class COCOEvaluator():
     def __init__(self, dataset_name=None, gt_path=None) -> None:
         assert dataset_name is not None or gt_path is not None
+        self.dataset_name = dataset_name
         if gt_path is not None:
             self.gt_path = gt_path
         else:

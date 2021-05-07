@@ -1,12 +1,14 @@
 import numpy as np
+import torch
 import pickle
 from .dataset_new import Dataset
 from PIL import Image
 import os
+from torchvision.transforms.functional import to_tensor
 
 class COCODataset(Dataset):
     '''COCO dataset'''
-    def __init__( self, root, anno, part, transforms=None, debug=False, xyxy=True ):
+    def __init__( self, root, anno, part, transforms=None, debug=False, xyxy=True, torchvision_format=False, add_mask=False):
         super().__init__( root, transforms )
         self._part = part
 
@@ -17,6 +19,8 @@ class COCODataset(Dataset):
         self.map_category_id_to_continous()
         self.debug = debug
         self.xyxy = xyxy
+        self.torchvision_format = torchvision_format
+        self.add_mask = add_mask
         if xyxy:
             self.convert_to_xyxy()
 
@@ -49,6 +53,11 @@ class COCODataset(Dataset):
         boxes = np.array(boxes, dtype=np.float32)
         labels = np.array(labels, dtype=np.int64)
 
+        if self.torchvision_format:
+            boxes = torch.from_numpy(boxes)
+            labels = torch.from_numpy(labels)
+            img = to_tensor(img)
+
         #images (list[Tensor]): images to be processed
         #targets (list[Dict[Tensor]]): ground-truth boxes present in the image (optional)
         inputs = {}
@@ -56,7 +65,10 @@ class COCODataset(Dataset):
 
         targets = {}
         targets["boxes"] = boxes
-        targets["cat_labels"] = labels 
+        if self.torchvision_format:
+            targets["labels"] = labels 
+        else:
+            targets["cat_labels"] = labels 
         #target["masks"] = masks
         targets["image_id"] = image_id
         #target["area"] = area

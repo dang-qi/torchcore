@@ -1,16 +1,22 @@
 import numpy as np
 import pickle
+import torch
 from .dataset_new import Dataset
 from PIL import Image
 import os
+from ..dataset_util import get_binary_mask
+from torchvision.transforms.functional import to_tensor
 
 class FashionPediaDataset(Dataset):
     '''FashionPedia dataset'''
-    def __init__( self, root, anno, part, transforms=None, xyxy=True, debug=False ):
+    def __init__( self, root, anno, part, transforms=None, xyxy=True, debug=False, torchvision_format=False, add_mask=False ):
         super().__init__( root, transforms )
         self._part = part
         folder_dict = {'train':'train', 'val':'test', 'test':'test'}
         self._folder = folder_dict[part]
+
+        self.torchvision_format = torchvision_format
+        self.add_mask = add_mask
 
         # load annotations
         with open(anno, 'rb') as f:
@@ -41,6 +47,19 @@ class FashionPediaDataset(Dataset):
         boxes = np.array(boxes, dtype=np.float32)
         labels = np.array(labels, dtype=np.int64)
 
+        if self.torchvision_format:
+            boxes = torch.from_numpy(boxes)
+            labels = torch.from_numpy(labels)
+            img = to_tensor(img)
+
+        if self.add_mask:
+            height = image['height']
+            width = image['width']
+            masks = [get_binary_mask(obj['segmentation'], height, width, use_compressed_rle=True) for obj in image['objects']]
+            masks = np.array(masks, dtype=np.uint8)
+            if self.torchvision_format:
+                masks = torch.from_numpy(masks)
+
         inputs = {}
         inputs['data'] = img
         if self.debug:
@@ -48,15 +67,21 @@ class FashionPediaDataset(Dataset):
 
         targets = {}
         targets["boxes"] = boxes
-        targets["cat_labels"] = labels
+        if self.torchvision_format:
+            targets["labels"] = labels 
+        else:
+            targets["cat_labels"] = labels 
         targets["labels"] = labels
-        #target["masks"] = masks
+        if self.add_mask:
+            targets["masks"] = masks
         targets["image_id"] = image_id
         #target["area"] = area
         #target["iscrowd"] = iscrowd
         if self._transforms is not None:
             inputs, targets = self._transforms(inputs, targets)
 
+        if self.torchvision_format:
+            return img, targets
         return inputs, targets
 
     def convert_to_xyxy(self):

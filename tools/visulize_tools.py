@@ -203,6 +203,13 @@ def draw_plain_boxes(image,boxes, color=(255, 0, 0)):
         draw.rectangle(box, outline=color, width=3)
     return image
 
+def visulize_mask_with_image(mask, image):
+    #heatmap = np.amax(heatmap,axis=0)
+    mask = Image.fromarray((mask*255).astype(np.uint8)).convert('RGB')
+    #mask = mask.resize(image.size)
+    blend_im = Image.blend(mask, image, 0.5)
+    #blend_im.show()
+    return blend_im
 
 def visulize_heatmaps_with_image(heatmap, image):
     heatmap = np.amax(heatmap,axis=0)

@@ -47,18 +47,12 @@ class FashionPediaDataset(Dataset):
         boxes = np.array(boxes, dtype=np.float32)
         labels = np.array(labels, dtype=np.int64)
 
-        if self.torchvision_format:
-            boxes = torch.from_numpy(boxes)
-            labels = torch.from_numpy(labels)
-            img = to_tensor(img)
 
         if self.add_mask:
             height = image['height']
             width = image['width']
             masks = [get_binary_mask(obj['segmentation'], height, width, use_compressed_rle=True) for obj in image['objects']]
             masks = np.array(masks, dtype=np.uint8)
-            if self.torchvision_format:
-                masks = torch.from_numpy(masks)
 
         inputs = {}
         inputs['data'] = img
@@ -67,20 +61,25 @@ class FashionPediaDataset(Dataset):
 
         targets = {}
         targets["boxes"] = boxes
-        if self.torchvision_format:
-            targets["labels"] = labels 
-        else:
-            targets["cat_labels"] = labels 
+        targets["cat_labels"] = labels 
         targets["labels"] = labels
         if self.add_mask:
             targets["masks"] = masks
         targets["image_id"] = image_id
         #target["area"] = area
         #target["iscrowd"] = iscrowd
+        # The transform funcs are based on Image liberary
         if self._transforms is not None:
             inputs, targets = self._transforms(inputs, targets)
 
         if self.torchvision_format:
+            boxes = torch.from_numpy(targets['boxes'])
+            labels = torch.from_numpy(targets['labels'])
+            img = to_tensor(inputs['data'])
+            targets["boxes"] = boxes
+            targets["labels"] = labels 
+            if self.add_mask:
+                targets["masks"] = torch.from_numpy(targets['masks'])
             return img, targets
         return inputs, targets
 

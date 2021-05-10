@@ -8,6 +8,9 @@ except ImportError:
 import numpy as np
 import numbers
 import random
+import cv2
+import math
+
 
 Iterable = collections.abc.Iterable
 Sequence = collections.abc.Sequence
@@ -367,8 +370,8 @@ def random_crop_boxes(boxes, position):
 
 def scale(image, scale):
     width, height = image.size
-    width = int(width*scale)
-    height = int(height*scale)
+    width = round(width*scale)
+    height = round(height*scale)
     return image.resize((width, height))
 
 def scale_box(boxes, scale):
@@ -382,3 +385,52 @@ def surrounding_box(boxes):
     surrounding_box = np.array([x1,y1,x2,y2])
     return surrounding_box
 
+def mirror_masks(masks):
+    '''
+        masks: shape: (channel, height, width)
+    '''
+    #assert len(masks.shape) == 3 , "shape of mask is {}".format(masks.shape)
+
+    masks = np.flip(masks, axis=2)
+    #masks = np.transpose(masks,(1,2,0))
+    #masks = cv2.flip(masks, 1)
+    ## when mask shape = (1, h, w), the cv2 will make ignore the channel,
+    ## so we need to expand the dim back
+    #if len(masks.shape) == 2:
+    #    masks = np.expand_dims(masks, 0)
+    #else:
+    #    masks = np.transpose(masks,(2,0,1))
+    return masks
+
+def scale_masks(masks, scale):
+    '''
+        masks: shape: (channel, height, width)
+    '''
+    masks = torch.from_numpy(masks.copy())
+    masks = torch.nn.functional.interpolate(masks[None].float(),scale_factor=scale,mode='bilinear',align_corners=False)[0].byte()
+    masks = masks.numpy()
+    #masks = np.transpose(masks,(1,2,0))
+    #masks = cv2.resize(masks, dsize=None, fx=scale, fy=scale, interpolation=cv2.INTER_LINEAR)
+    ## when mask shape = (1, h, w), the cv2 will make ignore the channel,
+    ## so we need to expand the dim back
+    #if len(masks.shape) == 2:
+    #    masks = np.expand_dims(masks, 0)
+    #else:
+    #    masks = np.transpose(masks,(2,0,1))
+    return masks
+
+def crop_masks(masks, position):
+    '''
+        masks: shape: (channel, height, width)
+        position: (x1,y1,x2,y2)
+    '''
+    x1, y1, x2, y2 = position
+    width = x2 - x1
+    height = y2 - y1
+    c, h, w = masks.shape
+    #if h-y1 >= height and w-x1 >= width:
+    #    return masks[:,y1:y2, x1:x2]
+    #else:
+    out = np.zeros((c, height, width),dtype=masks.dtype)
+    out[:,0:h-y1,0:w-x1] = masks[:,y1:y2, x1:x2]
+    return out

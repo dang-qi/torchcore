@@ -300,10 +300,11 @@ class GeneralRCNNTransformTV(object):
         return inputs, targets
 
 class RandomMirror(object):
-    def __init__(self, probability=0.5, inputs_box_keys=[], targets_box_keys=['boxes']):
+    def __init__(self, probability=0.5, inputs_box_keys=[], targets_box_keys=['boxes'], mask_key=None):
         self.probability = probability
         self.inputs_box_keys = inputs_box_keys
         self.targets_box_keys = targets_box_keys
+        self.mask_key = mask_key
 
     def __call__(self, inputs, targets):
         inputs['mirrored'] = False
@@ -317,6 +318,8 @@ class RandomMirror(object):
 
             for target_key in self.targets_box_keys:
                 targets[target_key] = F.mirror_boxes(targets[target_key], im_width)
+            if self.mask_key is not None:
+                targets[self.mask_key] = F.mirror_masks(targets[self.mask_key])
         
         return inputs, targets
 
@@ -329,7 +332,7 @@ class RandomCrop(object):
        targets_other_key can be labels, etc
        After cropping, the invalid boxes and labels are deleted
     '''
-    def __init__(self, size, box_inside, target_box_main_key='boxes', inputs_box_keys=[], targets_box_keys=[], targets_other_key=['labels']):
+    def __init__(self, size, box_inside, target_box_main_key='boxes', inputs_box_keys=[], targets_box_keys=[], targets_other_key=['labels'], mask_key=None):
         if isinstance(size, Iterable):
             self.size = size
         else:
@@ -344,6 +347,7 @@ class RandomCrop(object):
             assert target_box_main_key is not None
         if target_box_main_key is not None:
             assert isinstance(target_box_main_key, str)
+        self.mask_key = mask_key
 
 
     def __call__(self, inputs, targets):
@@ -366,6 +370,9 @@ class RandomCrop(object):
                         inputs[k] = F.random_crop_boxes(inputs[k], position)
                     for k in self.targets_box_keys:
                         targets[k] = F.random_crop_boxes(targets[k], position)
+                    if self.mask_key is not None:
+                        targets[self.mask_key] = targets[self.mask_key][keep]
+                        targets[self.mask_key] = F.crop_masks(targets[self.mask_key], position)
                     break
                 else:
                     continue
@@ -375,7 +382,7 @@ class RandomCrop(object):
         return inputs, targets
 
 class RandomScale(object):
-    def __init__(self, low, high, inputs_box_keys=[], targets_box_keys=['boxes']):
+    def __init__(self, low, high, inputs_box_keys=[], targets_box_keys=['boxes'], mask_key=None):
         assert low > 0
         assert high > 0
         assert low<=high
@@ -383,6 +390,7 @@ class RandomScale(object):
         self.high = high
         self.inputs_box_keys = inputs_box_keys
         self.targets_box_keys = targets_box_keys
+        self.mask_key = mask_key
 
     def __call__(self, inputs, targets):
         scale = random.uniform(self.low, self.high)
@@ -399,11 +407,13 @@ class RandomScale(object):
 
         for target_key in self.targets_box_keys:
             targets[target_key] = F.scale_box[targets[target_key], scale]
+        if self.mask_key is not None:
+            targets[self.mask_key] = F.scale_masks(targets[self.mask_key], scale)
         
         return inputs, targets
 
 class RandomAbsoluteScale(object):
-    def __init__(self, low, high, inputs_box_keys=[], targets_box_keys=['boxes']):
+    def __init__(self, low, high, inputs_box_keys=[], targets_box_keys=['boxes'], mask_key=None):
         assert low > 0
         assert high > 0
         assert low<=high
@@ -411,6 +421,7 @@ class RandomAbsoluteScale(object):
         self.high = int(high)
         self.inputs_box_keys = inputs_box_keys
         self.targets_box_keys = targets_box_keys
+        self.mask_key = mask_key
 
     def __call__(self, inputs, targets):
         longgest_side = random.randint(self.low, self.high)
@@ -430,6 +441,8 @@ class RandomAbsoluteScale(object):
 
         for target_key in self.targets_box_keys:
             targets[target_key] = F.scale_box(targets[target_key], scale)
+        if self.mask_key is not None:
+            targets[self.mask_key] = F.scale_masks(targets[self.mask_key], scale)
         
         return inputs, targets
 

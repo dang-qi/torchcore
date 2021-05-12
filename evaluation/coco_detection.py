@@ -4,13 +4,14 @@ import json
 from pycocotools.coco import COCO
 from pycocotools.cocoeval import COCOeval
 class COCOEvaluator():
-    def __init__(self, dataset_name=None, gt_path=None) -> None:
+    def __init__(self, evaluate_type='bbox', dataset_name=None, gt_path=None) -> None:
         assert dataset_name is not None or gt_path is not None
         self.dataset_name = dataset_name
         if gt_path is not None:
             self.gt_path = gt_path
         else:
             self.set_gt_path(dataset_name)
+        self.evaluate_type = evaluate_type
 
     def set_gt_path(self, dataset_name):
         if dataset_name not in ['coco','coco_person', 'modanet', 'fashionpedia']:
@@ -27,6 +28,14 @@ class COCOEvaluator():
         self.gt_path = gt_json
 
     def evaluate(self, result_path):
+        if isinstance(self.evaluate_type, str):
+            self.evaluate_once(result_path, self.evaluate_type)
+        else:
+            for eval_type in self.evaluate_type:
+                assert eval_type in ['segm','bbox','keypoints']
+                self.evaluate_once(result_path, eval_type)
+
+    def evaluate_once(self, result_path, eval_type):
         # only support bbox mode for now
         dataset = self.dataset_name
         # we need to map the category ids back
@@ -38,6 +47,7 @@ class COCOEvaluator():
                 for result in results:
                     temp_id = result['category_id']
                     result['category_id'] = cat_ids[temp_id-1]
+            result_path = 'coco_'+result_path
             with open(result_path,'w') as f:
                 json.dump(results,f)
         if dataset == 'fashionpedia':
@@ -47,9 +57,10 @@ class COCOEvaluator():
                 for result in results:
                     temp_id = result['category_id']
                     result['category_id'] = temp_id-1
+            result_path = 'fashionpedia_'+result_path
             with open(result_path,'w') as f:
                 json.dump(results,f)
-        annType = 'bbox'
+        annType = eval_type
         cocoGt=COCO(self.gt_path)
         cocoDt=cocoGt.loadRes(result_path)
 

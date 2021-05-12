@@ -8,6 +8,7 @@ import tqdm
 import json
 import datetime
 import math
+import copy
 
 import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
@@ -15,7 +16,8 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from ..tools.logger import Logger
 from ..evaluation import COCOEvaluator
 
-class trainer :
+
+class BaseTrainer :
     def __init__( self, cfg, model, device, trainset, testset=None, optimizer=None, scheduler=None ):
         self._cfg = cfg
         self._device = device
@@ -116,7 +118,7 @@ class trainer :
 
         print('Average loss : ', np.mean(loss_values))
 
-    def _validate( self ):
+    def validate( self ):
         self._model['net'].eval()
 
         bench = self._testset.benchmark()
@@ -139,7 +141,7 @@ class trainer :
             self._train()
 
             if self._testset is not None :
-                self._validate()
+                self.validate()
             self._epoch = i
             if self._scheduler is not None:
                 self._scheduler.step()
@@ -148,19 +150,74 @@ class trainer :
         state_dict = torch.load(model_path)['state_dict']
         self._model.load_state_dict(state_dict)
 
-    def save_training(self, path, to_print=True):
-        if isinstance(self._model, nn.DataParallel):
-            model_state_dict = self._model.module.state_dict()
+    def save_training(self, path, to_print=True,epoch_based=True):
+        if isinstance(self._model, DDP):
+            #if self.rank == 0:
+            if self.is_main_process():
+                state_dict = self._model.state_dict()
+            else:
+                return
+        elif isinstance(self._model, torch.nn.DataParallel):
+            state_dict = self._model.module.state_dict()
         else:
-            model_state_dict = self._model.state_dict()
-        torch.save({
-            'epoch': self._epoch,
-            'model_state_dict': model_state_dict,
-            'optimizer_state_dict': self._optimizer.state_dict(),
-            'scheduler_state_dict': self._scheduler if self._scheduler is None else self._scheduler.state_dict()
-        }, path)
+            state_dict =self._model.state_dict()
+        if epoch_based:
+            torch.save({
+                'epoch': self._epoch,
+                'model_state_dict': state_dict,
+                'optimizer_state_dict': self._optimizer.state_dict(),
+                'scheduler':self._scheduler.state_dict(),
+                'niter':self._niter
+            }, path)
+            folder = os.path.dirname(path)
+            torch.save({
+                'epoch': self._epoch,
+                'model_state_dict': state_dict,
+                'optimizer_state_dict': self._optimizer.state_dict(),
+                'scheduler':self._scheduler.state_dict(),
+                'niter':self._niter
+            }, os.path.join(folder, '{}_last.pth'.format(self._tag)))
+        else: # step based
+            torch.save({
+                'step': self._step,
+                'model_state_dict': state_dict,
+                'optimizer_state_dict': self._optimizer.state_dict(),
+                'scheduler':self._scheduler.state_dict(),
+                'nstep':self._nstep
+            }, path)
+            folder = os.path.dirname(path)
+            torch.save({
+                'step': self._step,
+                'model_state_dict': state_dict,
+                'optimizer_state_dict': self._optimizer.state_dict(),
+                'scheduler':self._scheduler.state_dict(),
+                'nstep':self._nstep
+            }, os.path.join(folder, '{}_last.pth'.format(self._tag)))
+
         if to_print:
             print('The checkpoint has been saved to {}'.format(path))
+
+    def resume_training(self, path, device, to_print=True, epoch_based=True):
+        if isinstance(self._model, DDP):
+            dist.barrier()
+        checkpoint = torch.load(path, map_location=device)
+        if epoch_based:
+            self._epoch = checkpoint['epoch']
+        else:
+            self.start_step = checkpoint['step']
+        self._model.load_state_dict(checkpoint['model_state_dict'])
+        self._optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        self.move_optimizer_to_device(self._optimizer, device)
+        if 'scheduler' in checkpoint:
+            self._scheduler.load_state_dict(checkpoint['scheduler'])
+        if to_print:
+            print('Chekpoint has been loaded from {}'.format(path))
+    
+    def move_optimizer_to_device(self, optimizer, device):
+        for state in optimizer.state.values():
+            for k, v in state.items():
+                if isinstance(v, torch.Tensor):
+                    state[k] = v.to(device)
 
     def load_training(self, path, to_print=True):
         checkpoint = torch.load(path)
@@ -171,8 +228,8 @@ class trainer :
         if to_print:
             print('Chekpoint has been loaded from {}'.format(path))
 
-class trainer_dist(trainer):
-    def __init__( self, cfg, model, device, trainset, tag='', testset=None, dataset_name=None, train_sampler=None, rank=None, benchmark=None, criterias=None, log_print_iter=1000, evaluator=None, clip_gradient=None ):
+class DistributedTrainer(BaseTrainer):
+    def __init__( self, cfg, model, device, trainset, tag='', testset=None, dataset_name=None, train_sampler=None, rank=None, benchmark=None, log_print_iter=1000, evaluator=None, clip_gradient=None, epoch_based=True, eval_step_interval=20000, save_step_interval=20000):
         self._cfg = cfg
         self._device = device
         self._optimizer = None
@@ -191,10 +248,19 @@ class trainer_dist(trainer):
         self._trainset = trainset
         self._testset = testset
         self._benchmark = benchmark
-        self._criterias = criterias
         self._dataset_name = dataset_name
+        self._epoch_based = epoch_based
+        self.eval_step_interval = eval_step_interval
+        self.save_step_interval = save_step_interval
         self._epoch = 0
-        self._niter = cfg.optimizer.n_iter
+        self.loss_logger = LossLogger()
+        if trainset is not None:
+            self.train_set_iter = iter(self._trainset)
+        if epoch_based:
+            self._niter = cfg.optimizer.n_iter
+        else: # step_based
+            self.start_step = 1
+            self.end_step = cfg.optimizer.total_step
         self._clip_gradient = clip_gradient
         if evaluator is None:
             self.evaluator = COCOEvaluator(dataset_name=dataset_name)
@@ -216,7 +282,36 @@ class trainer_dist(trainer):
         else:
             return False
 
-    def train( self ):
+    def train(self):
+        if self._epoch_based:
+            self.train_epoch()
+        else:       #step based training schedual
+            self.train_step()
+
+    def train_step( self ):
+
+        self._optimizer.zero_grad()
+        for step in tqdm.tqdm(range(self.start_step, self.end_step+1),desc='Training'):
+            self._step = step
+            self._train_step()
+
+            if self._testset is not None and step%self.eval_step_interval == 0 :
+                if self.distributed:
+                    dist.barrier()
+                #if not self.distributed or self.rank==0:
+                if self.is_main_process():
+                    self.validate()
+                if self.distributed:
+                    dist.barrier()
+
+            if self.is_main_process():
+                if step % self.save_step_interval == 0 or step==self.end_step:
+                    self.save_training(self._cfg.path.CHECKPOINT.format(self._step), epoch_based=False)
+
+            if hasattr(self, '_scheduler'):
+                self._scheduler.step()
+
+    def train_epoch( self ):
         #if self._testset is not None :
         #    self._validate()
 
@@ -226,22 +321,24 @@ class trainer_dist(trainer):
             if self.is_main_process():
                 print("Epoch %d/%d" % (i,self._niter))
                 self._logger.info('epoch {}\n'.format(i))
-            self._train()
+            self._model.train()
+            self._train_epoch()
 
             if self._testset is not None and i%1 == 0 :
                 if self.distributed:
                     dist.barrier()
                 #if not self.distributed or self.rank==0:
                 if self.is_main_process():
-                    self._validate()
+                    self.validate()
                 if self.distributed:
                     dist.barrier()
             self._epoch = i
-            self.save_training(self._cfg.path.CHECKPOINT.format(self._epoch))
+            if self.is_main_process():
+                self.save_training(self._cfg.path.CHECKPOINT.format(self._epoch))
             if hasattr(self, '_scheduler'):
                 self._scheduler.step()
 
-    def _validate( self ):
+    def validate( self ):
         if isinstance(self._model, DDP):
             if not self.is_main_process():
                 return
@@ -280,7 +377,69 @@ class trainer_dist(trainer):
     def eval_result(self, dataset='coco_person'):
         raise NotImplementedError
 
-    def _train( self ):
+    def reset_trainset(self):
+        self._epoch += 1
+        if self._train_sampler is not None:
+            self._train_sampler.set_epoch(self._epoch)
+        self.train_set_iter = iter(self._trainset)
+
+    def _train_step( self ):
+        self._model.train()
+
+        try:
+            data = next(self.train_set_iter)
+        except StopIteration:
+            self.reset_trainset()
+            data = next(self.train_set_iter)
+        inputs, targets = data
+
+        inputs = self._set_device( inputs )
+        targets = self._set_device( targets )
+
+        loss_dict = self._model(inputs, targets)
+
+        # add the losses for each part
+        #loss_sum = sum(loss for loss in loss_dict.values())
+        loss_sum=0
+        for single_loss in loss_dict:
+            loss_sum = loss_sum + loss_dict[single_loss]
+
+        loss_sum_num = loss_sum.item()
+        if not math.isfinite(loss_sum_num):
+            #print("Loss is {}, stopping training".format(loss_sum))
+            self._optimizer.zero_grad()
+            print('wrong targets:',targets)
+            print("Loss is {}, skip this batch".format(loss_sum_num))
+            print(loss_dict)
+            return
+            #sys.exit(1)
+        self.loss_logger.update(loss_dict)
+
+        # Computing gradient and do SGD step
+        loss_sum.backward()
+
+        if self._clip_gradient is not None:
+            torch.nn.utils.clip_grad_norm_(self._model.parameters(), self._clip_gradient)
+
+        if self._step % self._cfg.accumulation_step == 0:
+            self._optimizer.step()
+            self._optimizer.zero_grad()
+
+        if self.is_main_process():
+            if self._step % self.log_print_iter == 1:
+                self._logger.info('{} '.format(self._step+1))
+                loss_str = ''
+                average_losses = self.loss_logger.get_last_average()
+                for loss in average_losses:
+                    loss_num = average_losses[loss]
+                    self._logger.info('{} '.format(loss_num))
+                    loss_str += (' {} loss:{}, '.format(loss, loss_num))
+                print(loss_str[:-2])
+                average_losses = {}
+                self._logger.info('\n')
+            
+
+    def _train_epoch( self ):
         self._model.train()
 
         loss_values = []
@@ -379,34 +538,6 @@ class trainer_dist(trainer):
 
         print('Loss log path is: {}'.format(train_path))
 
-    def save_training(self, path, to_print=True):
-        if isinstance(self._model, DDP):
-            #if self.rank == 0:
-            if self.is_main_process():
-                state_dict = self._model.state_dict()
-            else:
-                return
-        elif isinstance(self._model, torch.nn.DataParallel):
-            state_dict = self._model.module.state_dict()
-        else:
-            state_dict =self._model.state_dict()
-        torch.save({
-            'epoch': self._epoch,
-            'model_state_dict': state_dict,
-            'optimizer_state_dict': self._optimizer.state_dict(),
-            'scheduler':self._scheduler.state_dict(),
-            'niter':self._niter
-        }, path)
-        folder = os.path.dirname(path)
-        torch.save({
-            'epoch': self._epoch,
-            'model_state_dict': state_dict,
-            'optimizer_state_dict': self._optimizer.state_dict(),
-            'scheduler':self._scheduler.state_dict(),
-            'niter':self._niter
-        }, os.path.join(folder, '{}_last.pth'.format(self._tag)))
-        if to_print:
-            print('The checkpoint has been saved to {}'.format(path))
 
     #def resume_training(self, path, device, to_print=True):
     #    if isinstance(self._model, DDP):
@@ -421,22 +552,42 @@ class trainer_dist(trainer):
     #    if to_print:
     #        print('Chekpoint has been loaded from {}'.format(path))
 
-    def resume_training(self, path, device, to_print=True):
-        if isinstance(self._model, DDP):
-            dist.barrier()
-        checkpoint = torch.load(path, map_location=device)
-        self._epoch = checkpoint['epoch']
-        self._model.load_state_dict(checkpoint['model_state_dict'])
-        self._optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        self.move_optimizer_to_device(self._optimizer, device)
-        self._niter = self._niter
-        if 'scheduler' in checkpoint:
-            self._scheduler.load_state_dict(checkpoint['scheduler'])
-        if to_print:
-            print('Chekpoint has been loaded from {}'.format(path))
-    
-    def move_optimizer_to_device(self, optimizer, device):
-        for state in optimizer.state.values():
-            for k, v in state.items():
-                if isinstance(v, torch.Tensor):
-                    state[k] = v.to(device)
+class LossLogger():
+    def __init__(self) -> None:
+        self.loss = None
+        self.loss_average = None
+        self.loss_count = 0
+        self.loss_average_count = 0
+
+    def get_last_average(self):
+        average = {}
+        for k,v in self.loss_average.items():
+            average[k] = v / self.loss_average_count
+        self.loss_average_count = 0
+        self.loss_average = None
+        return average
+
+    def update(self, loss_dict):
+        if self.loss is None:
+            self.loss = {}
+            for k in loss_dict.keys():
+                self.loss[k] = 0
+
+        self.loss_count += 1
+        for k,v in loss_dict.items():
+            self.loss[k] += v.item()
+
+        if self.loss_average is None:
+            self.loss_average = {}
+            for k in loss_dict.keys():
+                self.loss_average[k] = 0
+
+        self.loss_average_count += 1
+        for k,v in loss_dict.items():
+            self.loss_average[k] += v.item()
+
+
+
+# to make the older version compatible
+trainer = BaseTrainer
+trainer_dist = DistributedTrainer

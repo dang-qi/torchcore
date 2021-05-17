@@ -11,6 +11,7 @@ from torch.nn import functional as F
 
 from .tools import AnchorBoxesCoder
 from .tools import PosNegSampler
+from torchvision.models.detection._utils import BalancedPositiveNegativeSampler
 
 class MyAnchorGenerator(AnchorGenerator):
     def __init__(
@@ -81,18 +82,19 @@ class MyAnchorGenerator(AnchorGenerator):
             device = base_anchors.device
 
             # For output anchor, compute [x_center, y_center, x_center, y_center]
-            shifts_x = (torch.arange(
-                0, grid_width, dtype=torch.float32, device=device
-            )+0.5) * stride_width
-            shifts_y = (torch.arange(
-                0, grid_height, dtype=torch.float32, device=device
-            )+0.5) * stride_height
             #shifts_x = (torch.arange(
             #    0, grid_width, dtype=torch.float32, device=device
-            #)) * stride_width
+            #)+0.5) * stride_width
             #shifts_y = (torch.arange(
             #    0, grid_height, dtype=torch.float32, device=device
-            #)) * stride_height
+            #)+0.5) * stride_height
+            ### torchvision version
+            shifts_x = (torch.arange(
+                0, grid_width, dtype=torch.float32, device=device
+            )) * stride_width
+            shifts_y = (torch.arange(
+                0, grid_height, dtype=torch.float32, device=device
+            )) * stride_height
             shift_y, shift_x = torch.meshgrid(shifts_y, shifts_x)
             shift_x = shift_x.reshape(-1)
             shift_y = shift_y.reshape(-1)
@@ -115,7 +117,9 @@ class MyRegionProposalNetwork(RegionProposalNetwork):
         self.anchor_generator = anchor_generator
         self.head = head
         self.box_coder = AnchorBoxesCoder(box_code_clip=math.log(1000./16))
-        self.pos_neg_sampler = PosNegSampler(pos_num=128, neg_num=128)
+        #self.pos_neg_sampler = PosNegSampler(pos_num=128, neg_num=128)
+        self.pos_neg_sampler = PosNegSampler(pos_num=128, neg_num=384)
+        #self.tv_sampler = BalancedPositiveNegativeSampler(512, 0.25)
         self.cfg = cfg
 
         self.nms_thresh = cfg.nms_thresh
@@ -190,7 +194,6 @@ class MyRegionProposalNetwork(RegionProposalNetwork):
             #print('all the boxes are:', boxes)
             pos_boxes = [target['boxes'][ind] for target, ind in zip(targets, ind_pos_boxes)]
             pos_anchor = [target[ind] for target, ind in zip(anchors, ind_pos_anchor)]
-            #return pos_boxes, pos_anchor
             regression_targets  = self.box_coder.encode(pos_anchor, pos_boxes )
             #print('regression targets shapes',[t.shape for t in regression_targets])
             #print('regression targets:', regression_targets)
@@ -207,7 +210,29 @@ class MyRegionProposalNetwork(RegionProposalNetwork):
         return inputs['dataset_label'] == self.dataset_label
 
     def compute_loss(self, pred_class, pred_bbox_deltas, ind_pos_anchor, ind_neg_anchor, regression_targets):
+        ######DEBUG
+        #torch.manual_seed(0)
+        #for i in range(2):
+        #    print(len(ind_neg_anchor[i]))
+        #########
+
         keep_pos, keep_neg = self.pos_neg_sampler.sample_batch(ind_pos_anchor, ind_neg_anchor)
+
+        ######DEBUG
+        #matched_idxs = [torch.full((len(pred_class_single),), -1, dtype=torch.float32, device=pred_class_single.device) for pred_class_single in pred_class]
+        #for i in range(len(matched_idxs)):
+        #    matched_idxs[i][ind_pos_anchor[i]]=1
+        #    matched_idxs[i][ind_neg_anchor[i]]=0
+        #torch.manual_seed(0)
+        #sampled_pos, sampled_neg = self.tv_sampler(matched_idxs)
+        #print('keep pos', ind_pos_anchor[0][keep_pos[0]])
+        #print('tv keep pos', torch.where(sampled_pos[0]))
+        #seta = set(ind_pos_anchor[0][keep_pos[0]].numpy().tolist())
+        #setb = set(torch.where(sampled_pos[0])[0].numpy().tolist())
+        #print(seta-setb)
+        #print(setb-seta)
+        #print(seta.difference(setb))
+        #######
 
         ind_pos_anchor = [anchor_ind[keep] for anchor_ind, keep in zip(ind_pos_anchor, keep_pos)]
         ind_neg_anchor = [anchor_ind[keep] for anchor_ind, keep in zip(ind_neg_anchor, keep_neg)]
@@ -237,6 +262,7 @@ class MyRegionProposalNetwork(RegionProposalNetwork):
         #print('targets shape:', regression_targets.shape)
         #loss_box = self.smooth_l1_loss(pred_bbox_deltas, regression_targets) / label_pos.numel()
         # TODO this is the loss from torchvision, reduced the wight of box loss
+        #print(len(pred_bbox_deltas))
         loss_box = self.smooth_l1_loss(pred_bbox_deltas, regression_targets) / label_target.numel()
         #loss_box = self.smooth_l1_loss(pred_bbox_deltas, regression_targets) 
         #loss_box = det_utils.smooth_l1_loss(

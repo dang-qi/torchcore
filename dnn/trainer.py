@@ -183,7 +183,7 @@ class BaseTrainer :
                 'model_state_dict': state_dict,
                 'optimizer_state_dict': self._optimizer.state_dict(),
                 'scheduler':self._scheduler.state_dict(),
-                'nstep':self._nstep
+                'nstep':self._step
             }, path)
             folder = os.path.dirname(path)
             torch.save({
@@ -191,7 +191,7 @@ class BaseTrainer :
                 'model_state_dict': state_dict,
                 'optimizer_state_dict': self._optimizer.state_dict(),
                 'scheduler':self._scheduler.state_dict(),
-                'nstep':self._nstep
+                'nstep':self._step
             }, os.path.join(folder, '{}_last.pth'.format(self._tag)))
 
         if to_print:

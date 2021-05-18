@@ -117,8 +117,8 @@ class MyRegionProposalNetwork(RegionProposalNetwork):
         self.anchor_generator = anchor_generator
         self.head = head
         self.box_coder = AnchorBoxesCoder(box_code_clip=math.log(1000./16))
-        #self.pos_neg_sampler = PosNegSampler(pos_num=128, neg_num=128)
-        self.pos_neg_sampler = PosNegSampler(pos_num=128, neg_num=384)
+        self.pos_neg_sampler = PosNegSampler(pos_num=128, neg_num=128)
+        #self.pos_neg_sampler = PosNegSampler(pos_num=256, neg_num=256)
         #self.tv_sampler = BalancedPositiveNegativeSampler(512, 0.25)
         self.cfg = cfg
 
@@ -197,6 +197,7 @@ class MyRegionProposalNetwork(RegionProposalNetwork):
             regression_targets  = self.box_coder.encode(pos_anchor, pos_boxes )
             #print('regression targets shapes',[t.shape for t in regression_targets])
             #print('regression targets:', regression_targets)
+
             loss_objectness, loss_rpn_box_reg = self.compute_loss(
                 pred_class, pred_bbox_deltas, ind_pos_anchor, ind_neg_anchor, regression_targets)
             #print('loss')
@@ -210,11 +211,6 @@ class MyRegionProposalNetwork(RegionProposalNetwork):
         return inputs['dataset_label'] == self.dataset_label
 
     def compute_loss(self, pred_class, pred_bbox_deltas, ind_pos_anchor, ind_neg_anchor, regression_targets):
-        ######DEBUG
-        #torch.manual_seed(0)
-        #for i in range(2):
-        #    print(len(ind_neg_anchor[i]))
-        #########
 
         keep_pos, keep_neg = self.pos_neg_sampler.sample_batch(ind_pos_anchor, ind_neg_anchor)
 
@@ -237,9 +233,7 @@ class MyRegionProposalNetwork(RegionProposalNetwork):
         ind_pos_anchor = [anchor_ind[keep] for anchor_ind, keep in zip(ind_pos_anchor, keep_pos)]
         ind_neg_anchor = [anchor_ind[keep] for anchor_ind, keep in zip(ind_neg_anchor, keep_neg)]
         #print('keep pos', keep_pos)
-        #print('ind_pos_anchor', ind_pos_anchor)
         #print('ind_neg_anchor', ind_neg_anchor)
-        #print('regression targets', regression_targets)
 
         regression_targets = [target[ind] for target, ind in zip(regression_targets, keep_pos)]
         regression_targets = torch.cat(regression_targets, dim=0)
@@ -262,7 +256,6 @@ class MyRegionProposalNetwork(RegionProposalNetwork):
         #print('targets shape:', regression_targets.shape)
         #loss_box = self.smooth_l1_loss(pred_bbox_deltas, regression_targets) / label_pos.numel()
         # TODO this is the loss from torchvision, reduced the wight of box loss
-        #print(len(pred_bbox_deltas))
         loss_box = self.smooth_l1_loss(pred_bbox_deltas, regression_targets) / label_target.numel()
         #loss_box = self.smooth_l1_loss(pred_bbox_deltas, regression_targets) 
         #loss_box = det_utils.smooth_l1_loss(
@@ -305,18 +298,24 @@ class MyRegionProposalNetwork(RegionProposalNetwork):
         # value with the boxes  
 
         match_box_ind = torch.full_like(iou_mat[:,0], -1, dtype=torch.int64)
-        index_neg_anchor, _ = torch.where(iou_mat<low_thresh)
+
+        # set the negtive index
+        max_val_anchor, max_box_ind = iou_mat.max(dim=1)
+        index_neg_anchor = torch.where(max_val_anchor<low_thresh)
         match_box_ind[index_neg_anchor] = -2 # -2 means negtive anchors
 
-        max_val, _ = iou_mat.max(dim=0)
-        inds_anchor, ind_box = torch.where(iou_mat==max_val.expand_as(iou_mat))
-        match_box_ind[inds_anchor] = ind_box
 
         ##TODO stuff added, maybe need to delete these
         #max_val, max_box_ind = iou_mat.max(dim=1)
         #match_box_ind[inds_anchor] = max_box_ind[inds_anchor]
         
 
+        # set the vague ones
+        # if a anchor can match two boxes, still keep the biggest one!!!!
+        max_val, _ = iou_mat.max(dim=0)
+        inds_anchor, ind_box = torch.where(iou_mat==max_val.expand_as(iou_mat))
+        #match_box_ind[inds_anchor] = ind_box
+        match_box_ind[inds_anchor] = max_box_ind[inds_anchor]
 
         #index_mat = torch.zeros_like(iou_mat)
         #ind1 = torch.arange(M)
@@ -325,9 +324,10 @@ class MyRegionProposalNetwork(RegionProposalNetwork):
         #print('indexes shape:', indexes.shape)
         #print('iou mat', iou_mat[inds_max])
         #index_mat[inds_max] = 1
-        inds_anchor_above, inds_box_above = torch.where(iou_mat>=high_thresh)
-        match_box_ind[inds_anchor_above] = inds_box_above
+        inds_anchor_above = max_val_anchor>=high_thresh
+        match_box_ind[inds_anchor_above] = max_box_ind[inds_anchor_above]
         #index_mat[index_above_thre] = 1
+
 
         # the whole thing here is to make sure each anchor only map to one box (not two or more)
         # otherwise we can use: index_pos_anchor, index_pos_boxes = torch.where(index_mat==1)

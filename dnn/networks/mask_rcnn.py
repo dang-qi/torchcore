@@ -5,17 +5,18 @@ from collections import OrderedDict
 from .pooling import RoiAliagnFPN
 from .general_detector import GeneralDetector
 from torchvision.ops import roi_align, nms
+from .faster_rcnn_fpn import FasterRCNNFPN
 
-class FasterRCNNFPN(GeneralDetector):
-    def __init__(self, backbone, neck=None, heads=None, cfg=None, training=True, rpn_feature_names=['0','1','2','3', 'pool'], roi_feature_names=['0','1','2','3'], debug_time=False, just_rpn=False):
+class MaskRCNN(FasterRCNNFPN):
+    def __init__(self, backbone, neck=None, heads=None, cfg=None, training=True, feature_names=['0','1','2','3'], debug_time=False, just_rpn=False):
         super(GeneralDetector, self).__init__()
         self.backbone = backbone
         self.neck = neck
         self.rpn = heads['rpn']
         self.roi_head = heads['bbox']
+        self.mask_head = heads['mask']
         self.training = training
-        self.rpn_feature_names = rpn_feature_names
-        self.roi_feature_names = roi_feature_names
+        self.feature_names = feature_names
         self.strides = None
         self.just_rpn=just_rpn
 
@@ -40,33 +41,35 @@ class FasterRCNNFPN(GeneralDetector):
 
         #print('strides', strides)
         # This is new place to try
-        rpn_features = OrderedDict()
-        for k in self.rpn_feature_names:
-            rpn_features[k] = features[k]
+        features_new = OrderedDict()
+        for k in self.feature_names:
+            features_new[k] = features[k]
+        features = features_new
 
         if self.training:
-            proposals, losses_rpn = self.rpn(inputs, rpn_features, targets)
+            proposals, losses_rpn = self.rpn(inputs, features, targets)
         else:
-            proposals, scores = self.rpn(inputs, rpn_features, targets)
+            proposals, scores = self.rpn(inputs, features, targets)
 
         if debug_time:
             rpn_time = time.time()
             self.total_time['rpn'] += rpn_time - feature_time 
 
 
-        roi_input_features = OrderedDict()
-        for k in self.feature_names:
-            roi_input_features[k] = features[k]
-
+        ## This is old place
+        #features_new = OrderedDict()
+        #for k in self.feature_names:
+        #    features_new[k] = features[k]
+        #features = features_new
         if self.strides is None:
-            strides = self.get_strides(inputs, roi_input_features)
+            strides = self.get_strides(inputs, features)
         else:
             strides = self.strides
         #for proposal in proposals:
         #    print('proposal shape', proposal.shape)
 
         if self.training:
-            losses_roi = self.roi_head(proposals, roi_input_features, strides, targets=targets)
+            losses_roi = self.roi_head(proposals, features, strides, targets=targets)
             losses = {**losses_rpn, **losses_roi}
             if debug_time:
                 roi_head_time = time.time()
@@ -76,7 +79,7 @@ class FasterRCNNFPN(GeneralDetector):
             if self.just_rpn:
                 results = {'boxes':proposals, 'scores':scores, 'labels':[torch.ones_like(score) for score in scores]}
                 return results
-            results = self.roi_head(proposals, roi_input_features, strides, targets=targets)
+            results = self.roi_head(proposals, features, strides, targets=targets)
             results = self.post_process(results, inputs)
             if debug_time:
                 roi_head_time = time.time()

@@ -5,7 +5,7 @@ from .pooling import RoiAliagnFPN
 from .tools import PosNegSampler
 from .tools import AnchorBoxesCoder
 from torchvision.ops.boxes import batched_nms, box_iou
-from .heads import FastRCNNHead
+from .heads import FastRCNNHead, MaskRCNNHead
 
 class RoINet(nn.Module):
     def __init__(self,cfg):
@@ -22,7 +22,14 @@ class RoINet(nn.Module):
                                       cfg.pool_w,
                                       sampling=2)
         self.faster_rcnn_head = FastRCNNHead(cfg)
-        self.box_coder = AnchorBoxesCoder(box_code_clip=None)
+        if hasattr(cfg, 'mask_head'):
+            if cfg.mask_head:
+                self.mask_rcnn_head = MaskRCNNHead(cfg)
+                self.mask_roi_align = RoiAliagnFPN(cfg.mask_pool_h,
+                                            cfg.mask_pool_w,
+                                            sampling=2)
+                self.mask_loss = nn.BCEWithLogitsLoss(reduce='mean')
+        self.box_coder = AnchorBoxesCoder(box_code_clip=None, weight=cfg.box_weight)
         #self.smooth_l1_loss = nn.SmoothL1Loss(reduction='mean')
         self.smooth_l1_loss = nn.SmoothL1Loss(reduction='sum', beta= 1.0 / 9) 
         self.label_loss = nn.CrossEntropyLoss(reduction='mean')
@@ -34,6 +41,7 @@ class RoINet(nn.Module):
         rois = self.roi_align(features, proposals, strides)
 
         label_pre, bbox_pre = self.faster_rcnn_head(rois)
+        #return proposals, rois, label_pre, bbox_pre
         if self.training:
             if self.dataset_label is not None:
                 # just select the stuff that equals the dataset label to compute loss
@@ -187,7 +195,7 @@ class RoINet(nn.Module):
         #bbox_loss = self.smooth_l1_loss(bbox_pre_pos, target_boxes) / label_pos.numel()
         #weight=torch.tensor([10,10,5,5], dtype=bbox_pre_pos.dtype, device=bbox_pre_pos.device).expand_as(bbox_pre_pos)
         #bbox_loss = self.smooth_l1_loss(bbox_pre_pos*weight, target_boxes*weight) / target_labels.numel()
-        bbox_loss = 10*self.smooth_l1_loss(bbox_pre_pos, target_boxes) / target_labels.numel()
+        bbox_loss = self.smooth_l1_loss(bbox_pre_pos, target_boxes) / target_labels.numel()
         #bbox_loss = self.smooth_l1_loss(bbox_pre_pos, target_boxes) 
         label_loss = self.label_loss(label_pre, target_labels)
         return label_loss, bbox_loss
@@ -244,13 +252,13 @@ class RoINet(nn.Module):
                 iou_mat = box_iou(proposal_image, boxes) # proposal N and target boxes M, iou mat: NxM
                 # set up the max iou for each box as positive 
                 # set up the iou bigger than a value as positive
-                ind_pos_proposal, ind_pos_boxes, ind_neg_proposal, _ = self.match_boxes(iou_mat, low_thresh=self.cfg.iou_low_thre, high_thresh=self.cfg.iou_high_thre)
+                ind_pos_proposal, ind_pos_boxes, ind_neg_proposal = self.match_boxes(iou_mat, low_thresh=self.cfg.iou_low_thre, high_thresh=self.cfg.iou_high_thre)
                 ind_pos_proposal_all.append(ind_pos_proposal)
                 ind_neg_proposal_all.append(ind_neg_proposal)
                 ind_pos_boxes_all.append(ind_pos_boxes)
         return ind_pos_proposal_all, ind_neg_proposal_all, ind_pos_boxes_all
 
-    def match_boxes(self, iou_mat, low_thresh, high_thresh):
+    def match_boxes_old(self, iou_mat, low_thresh, high_thresh):
         # according to faster RCNN paper, the max iou and the one bigger than 
         # high_thresh are positive matches, lower than low_thresh are negtive matches
         # the iou in between are ignored during the training
@@ -267,7 +275,65 @@ class RoINet(nn.Module):
         index_mat[index_above_thre] = 1
         index_pos_anchor, index_pos_boxes = torch.where(index_mat==1)
         index_neg_anchor, index_neg_boxes = torch.where(iou_mat<low_thresh)
+        print('index pos boxes:', index_pos_boxes)
+        #print('index pos anchor:', index_pos_anchor)
+        return index_pos_anchor, index_pos_boxes, index_neg_anchor 
+        
+    def match_boxes(self, iou_mat, low_thresh, high_thresh, allow_low_quality_match=False):
+        # according to faster RCNN paper, the max iou and the one bigger than 
+        # high_thresh are positive matches, lower than low_thresh are negtive matches
+        # the iou in between are ignored during the training
+        # iou mat NxM, N anchor and M target boxes
+        #N, M = iou_mat.shape
+
+        # set up the possible weak but biggest anchors that cover boxes
+        # There are possible more than one anchors have same biggest 
+        # value with the boxes  
+
+        match_box_ind = torch.full_like(iou_mat[:,0], -1, dtype=torch.int64)
+
+        # set the negtive index
+        max_val_anchor, max_box_ind = iou_mat.max(dim=1)
+        index_neg_anchor = torch.where(max_val_anchor<low_thresh)
+        match_box_ind[index_neg_anchor] = -2 # -2 means negtive anchors
+
+
+        ##TODO stuff added, maybe need to delete these
+        #max_val, max_box_ind = iou_mat.max(dim=1)
+        #match_box_ind[inds_anchor] = max_box_ind[inds_anchor]
+
+        # set the vague ones
+        # if a anchor can match two boxes, still keep the biggest one!!!!
+        if  allow_low_quality_match:
+            max_val, _ = iou_mat.max(dim=0)
+            inds_anchor, ind_box = torch.where(iou_mat==max_val.expand_as(iou_mat))
+            #match_box_ind[inds_anchor] = ind_box
+            match_box_ind[inds_anchor] = max_box_ind[inds_anchor]
+
+        #index_mat = torch.zeros_like(iou_mat)
+        #ind1 = torch.arange(M)
+        #print('index mat shape:', index_mat.shape)
+        #print('ind1 shape:', ind1.shape)
+        #print('indexes shape:', indexes.shape)
+        #print('iou mat', iou_mat[inds_max])
+        #index_mat[inds_max] = 1
+        inds_anchor_above = max_val_anchor>=high_thresh
+        match_box_ind[inds_anchor_above] = max_box_ind[inds_anchor_above]
+        #index_mat[index_above_thre] = 1
+
+
+        # the whole thing here is to make sure each anchor only map to one box (not two or more)
+        # otherwise we can use: index_pos_anchor, index_pos_boxes = torch.where(index_mat==1)
+        #max_val_new, index_pos_boxes = index_mat.max(dim=1)
+        #max_val_new = max_val_new > 0
+        #index_pos_anchor = index_pos_anchor[max_val_new]
+        #index_pos_boxes = index_pos_boxes[max_val_new]
+       
+        pos_ind = match_box_ind>= 0
+        index_pos_boxes = match_box_ind[pos_ind]
+        index_pos_anchor = torch.where(pos_ind)[0]
+        index_neg_anchor = torch.where(match_box_ind==-2)[0]
+        #index_pos_anchor, index_pos_boxes = torch.where(index_mat==1)
         #print('index pos boxes:', index_pos_boxes)
         #print('index pos anchor:', index_pos_anchor)
-        return index_pos_anchor, index_pos_boxes, index_neg_anchor, index_neg_boxes
-        
+        return index_pos_anchor, index_pos_boxes, index_neg_anchor

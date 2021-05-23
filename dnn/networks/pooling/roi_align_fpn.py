@@ -5,7 +5,7 @@ from torch import nn
 from torchvision.ops import roi_align, RoIAlign
 
 class RoiAliagnFPN(nn.Module):
-    def __init__(self, pool_h, pool_w, sampling=-1):
+    def __init__(self, pool_h, pool_w, sampling=-1, aligned=False):
         super().__init__()
         self.pool_h = pool_h
         self.pool_w = pool_w
@@ -15,6 +15,7 @@ class RoiAliagnFPN(nn.Module):
         self.sampling = sampling
         self.k_max = None
         self.k_min = None
+        self.aligned = aligned
 
     def forward_old(self, features, boxes, strides):
         feature_keys = list(features.keys())
@@ -58,7 +59,7 @@ class RoiAliagnFPN(nn.Module):
             #print('level {}: stride{}'.format(level, stride))
             #print('feature level shape',feature_level.shape)
             #print('boxes in level', boxes_in_level)
-            roi_level = roi_align(feature_level, boxes_level, self.out_size, spatial_scale=1.0/stride, sampling_ratio=self.sampling,aligned=True)
+            roi_level = roi_align(feature_level, boxes_level, self.out_size, spatial_scale=1.0/stride, sampling_ratio=self.sampling,aligned=self.aligned)
             rois_out[ind_level] = roi_level
         return rois_out
 

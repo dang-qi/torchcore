@@ -2,8 +2,9 @@ import math
 import torch
 
 class AnchorBoxesCoder():
-    def __init__(self, box_code_clip=math.log(1000. / 16)):
+    def __init__(self, box_code_clip=math.log(1000. / 16), weight=[1.0, 1.0, 1.0, 1.0]):
         self.box_code_clip = box_code_clip
+        self.weight = weight
 
     def decode(self, codes, anchors):
         # codes shape N * HxWxA * 4 (tx, ty, tw, th)
@@ -16,15 +17,20 @@ class AnchorBoxesCoder():
         return boxes
 
     def decode_once(self, code, anchor):
+        wx = self.weight[0]
+        wy = self.weight[1]
+        ww = self.weight[2]
+        wh = self.weight[3]
+
         anchor_width = anchor[...,2] - anchor[..., 0]
         anchor_height = anchor[...,3] - anchor[..., 1]
         anchor_xc = anchor[..., 0] + anchor_width / 2
         anchor_yc = anchor[..., 1] + anchor_height / 2
 
-        code_x = code[...,0]
-        code_y = code[...,1]
-        code_w = code[...,2]
-        code_h = code[...,3]
+        code_x = code[...,0] / wx
+        code_y = code[...,1] / wy
+        code_w = code[...,2] / ww
+        code_h = code[...,3] / wh
 
         if self.box_code_clip is not None:
             code_w = code_w.clamp_max(self.box_code_clip)
@@ -52,6 +58,11 @@ class AnchorBoxesCoder():
         return torch.split(targets, num_per_im, dim=0)
 
     def encode_once(self, pos_anchors, pos_boxes ):
+        wx = self.weight[0]
+        wy = self.weight[1]
+        ww = self.weight[2]
+        wh = self.weight[3]
+
         w_anchor = pos_anchors[...,2] - pos_anchors[...,0]
         h_anchor = pos_anchors[...,3] - pos_anchors[...,1]
         xc_anchor = pos_anchors[..., 0] + w_anchor*0.5
@@ -62,10 +73,10 @@ class AnchorBoxesCoder():
         xc_boxes = pos_boxes[..., 0] + w_boxes*0.5
         yc_boxes = pos_boxes[..., 1] + h_boxes*0.5
 
-        tx = ( xc_boxes - xc_anchor) / w_anchor
-        ty = ( yc_boxes - yc_anchor) / h_anchor
-        tw = torch.log(w_boxes / w_anchor)
-        th = torch.log(h_boxes / h_anchor)
+        tx = wx * ( xc_boxes - xc_anchor) / w_anchor
+        ty = wy * ( yc_boxes - yc_anchor) / h_anchor
+        tw = ww * torch.log(w_boxes / w_anchor)
+        th = wh * torch.log(h_boxes / h_anchor)
 
         targets = torch.stack((tx,ty,tw,th), dim=1)
         return targets

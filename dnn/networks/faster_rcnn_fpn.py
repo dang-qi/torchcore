@@ -55,7 +55,7 @@ class FasterRCNNFPN(GeneralDetector):
 
 
         roi_input_features = OrderedDict()
-        for k in self.feature_names:
+        for k in self.roi_feature_names:
             roi_input_features[k] = features[k]
 
         if self.strides is None:

@@ -65,10 +65,10 @@ class COCODataset(Dataset):
 
         targets = {}
         targets["boxes"] = boxes
-        if self.torchvision_format:
-            targets["labels"] = labels 
-        else:
-            targets["cat_labels"] = labels 
+        #if self.torchvision_format:
+        targets["labels"] = labels 
+        #else:
+        #    targets["cat_labels"] = labels 
         #target["masks"] = masks
         targets["image_id"] = image_id
         #target["area"] = area

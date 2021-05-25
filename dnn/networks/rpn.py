@@ -11,7 +11,6 @@ from torch.nn import functional as F
 
 from .tools import AnchorBoxesCoder
 from .tools import PosNegSampler
-from torchvision.models.detection._utils import BalancedPositiveNegativeSampler
 
 class MyAnchorGenerator(AnchorGenerator):
     def __init__(

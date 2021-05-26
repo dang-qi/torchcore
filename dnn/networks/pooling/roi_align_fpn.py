@@ -5,7 +5,7 @@ from torch import nn
 from torchvision.ops import roi_align, RoIAlign
 
 class RoiAliagnFPN(nn.Module):
-    def __init__(self, pool_h, pool_w, sampling=-1, aligned=False):
+    def __init__(self, pool_h, pool_w, sampling=-1, aligned=True):
         super().__init__()
         self.pool_h = pool_h
         self.pool_w = pool_w

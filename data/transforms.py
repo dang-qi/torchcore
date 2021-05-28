@@ -487,16 +487,20 @@ class AddSurrandingBox(object):
         return inputs, targets
 
 class AddPersonBox(object):
-    def __init__(self, anno_path, name='input_box'):
+    def __init__(self, anno_path, name='input_box', out_name='input_box', add_extra_dim=False):
         self.name = name
+        self.out_name = out_name
+        self.add_extra_dim = add_extra_dim
         with open(anno_path, 'rb') as f:
             self.anno = pickle.load(f)
     
     def __call__(self, inputs, targets):
         im_id = targets['image_id']
         input_box = self.anno[im_id][self.name]
-        #targets['input_box'] = np.expand_dims(np.array(input_box), axis=0)
-        targets['input_box'] = np.array(input_box)
+        if self.add_extra_dim:
+            targets[self.out_name] = np.expand_dims(np.array(input_box), axis=0)
+        else:
+            targets[self.out_name] = np.array(input_box)
         return inputs, targets
     
 

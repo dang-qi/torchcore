@@ -185,13 +185,15 @@ class RoITargetConverter():
                 roi_w = roi_box[2] - roi_box[0]
                 roi_h = roi_box[3] - roi_box[1]
 
-                w_scale =  roi_w / self.roi_pool_w
-                h_scale =  roi_h / self.roi_pool_h
+                w_scale =  roi_w / self.roi_pool_w /self.stride
+                h_scale =  roi_h / self.roi_pool_h /self.stride
 
                 boxes[:,0] = boxes[:,0]*w_scale + roi_box[0]
                 boxes[:,1] = boxes[:,1]*h_scale + roi_box[1]
                 boxes[:,2] = boxes[:,2]*w_scale + roi_box[0]
                 boxes[:,3] = boxes[:,3]*h_scale + roi_box[1]
+
+                #boxes = boxes/self.stride
                 new_batch.append(boxes)
             results['boxes'] = new_batch
         results = self.merge_result(results, roi_per_im)

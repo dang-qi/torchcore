@@ -487,10 +487,13 @@ class AddSurrandingBox(object):
         return inputs, targets
 
 class AddPersonBox(object):
-    def __init__(self, anno_path, name='input_box', out_name='input_box', add_extra_dim=False):
+    def __init__(self, anno_path, name='input_box', out_name='input_box', targets_boxes_name='boxes', add_extra_dim=False, extend_to_target_boxes=False, extra_padding=None):
         self.name = name
         self.out_name = out_name
+        self.targets_boxes_name = targets_boxes_name
         self.add_extra_dim = add_extra_dim
+        self.extend_to_target_boxes = extend_to_target_boxes
+        self.extra_padding = extra_padding
         with open(anno_path, 'rb') as f:
             self.anno = pickle.load(f)
     
@@ -501,6 +504,19 @@ class AddPersonBox(object):
             targets[self.out_name] = np.expand_dims(np.array(input_box), axis=0)
         else:
             targets[self.out_name] = np.array(input_box)
+
+        if self.extend_to_target_boxes:
+            boxes = targets[self.targets_boxes_name]
+            x1 = min(boxes[:,0])
+            y1 = min(boxes[:,1])
+            x2 = max(boxes[:,2])
+            y2 = max(boxes[:,3])
+
+            targets[self.out_name][...,0] = min(x1, targets[self.out_name][...,0])
+            targets[self.out_name][...,1] = min(y1, targets[self.out_name][...,1])
+            targets[self.out_name][...,2] = max(x2, targets[self.out_name][...,2])
+            targets[self.out_name][...,3] = max(y2, targets[self.out_name][...,3])
+            
         return inputs, targets
     
 

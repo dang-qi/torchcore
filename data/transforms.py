@@ -516,6 +516,14 @@ class AddPersonBox(object):
             targets[self.out_name][...,1] = min(y1, targets[self.out_name][...,1])
             targets[self.out_name][...,2] = max(x2, targets[self.out_name][...,2])
             targets[self.out_name][...,3] = max(y2, targets[self.out_name][...,3])
+        
+        if self.extra_padding is not None:
+            assert isinstance(self.extra_padding, int)
+            targets[self.out_name][...,0] = (targets[self.out_name][...,0] // self.extra_padding) * self.extra_padding
+            targets[self.out_name][...,1] = (targets[self.out_name][...,1] // self.extra_padding) * self.extra_padding
+            targets[self.out_name][...,2] = (targets[self.out_name][...,2] // self.extra_padding + 1) * self.extra_padding
+            targets[self.out_name][...,3] = (targets[self.out_name][...,3] // self.extra_padding + 1) * self.extra_padding
+            
             
         return inputs, targets
     

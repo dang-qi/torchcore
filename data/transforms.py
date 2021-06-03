@@ -487,13 +487,22 @@ class AddSurrandingBox(object):
         return inputs, targets
 
 class AddPersonBox(object):
-    def __init__(self, anno_path, name='input_box', out_name='input_box', targets_boxes_name='boxes', add_extra_dim=False, extend_to_target_boxes=False, extra_padding=None):
+    def __init__(self, anno_path, name='input_box', out_name='input_box', targets_boxes_name='boxes', add_extra_dim=False, extend_to_target_boxes=False, extra_padding=None, random_scale_and_crop=None):
+        '''
+        name: the key of person box in annotation file
+        out_name: the key in output targets
+        targets_boxes_name: garments boxes key in annotation file
+        add_extra_dim: if we need to add extra dimension for person box since its size can be (4,), instead of (n,4)
+        extra_padding: do we need to add extra padding for person box so it can be devided by the number
+        random_scale_and_crop: List or tuple(min_scale, max_scale) randomly extend or shrink the person box for training, random scale ONLY SUPPORT ONE PERSON BOX
+        '''
         self.name = name
         self.out_name = out_name
         self.targets_boxes_name = targets_boxes_name
         self.add_extra_dim = add_extra_dim
         self.extend_to_target_boxes = extend_to_target_boxes
         self.extra_padding = extra_padding
+        self.random_scale = random_scale_and_crop
         with open(anno_path, 'rb') as f:
             self.anno = pickle.load(f)
     
@@ -501,9 +510,9 @@ class AddPersonBox(object):
         im_id = targets['image_id']
         input_box = self.anno[im_id][self.name]
         if self.add_extra_dim:
-            targets[self.out_name] = np.expand_dims(np.array(input_box), axis=0)
+            roi_box = np.expand_dims(np.array(input_box), axis=0)
         else:
-            targets[self.out_name] = np.array(input_box)
+            roi_box = np.array(input_box)
 
         if self.extend_to_target_boxes:
             boxes = targets[self.targets_boxes_name]
@@ -512,19 +521,61 @@ class AddPersonBox(object):
             x2 = max(boxes[:,2])
             y2 = max(boxes[:,3])
 
-            targets[self.out_name][...,0] = min(x1, targets[self.out_name][...,0])
-            targets[self.out_name][...,1] = min(y1, targets[self.out_name][...,1])
-            targets[self.out_name][...,2] = max(x2, targets[self.out_name][...,2])
-            targets[self.out_name][...,3] = max(y2, targets[self.out_name][...,3])
+            roi_box[...,0] = min(x1, roi_box[...,0])
+            roi_box[...,1] = min(y1, roi_box[...,1])
+            roi_box[...,2] = max(x2, roi_box[...,2])
+            roi_box[...,3] = max(y2, roi_box[...,3])
+
+        if self.random_scale is not None:
+            assert self.random_scale[1] > self.random_scale[0]
+            # only support one person box
+            assert roi_box.shape == (1,4) or roi_box.shape == (4,)
+            while True:
+                scale = np.random.uniform(low=self.random_scale[0],high=self.random_scale[1], size=4)
+
+                x1 = roi_box[...,0].copy()
+                y1 = roi_box[...,1].copy()
+                x2 = roi_box[...,2].copy()
+                y2 = roi_box[...,3].copy()
+
+                h_half = (y2 - y1) / 2
+                w_half = (x2 - x1) / 2
+
+                x1 += w_half*(scale[0]-1)
+                y1 += h_half*(scale[1]-1)
+                x2 += w_half*(scale[2]-1)
+                y2 += h_half*(scale[3]-1)
+
+                #  garment boxes should be inside the human box and smaller than the image size
+                boxes = targets[self.targets_boxes_name].copy()
+                boxes[...,0] = np.maximum(boxes[...,0], x1)
+                boxes[...,1] = np.maximum(boxes[...,1], y1)
+                boxes[...,2] = np.minimum(boxes[...,2], x2)
+                boxes[...,3] = np.minimum(boxes[...,3], y2)
+
+                if ((boxes[...,2]>boxes[...,0])&(boxes[...,3]>boxes[...,1])).any():
+                    break
+
+            im_width, im_height = inputs['data'].size
+            x1 = x1.clip(0, im_width)
+            y1 = y1.clip(0, im_height)
+            x2 = x2.clip(0, im_width)
+            y2 = y2.clip(0, im_height)
+
+            roi_box[...,0] = x1
+            roi_box[...,1] = y1
+            roi_box[...,2] = x2
+            roi_box[...,3] = y2
+
         
         if self.extra_padding is not None:
             assert isinstance(self.extra_padding, int)
-            targets[self.out_name][...,0] = (targets[self.out_name][...,0] // self.extra_padding) * self.extra_padding
-            targets[self.out_name][...,1] = (targets[self.out_name][...,1] // self.extra_padding) * self.extra_padding
-            targets[self.out_name][...,2] = (targets[self.out_name][...,2] // self.extra_padding + 1) * self.extra_padding
-            targets[self.out_name][...,3] = (targets[self.out_name][...,3] // self.extra_padding + 1) * self.extra_padding
+            roi_box[...,0] = (roi_box[...,0] // self.extra_padding) * self.extra_padding
+            roi_box[...,1] = (roi_box[...,1] // self.extra_padding) * self.extra_padding
+            roi_box[...,2] = (roi_box[...,2] // self.extra_padding + 1) * self.extra_padding
+            roi_box[...,3] = (roi_box[...,3] // self.extra_padding + 1) * self.extra_padding
             
-            
+        targets[self.out_name] = roi_box
         return inputs, targets
     
 

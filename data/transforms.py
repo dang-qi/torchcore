@@ -332,7 +332,7 @@ class RandomCrop(object):
        targets_other_key can be labels, etc
        After cropping, the invalid boxes and labels are deleted
     '''
-    def __init__(self, size, box_inside, target_box_main_key='boxes', inputs_box_keys=[], targets_box_keys=[], targets_other_key=['labels'], mask_key=None):
+    def __init__(self, size, box_inside, target_box_main_key='boxes', inputs_box_keys=[], targets_box_keys=[], targets_other_key=['labels'], inputs_box_inside=False, targets_box_inside=False, mask_key=None):
         if isinstance(size, Iterable):
             self.size = size
         else:
@@ -343,6 +343,8 @@ class RandomCrop(object):
         self.targets_box_keys = targets_box_keys
         self.targets_other_key = targets_other_key
         self.targets_box_main_key = target_box_main_key
+        self.inputs_box_inside = inputs_box_inside
+        self.targets_box_inside = targets_box_inside
         if box_inside:
             assert target_box_main_key is not None
         if target_box_main_key is not None:
@@ -368,8 +370,23 @@ class RandomCrop(object):
                         targets[k] = targets[k][keep]
                     for k in self.inputs_box_keys:
                         inputs[k] = F.random_crop_boxes(inputs[k], position)
+                        if self.inputs_box_inside:
+                            boxes = inputs[k]
+                            keep = np.logical_and(boxes[...,3]>boxes[...,1], boxes[...,2]>boxes[...,0])
+                            if not keep.any():
+                                continue
+                            else:
+                                inputs[k] = inputs[k][keep]
+
                     for k in self.targets_box_keys:
                         targets[k] = F.random_crop_boxes(targets[k], position)
+                        if self.targets_box_inside:
+                            boxes = targets[k]
+                            keep = np.logical_and(boxes[...,3]>boxes[...,1], boxes[...,2]>boxes[...,0])
+                            if not keep.any():
+                                continue
+                            else:
+                                targets[k] = targets[k][keep]
                     if self.mask_key is not None:
                         targets[self.mask_key] = targets[self.mask_key][keep]
                         targets[self.mask_key] = F.crop_masks(targets[self.mask_key], position)

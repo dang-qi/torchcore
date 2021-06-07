@@ -375,8 +375,7 @@ class RandomCrop(object):
                             keep = np.logical_and(boxes[...,3]>boxes[...,1], boxes[...,2]>boxes[...,0])
                             if not keep.any():
                                 continue
-                            else:
-                                inputs[k] = inputs[k][keep]
+                        inputs[k] = inputs[k][keep]
 
                     for k in self.targets_box_keys:
                         targets[k] = F.random_crop_boxes(targets[k], position)
@@ -385,8 +384,7 @@ class RandomCrop(object):
                             keep = np.logical_and(boxes[...,3]>boxes[...,1], boxes[...,2]>boxes[...,0])
                             if not keep.any():
                                 continue
-                            else:
-                                targets[k] = targets[k][keep]
+                        targets[k] = targets[k][keep]
                     if self.mask_key is not None:
                         targets[self.mask_key] = targets[self.mask_key][keep]
                         targets[self.mask_key] = F.crop_masks(targets[self.mask_key], position)

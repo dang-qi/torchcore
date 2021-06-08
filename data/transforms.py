@@ -370,8 +370,8 @@ class RandomCrop(object):
                     for k in self.inputs_box_keys:
                         inputs_temp[k] = F.random_crop_boxes(inputs[k].copy(), position)
                         if self.inputs_box_inside:
-                            boxes = inputs_temp[k]
-                            keep_temp = np.logical_and(boxes[...,3]>boxes[...,1], boxes[...,2]>boxes[...,0])
+                            boxes_temp = inputs_temp[k]
+                            keep_temp = np.logical_and(boxes_temp[...,3]>boxes_temp[...,1], boxes_temp[...,2]>boxes_temp[...,0])
                             if not keep_temp.any():
                                 valid = False
                                 break
@@ -383,8 +383,8 @@ class RandomCrop(object):
                     for k in self.targets_box_keys:
                         targets_temp[k] = F.random_crop_boxes(targets[k].copy(), position)
                         if self.targets_box_inside:
-                            boxes = targets_temp[k]
-                            keep_temp = np.logical_and(boxes[...,3]>boxes[...,1], boxes[...,2]>boxes[...,0])
+                            boxes_temp = targets_temp[k]
+                            keep_temp = np.logical_and(boxes_temp[...,3]>boxes_temp[...,1], boxes_temp[...,2]>boxes_temp[...,0])
                             if not keep_temp.any():
                                 valid = False
                                 break

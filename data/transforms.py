@@ -365,36 +365,45 @@ class RandomCrop(object):
                 # only keep the valid boxes
                 keep = np.logical_and(boxes[:,3]>boxes[:,1], boxes[:,2]>boxes[:,0])
                 if not self.box_inside or keep.any():
-                    targets[self.targets_box_main_key] = boxes[keep]
-                    for k in self.targets_other_key:
-                        targets[k] = targets[k][keep]
                     valid = True
+                    inputs_temp = {}
                     for k in self.inputs_box_keys:
-                        inputs[k] = F.random_crop_boxes(inputs[k], position)
+                        inputs_temp[k] = F.random_crop_boxes(inputs[k].copy(), position)
                         if self.inputs_box_inside:
-                            boxes = inputs[k]
-                            keep = np.logical_and(boxes[...,3]>boxes[...,1], boxes[...,2]>boxes[...,0])
-                            if not keep.any():
+                            boxes = inputs_temp[k]
+                            keep_temp = np.logical_and(boxes[...,3]>boxes[...,1], boxes[...,2]>boxes[...,0])
+                            if not keep_temp.any():
                                 valid = False
                                 break
-                        inputs[k] = inputs[k][keep]
+                        inputs_temp[k] = inputs_temp[k][keep_temp]
                     if not valid:
                         continue
 
+                    targets_temp = {}
                     for k in self.targets_box_keys:
-                        targets[k] = F.random_crop_boxes(targets[k], position)
+                        targets_temp[k] = F.random_crop_boxes(targets[k].copy(), position)
                         if self.targets_box_inside:
-                            boxes = targets[k]
-                            keep = np.logical_and(boxes[...,3]>boxes[...,1], boxes[...,2]>boxes[...,0])
-                            if not keep.any():
+                            boxes = targets_temp[k]
+                            keep_temp = np.logical_and(boxes[...,3]>boxes[...,1], boxes[...,2]>boxes[...,0])
+                            if not keep_temp.any():
                                 valid = False
                                 break
-                        targets[k] = targets[k][keep]
+                        targets_temp[k] = targets_temp[k][keep_temp]
                     if not valid:
                         continue
                     if self.mask_key is not None:
                         targets[self.mask_key] = targets[self.mask_key][keep]
                         targets[self.mask_key] = F.crop_masks(targets[self.mask_key], position)
+                    # put it in the last line in case override the original one before other things are settle
+                    targets[self.targets_box_main_key] = boxes[keep]
+                    for k in self.targets_other_key:
+                        targets[k] = targets[k][keep]
+
+                    for k in self.inputs_box_keys:
+                        inputs[k] =inputs_temp[k]
+                    for k in self.targets_box_keys:
+                        targets[k] =targets_temp[k]
+
                     break
                 else:
                     continue

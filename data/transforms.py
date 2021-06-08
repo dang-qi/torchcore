@@ -368,14 +368,18 @@ class RandomCrop(object):
                     targets[self.targets_box_main_key] = boxes[keep]
                     for k in self.targets_other_key:
                         targets[k] = targets[k][keep]
+                    valid = True
                     for k in self.inputs_box_keys:
                         inputs[k] = F.random_crop_boxes(inputs[k], position)
                         if self.inputs_box_inside:
                             boxes = inputs[k]
                             keep = np.logical_and(boxes[...,3]>boxes[...,1], boxes[...,2]>boxes[...,0])
                             if not keep.any():
-                                continue
+                                valid = False
+                                break
                         inputs[k] = inputs[k][keep]
+                    if not valid:
+                        continue
 
                     for k in self.targets_box_keys:
                         targets[k] = F.random_crop_boxes(targets[k], position)
@@ -383,8 +387,11 @@ class RandomCrop(object):
                             boxes = targets[k]
                             keep = np.logical_and(boxes[...,3]>boxes[...,1], boxes[...,2]>boxes[...,0])
                             if not keep.any():
-                                continue
+                                valid = False
+                                break
                         targets[k] = targets[k][keep]
+                    if not valid:
+                        continue
                     if self.mask_key is not None:
                         targets[self.mask_key] = targets[self.mask_key][keep]
                         targets[self.mask_key] = F.crop_masks(targets[self.mask_key], position)

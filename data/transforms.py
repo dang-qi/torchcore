@@ -377,7 +377,7 @@ class RandomCrop(object):
                             if not keep_temp.any():
                                 valid = False
                                 break
-                            if not box_cover(boxes_temp, boxes_keep):
+                            if not box_overlap(boxes_temp, boxes_keep):
                                 valid = False
                                 break
 
@@ -394,7 +394,7 @@ class RandomCrop(object):
                             if not keep_temp.any():
                                 valid = False
                                 break
-                            if not box_cover(boxes_temp, boxes_keep):
+                            if not box_overlap(boxes_temp, boxes_keep):
                                 valid = False
                                 break
                         targets_temp[k] = targets_temp[k][keep_temp]

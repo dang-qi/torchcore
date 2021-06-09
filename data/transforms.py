@@ -413,9 +413,7 @@ class RandomCrop(object):
                 for k in self.targets_box_keys:
                     targets[k] =targets_temp[k]
 
-                    break
-                else:
-                    continue
+                break
             else:
                 break
 

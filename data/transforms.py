@@ -1,3 +1,4 @@
+from torchcore.dnn.networks.pooling.in_target_roi_pool import box_cover
 from PIL import Image
 import collections
 import torch
@@ -364,6 +365,7 @@ class RandomCrop(object):
                 boxes = F.random_crop_boxes(boxes, position)
                 # only keep the valid boxes
                 keep = np.logical_and(boxes[:,3]>boxes[:,1], boxes[:,2]>boxes[:,0])
+                boxes_keep = boxes[keep]
                 if not self.box_inside or keep.any():
                     valid = True
                     inputs_temp = {}
@@ -375,6 +377,10 @@ class RandomCrop(object):
                             if not keep_temp.any():
                                 valid = False
                                 break
+                            if not box_cover(boxes_temp, boxes_keep):
+                                valid = False
+                                break
+
                         inputs_temp[k] = inputs_temp[k][keep_temp]
                     if not valid:
                         continue
@@ -388,21 +394,24 @@ class RandomCrop(object):
                             if not keep_temp.any():
                                 valid = False
                                 break
+                            if not box_cover(boxes_temp, boxes_keep):
+                                valid = False
+                                break
                         targets_temp[k] = targets_temp[k][keep_temp]
                     if not valid:
                         continue
-                    if self.mask_key is not None:
-                        targets[self.mask_key] = targets[self.mask_key][keep]
-                        targets[self.mask_key] = F.crop_masks(targets[self.mask_key], position)
-                    # put it in the last line in case override the original one before other things are settle
-                    targets[self.targets_box_main_key] = boxes[keep]
-                    for k in self.targets_other_key:
-                        targets[k] = targets[k][keep]
+                if self.mask_key is not None:
+                    targets[self.mask_key] = targets[self.mask_key][keep]
+                    targets[self.mask_key] = F.crop_masks(targets[self.mask_key], position)
+                # put it in the last line in case override the original one before other things are settle
+                targets[self.targets_box_main_key] = boxes_keep
+                for k in self.targets_other_key:
+                    targets[k] = targets[k][keep]
 
-                    for k in self.inputs_box_keys:
-                        inputs[k] =inputs_temp[k]
-                    for k in self.targets_box_keys:
-                        targets[k] =targets_temp[k]
+                for k in self.inputs_box_keys:
+                    inputs[k] =inputs_temp[k]
+                for k in self.targets_box_keys:
+                    targets[k] =targets_temp[k]
 
                     break
                 else:
@@ -411,6 +420,17 @@ class RandomCrop(object):
                 break
 
         return inputs, targets
+
+def box_overlap(box, boxes):
+    x1 = np.maximum(box[...,0], boxes[...,0])
+    y1 = np.maximum(box[...,1], boxes[...,1])
+    x2 = np.minimum(box[...,2], boxes[...,2])
+    y2 = np.minimum(box[...,3], boxes[...,3])
+    if ((x2>x1) & (y2>y1)).any():
+        return True
+    else:
+        return False
+
 
 class RandomScale(object):
     def __init__(self, low, high, inputs_box_keys=[], targets_box_keys=['boxes'], mask_key=None):

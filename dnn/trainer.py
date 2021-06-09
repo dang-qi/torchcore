@@ -197,11 +197,11 @@ class BaseTrainer :
         if to_print:
             print('The checkpoint has been saved to {}'.format(path))
 
-    def resume_training(self, path, device, to_print=True, epoch_based=True):
+    def resume_training(self, path, device, to_print=True):
         if isinstance(self._model, DDP):
             dist.barrier()
         checkpoint = torch.load(path, map_location=device)
-        if epoch_based:
+        if self._epoch_based:
             self._epoch = checkpoint['epoch']
         else:
             self.start_step = checkpoint['step']

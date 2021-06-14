@@ -131,13 +131,14 @@ class FasterRCNNRoIFPN(GeneralDetector):
 
 
 class RoITargetConverter():
-    def __init__(self, roi_pool_w, roi_pool_h, stride, boxes_key='boxes', keep_key=['labels'],mask_key=None ) -> None:
+    def __init__(self, roi_pool_w, roi_pool_h, stride, boxes_key='boxes', keep_key=['labels'],mask_key=None, allow_box_outside=False ) -> None:
         self.boxes_key = boxes_key
         self.mask_key = mask_key
         self.keep_key = keep_key
         self.roi_pool_w = roi_pool_w
         self.roi_pool_h = roi_pool_h
         self.stride = stride
+        self.allow_box_outside = allow_box_outside
         
     @torch.no_grad()
     def convert(self, roi_boxes_batch, targets):
@@ -151,13 +152,29 @@ class RoITargetConverter():
                 h_scale = self.roi_pool_h / roi_h * self.stride
 
                 boxes = target[self.boxes_key].clone()
+                
+                if self.allow_box_outside:
+                    boxes[:,0] = boxes[:,0] - roi_box[0] 
+                    boxes[:,1] = boxes[:,1] - roi_box[1]
+                    boxes[:,2] = boxes[:,2] - roi_box[2]
+                    boxes[:,3] = boxes[:,3] - roi_box[3]
 
-                boxes[:,0] = torch.clamp((boxes[:,0] - roi_box[0]),0, roi_w) * w_scale
-                boxes[:,1] = torch.clamp((boxes[:,1] - roi_box[1]),0,roi_h) * h_scale
-                boxes[:,2] = torch.clamp((boxes[:,2] - roi_box[0]),0,roi_w) * w_scale
-                boxes[:,3] = torch.clamp((boxes[:,3] - roi_box[1]),0,roi_h) * h_scale
+                    intersection = (torch.minimum(boxes[:,2], torch.full_like(boxes[:,2],roi_w))- torch.maximum(torch.full_like(boxes[:,0],0), boxes[:,0]))\
+                        *(torch.minimum(boxes[:,3], torch.full_like(boxes[:,3, roi_h]))-torch.maximum(boxes[:,1],torch.full_like(boxes[:,1],0)))
+                    keep = intersection > 1
 
-                keep = (boxes[:,2]>boxes[:,0]) & (boxes[:,3]>boxes[:,1])
+                    boxes[:,0] *= w_scale
+                    boxes[:,1] *= h_scale
+                    boxes[:,2] *= w_scale
+                    boxes[:,3] *= h_scale
+                    
+                else:
+                    boxes[:,0] = torch.clamp((boxes[:,0] - roi_box[0]),0, roi_w) * w_scale
+                    boxes[:,1] = torch.clamp((boxes[:,1] - roi_box[1]),0,roi_h) * h_scale
+                    boxes[:,2] = torch.clamp((boxes[:,2] - roi_box[0]),0,roi_w) * w_scale
+                    boxes[:,3] = torch.clamp((boxes[:,3] - roi_box[1]),0,roi_h) * h_scale
+
+                    keep = (boxes[:,2]>boxes[:,0]) & (boxes[:,3]>boxes[:,1])
 
                 # Warning: This is NOT a deep copy
                 new_target = target.copy()

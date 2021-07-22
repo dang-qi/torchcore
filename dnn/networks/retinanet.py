@@ -44,26 +44,12 @@ class RetinaNet(GeneralDetector):
 
         if self.training:
             losses = self.retina_head(inputs, rpn_features, targets)
-        else:
-            proposals, scores = self.retina_head(inputs, rpn_features, targets)
-
-        if debug_time:
-            rpn_time = time.time()
-            self.total_time['rpn'] += rpn_time - feature_time 
-
-
-        if self.training:
             return losses
         else:
-            if self.just_rpn:
-                results = {'boxes':proposals, 'scores':scores, 'labels':[torch.ones_like(score) for score in scores]}
-                return results
-            results = self.roi_head(proposals, roi_input_features, strides, targets=targets)
+            results = self.retina_head(inputs, rpn_features, targets)
             results = self.post_process(results, inputs)
-            if debug_time:
-                roi_head_time = time.time()
-                self.total_time['roi_head'] += roi_head_time - rpn_time 
             return results
+
 
     def post_process(self, results, inputs):
         for i, (boxes, scores, labels) in enumerate(zip(results['boxes'], results['scores'], results['labels'])):

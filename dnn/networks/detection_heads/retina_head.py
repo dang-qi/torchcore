@@ -5,7 +5,7 @@ from torch import nn
 from ..tools import AnchorBoxesCoder
 #from ..rpn import MyRegionProposalNetwork, RegionProposalNetwork
 from torchvision.ops.boxes import batched_nms, box_iou
-from ..losses import FocalLossSigmoid,FocalLoss
+from ..losses import FocalLossSigmoid,FocalLoss,SigmoidFocalLoss
 
 class RetinaNetHead(nn.Module):
     def __init__(self, head, anchor_generator, cfg):
@@ -17,7 +17,7 @@ class RetinaNetHead(nn.Module):
         self.nms_thresh = cfg.nms_thresh
         self.score_thresh = cfg.score_thresh
         #self.class_loss = FocalLossSigmoid(alpha=0.25, gamma=2)
-        self.class_loss = FocalLoss(alpha=0.25, gamma=2)
+        self.class_loss = SigmoidFocalLoss(alpha=0.25, gamma=2, reduction='sum')
         self.smooth_l1_loss = nn.SmoothL1Loss(reduction='sum', beta= 1.0 / 9) 
 
     def forward(self, inputs, features, targets=None):
@@ -31,7 +31,7 @@ class RetinaNetHead(nn.Module):
         anchors = self.anchor_generater(inputs, features)
         
         num_images = len(anchors)
-        num_anchors_per_level = [pred[0][0].numel() for pred in pred_out]
+        num_anchors_per_level = [pred[1][0].numel()//4 for pred in pred_out]
         pred_class, pred_bbox_deltas = self.combine_and_permute_predictions(pred_out)
 
         # apply pred_bbox_deltas to anchors to obtain the decoded proposals
@@ -44,21 +44,26 @@ class RetinaNetHead(nn.Module):
             proposals = proposals.view(num_images, -1, 4)
 
             image_shapes = inputs['image_sizes']
-            boxes, scores = self.post_detection(pred_class, proposals, image_shapes, num_anchors_per_level)
-            return boxes, scores
+            results = self.post_detection(pred_class, proposals, image_shapes, num_anchors_per_level)
+            return results
         else:
             ind_pos_anchor, ind_neg_anchor, ind_pos_boxes = self.assign_targets_to_anchors(anchors, targets)
             #print('matched pos anchor num is:', sum([len(ind) for ind in ind_pos_anchor]))
             #boxes = [target['boxes'] for target in targets]
             #print('all the boxes are:', boxes)
+            #generate regression target
             pos_boxes = [target['boxes'][ind] for target, ind in zip(targets, ind_pos_boxes)]
             pos_anchor = [target[ind] for target, ind in zip(anchors, ind_pos_anchor)]
             regression_targets  = self.box_coder.encode(pos_anchor, pos_boxes )
+
+            #generate classification target
+            pos_labels = [target['labels'][ind] for target, ind in zip(targets, ind_pos_boxes)]
+            pos_labels = torch.cat(pos_labels, dim=0)
             #print('regression targets shapes',[t.shape for t in regression_targets])
             #print('regression targets:', regression_targets)
 
             loss_objectness, loss_rpn_box_reg = self.compute_loss(
-                pred_class, pred_bbox_deltas, ind_pos_anchor, ind_neg_anchor, regression_targets)
+                pred_class, pred_bbox_deltas, ind_pos_anchor, ind_neg_anchor, regression_targets, pos_labels)
             #print('loss')
             losses = {
                 "loss_objectness": loss_objectness,
@@ -66,7 +71,7 @@ class RetinaNetHead(nn.Module):
             }
             return losses
 
-    def compute_loss(self, pred_class, pred_bbox_deltas, ind_pos_anchor, ind_neg_anchor, regression_targets):
+    def compute_loss(self, pred_class, pred_bbox_deltas, ind_pos_anchor, ind_neg_anchor, regression_targets, pos_labels):
 
         #keep_pos, keep_neg = self.pos_neg_sampler.sample_batch(ind_pos_anchor, ind_neg_anchor)
 
@@ -98,18 +103,19 @@ class RetinaNetHead(nn.Module):
         pred_bbox_deltas = torch.cat(pred_bbox_deltas, dim=0)
 
         pred_class_pos = [pred_pos[ind] for pred_pos, ind in zip(pred_class, ind_pos_anchor)]
-        pred_class_pos = torch.cat(pred_class_pos, dim=0).flatten()
+        pred_class_pos = torch.cat(pred_class_pos, dim=0)
 
-        label_pos = torch.ones_like(pred_class_pos)
+        label_pos = torch.zeros_like(pred_class_pos)
+        label_pos.scatter_(1,(pos_labels-1).view(-1,1), 1.0)
         pred_class_neg = [pred_neg[ind] for pred_neg, ind in zip(pred_class, ind_neg_anchor)]
-        pred_class_neg = torch.cat(pred_class_neg, dim=0).flatten()
+        pred_class_neg = torch.cat(pred_class_neg, dim=0)
         label_neg = torch.zeros_like(pred_class_neg)
         label_pred = torch.cat((pred_class_pos, pred_class_neg), dim=0)
         label_target = torch.cat((label_pos, label_neg), dim=0)
 
         #loss_class = F.binary_cross_entropy_with_logits(label_pred, label_target)
-        label_pred = torch.sigmoid_(label_pred)
-        loss_class = self.class_loss(label_pred, label_target)
+        #label_pred = torch.sigmoid_(label_pred)
+        loss_class = self.class_loss(label_pred, label_target) / label_pos.size()[0]
         #print('label pos shape:', label_pos.shape)
         #print('targets shape:', regression_targets.shape)
         #loss_box = self.smooth_l1_loss(pred_bbox_deltas, regression_targets) / label_pos.numel()
@@ -131,140 +137,81 @@ class RetinaNetHead(nn.Module):
         # post nms for all the proposals for each image
         # proposal shape: N * Num_anchor_all * 4
         # pred_class shape: N * Num_anchor_all * C
-        device = pred_bbox.device
+
+
         pred_class = torch.sigmoid_(pred_class)
+
         batch_size, num_anchors_all, C = pred_class.shape
-        indexes = [torch.full((n,), num, dtype=torch.int64, device=device) for num, n in enumerate(num_anchors_per_level)]
-        indexes = torch.cat(indexes, dim=0)
-        indexes = indexes.expand((batch_size, num_anchors_all))
-        #print('indexes shape:', indexes.shape)
-        #print('num anchors per level', num_anchors_per_level)
+
+        boxes_all = []
+        scores_all = []
+        labels_all = []
         for i in range(batch_size):
-            pred_class = pred_class[i]
+            pred_class_image = pred_class[i]
+            pred_bbox_image = pred_bbox[i]
+            image_shape = image_shapes[i]
 
-        # do a pre top k score proposal selection for each feature map
-        pred_class = pred_class.reshape(batch_size,-1)
-        keep = self.get_top_k_ind(pred_class, self.get_pre_nms_top_n(), num_anchors_per_level, C)
-        #print('keep shape', keep.shape)
-        #print('proposals shape', proposals.shape)
-        image_ind = torch.arange(batch_size, device=device)[:,None]
-        pred_bbox = pred_bbox[image_ind, keep]
-        indexes = indexes[image_ind, keep]
-        pred_class = pred_class[image_ind, keep]
-        #proposals = proposals.view(-1, 4)[keep].reshape(batch_size, -1, 4)
-        #indexes = indexes.reshape(-1)[keep].reshape(batch_size, -1)
-        #print('indexes shape:', indexes.shape)
-        #pred_class = pred_class.view(-1, C)[keep].reshape(batch_size, -1, C)
+            boxes_image = []
+            scores_image = []
+            labels_image = []
+            off_set_image = 0
+            for num_anchor in num_anchors_per_level:
+                pred_class_image_level = pred_class_image[off_set_image:off_set_image+num_anchor]
+                pred_bbox_image_level = pred_bbox_image[off_set_image:off_set_image+num_anchor]
+                # remove detection with low score
+                #print('pred_class level ', pred_class_image_level)
+                keep = pred_class_image_level > self.score_thresh
+                score_keep = pred_class_image_level[keep]
+                inds, inds_class = torch.where(keep)
 
-        # perform nms on each layer seperately on each image
-        boxes_all = []
-        scores_all = []
-        for proposal, pred_class_image, image_size, idxs in zip(pred_bbox, pred_class, image_shapes, indexes):
-            # first crop the boxes inside the image
-            proposal = self.crop_boxes(proposal, image_size)
-            if len(proposal) == 0:
-                print('proposal are 0')
-            #print('proposal shape:', len(proposal))
-            keep = self.remove_small_boxes(proposal, self.min_size)
+                # get topk score boxes for the level
+                num_topk = min(self.get_pre_nms_top_n(), len(inds))
+                scores_topk, ind_topk = score_keep.topk(num_topk)
+                inds = inds[ind_topk]
+                inds_class = inds_class[ind_topk]
+                boxes_topk = pred_bbox_image_level[inds]
 
-            scores = pred_class_image[:,0]
-            proposal = proposal[keep]
-            scores = scores[keep]
-            idxs = idxs[keep]
-            #print('indx shape', idxs.shape)
-            if len(proposal) == 0:
-                print('proposal after small box removal are 0')
-                traceback.print_stack(file=sys.stdout)
+                self.crop_boxes(boxes_topk, image_shape)
 
-            # perform nms
-            keep = batched_nms(proposal, scores, idxs, self.nms_thresh) 
+                boxes_image.append(boxes_topk)
+                scores_image.append(scores_topk)
+                labels_image.append(inds_class)
+
+                off_set_image += num_anchor
+            
+            boxes_image = torch.cat(boxes_image,dim=0)
+            scores_image = torch.cat(scores_image,dim=0)
+            labels_image = torch.cat(labels_image,dim=0)
+
+            # do nms for the image
+            keep = batched_nms(boxes_image, scores_image, labels_image, self.nms_thresh) 
             # only keep the top k candidate
             keep = keep[:self.get_post_nms_top_n()]
-            proposal = proposal[keep]
-            scores = scores[keep]
+            boxes_image = boxes_image[keep]
+            scores_image = scores_image[keep]
+            labels_image = labels_image[keep]
             #print('scores shape', scores.shape)
             
-            boxes_all.append(proposal)
-            scores_all.append(scores)
-        return boxes_all, scores_all
+            boxes_all.append(boxes_image)
+            scores_all.append(scores_image)
+            labels_all.append(labels_image+1)
 
-    def post_detection_old(self, pred_class, pred_bbox, image_shapes, num_anchors_per_level):
-        # pre nms for each feature layers in each image
-        # crop the boxes so they are inside the image
-        # delete very small boxes
-        # post nms for all the proposals for each image
-        # proposal shape: N * Num_anchor_all * 4
-        # pred_class shape: N * Num_anchor_all * C
-        device = pred_bbox.device
-        pred_class = torch.sigmoid_(pred_class)
-        batch_size, num_anchors_all, C = pred_class.shape
-        indexes = [torch.full((n,), num, dtype=torch.int64, device=device) for num, n in enumerate(num_anchors_per_level)]
-        indexes = torch.cat(indexes, dim=0)
-        indexes = indexes.expand((batch_size, num_anchors_all))
-        #print('indexes shape:', indexes.shape)
-        #print('num anchors per level', num_anchors_per_level)
+        results = dict()
+        results['boxes'] = boxes_all
+        results['scores'] = scores_all
+        results['labels'] = labels_all
+        return results
 
-        # do a pre top k score proposal selection for each feature map
-        pred_class = pred_class.reshape(batch_size,-1)
-        keep = self.get_top_k_ind(pred_class, self.get_pre_nms_top_n(), num_anchors_per_level, C)
-        #print('keep shape', keep.shape)
-        #print('proposals shape', proposals.shape)
-        image_ind = torch.arange(batch_size, device=device)[:,None]
-        pred_bbox = pred_bbox[image_ind, keep]
-        indexes = indexes[image_ind, keep]
-        pred_class = pred_class[image_ind, keep]
-        #proposals = proposals.view(-1, 4)[keep].reshape(batch_size, -1, 4)
-        #indexes = indexes.reshape(-1)[keep].reshape(batch_size, -1)
-        #print('indexes shape:', indexes.shape)
-        #pred_class = pred_class.view(-1, C)[keep].reshape(batch_size, -1, C)
 
-        # perform nms on each layer seperately on each image
-        boxes_all = []
-        scores_all = []
-        for proposal, pred_class_image, image_size, idxs in zip(pred_bbox, pred_class, image_shapes, indexes):
-            # first crop the boxes inside the image
-            proposal = self.crop_boxes(proposal, image_size)
-            if len(proposal) == 0:
-                print('proposal are 0')
-            #print('proposal shape:', len(proposal))
-            keep = self.remove_small_boxes(proposal, self.min_size)
-
-            scores = pred_class_image[:,0]
-            proposal = proposal[keep]
-            scores = scores[keep]
-            idxs = idxs[keep]
-            #print('indx shape', idxs.shape)
-            if len(proposal) == 0:
-                print('proposal after small box removal are 0')
-                traceback.print_stack(file=sys.stdout)
-
-            # perform nms
-            keep = batched_nms(proposal, scores, idxs, self.nms_thresh) 
-            # only keep the top k candidate
-            keep = keep[:self.get_post_nms_top_n()]
-            proposal = proposal[keep]
-            scores = scores[keep]
-            #print('scores shape', scores.shape)
-            
-            boxes_all.append(proposal)
-            scores_all.append(scores)
-        return boxes_all, scores_all
-
-    def get_top_k_ind(self, scores, k, num_anchors_per_level, class_num):
-        # scores: Tensor[N,NumAnchors*C]
-        keep = []
-        #for score_image in scores:
-        offset_image = 0
-        for num_anchor in num_anchors_per_level:
-            score_level = scores[:,offset_image:offset_image+num_anchor*class_num]
-            # remove the ones with low score
-            ind = score_level > self.score_thresh
-            k = min(k, num_anchor)
-            _, i = torch.topk(score_level, k, dim=1)
-            keep.append(i+offset_image)
-            offset_image += num_anchor*class_num
-        keep = torch.cat(keep, dim=1)
-        return keep
+    def crop_boxes(self, boxes, image_size):
+        # boxes: N * 4 tensor, x1, y1, x2, y2 format
+        # image_size: height, width
+        height, width = image_size
+        boxes[...,0] = boxes[...,0].clamp(min=0, max=width)
+        boxes[...,1] = boxes[...,1].clamp(min=0, max=height)
+        boxes[...,2] = boxes[...,2].clamp(min=0, max=width)
+        boxes[...,3] = boxes[...,3].clamp(min=0, max=height)
+        return boxes
 
     def get_pre_nms_top_n(self):
         if self.training:

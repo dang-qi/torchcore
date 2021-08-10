@@ -400,6 +400,8 @@ class RandomCrop(object):
                         targets_temp[k] = targets_temp[k][keep_temp]
                     if not valid:
                         continue
+                else:
+                    continue
                 if self.mask_key is not None:
                     targets[self.mask_key] = targets[self.mask_key][keep]
                     targets[self.mask_key] = F.crop_masks(targets[self.mask_key], position)

@@ -33,6 +33,7 @@ class RetinaNetHead(nn.Module):
         num_images = len(anchors)
         num_anchors_per_level = [pred[1][0].numel()//4 for pred in pred_out]
         pred_class, pred_bbox_deltas = self.combine_and_permute_predictions(pred_out)
+        #return features,pred_class, pred_bbox_deltas
 
         # apply pred_bbox_deltas to anchors to obtain the decoded proposals
         # note that we detach the deltas because Faster R-CNN do not backprop through
@@ -58,7 +59,7 @@ class RetinaNetHead(nn.Module):
 
             #generate classification target
             pos_labels = [target['labels'][ind] for target, ind in zip(targets, ind_pos_boxes)]
-            pos_labels = torch.cat(pos_labels, dim=0)
+            #pos_labels = torch.cat(pos_labels, dim=0)
             #print('regression targets shapes',[t.shape for t in regression_targets])
             #print('regression targets:', regression_targets)
 
@@ -91,36 +92,40 @@ class RetinaNetHead(nn.Module):
         #print(seta.difference(setb))
         #######
 
-        #ind_pos_anchor = [anchor_ind[keep] for anchor_ind, keep in zip(ind_pos_anchor, keep_pos)]
-        #ind_neg_anchor = [anchor_ind[keep] for anchor_ind, keep in zip(ind_neg_anchor, keep_neg)]
-        ##print('keep pos', keep_pos)
-        ##print('ind_neg_anchor', ind_neg_anchor)
+        loss_class_list = []
+        for pred_class_per_im, ind_pos_anchor_per_im, pos_labels_per_im, ind_neg_anchor_per_im in zip(pred_class,ind_pos_anchor, pos_labels, ind_neg_anchor):
+            pred_class_pos = pred_class_per_im[ind_pos_anchor_per_im]
+            #pred_class_pos = [pred_pos[ind] for pred_pos, ind in zip(pred_class, ind_pos_anchor)]
+            #pred_class_pos = torch.cat(pred_class_pos, dim=0)
 
-        #regression_targets = [target[ind] for target, ind in zip(regression_targets, keep_pos)]
-        regression_targets = torch.cat(regression_targets, dim=0)
+            label_pos = torch.zeros_like(pred_class_pos)
+            label_pos.scatter_(1,(pos_labels_per_im-1).view(-1,1), 1.0)
+            pred_class_neg = pred_class_per_im[ind_neg_anchor_per_im]
+            #pred_class_neg = [pred_neg[ind] for pred_neg, ind in zip(pred_class, ind_neg_anchor)]
+            #pred_class_neg = torch.cat(pred_class_neg, dim=0)
+            label_neg = torch.zeros_like(pred_class_neg)
+            label_pred = torch.cat((pred_class_pos, pred_class_neg), dim=0)
+            label_target = torch.cat((label_pos, label_neg), dim=0)
 
-        pred_bbox_deltas = [pred_box[ind] for pred_box, ind in zip(pred_bbox_deltas, ind_pos_anchor)]
-        pred_bbox_deltas = torch.cat(pred_bbox_deltas, dim=0)
-
-        pred_class_pos = [pred_pos[ind] for pred_pos, ind in zip(pred_class, ind_pos_anchor)]
-        pred_class_pos = torch.cat(pred_class_pos, dim=0)
-
-        label_pos = torch.zeros_like(pred_class_pos)
-        label_pos.scatter_(1,(pos_labels-1).view(-1,1), 1.0)
-        pred_class_neg = [pred_neg[ind] for pred_neg, ind in zip(pred_class, ind_neg_anchor)]
-        pred_class_neg = torch.cat(pred_class_neg, dim=0)
-        label_neg = torch.zeros_like(pred_class_neg)
-        label_pred = torch.cat((pred_class_pos, pred_class_neg), dim=0)
-        label_target = torch.cat((label_pos, label_neg), dim=0)
-
-        #loss_class = F.binary_cross_entropy_with_logits(label_pred, label_target)
-        #label_pred = torch.sigmoid_(label_pred)
-        loss_class = self.class_loss(label_pred, label_target) / label_pos.size()[0]
+            #loss_class = F.binary_cross_entropy_with_logits(label_pred, label_target)
+            #label_pred = torch.sigmoid_(label_pred)
+            loss_class_list.append(self.class_loss(label_pred, label_target) / label_pos.size()[0])
+        loss_class = sum(loss_class_list) / len(loss_class_list)
         #print('label pos shape:', label_pos.shape)
         #print('targets shape:', regression_targets.shape)
         #loss_box = self.smooth_l1_loss(pred_bbox_deltas, regression_targets) / label_pos.numel()
+
+        loss_box_list = []
+        #regression_targets = torch.cat(regression_targets, dim=0)
+        for pred_bbox_per_im, ind_pos_per_im, regression_targets_per_im in zip(pred_bbox_deltas, ind_pos_anchor, regression_targets):
+            pred_bbox_delta = pred_bbox_per_im[ind_pos_per_im]
+
+        #pred_bbox_deltas = [pred_box[ind] for pred_box, ind in zip(pred_bbox_deltas, ind_pos_anchor)]
+        #pred_bbox_deltas = torch.cat(pred_bbox_deltas, dim=0)
         # TODO this is the loss from torchvision, reduced the wight of box loss
-        loss_box = self.smooth_l1_loss(pred_bbox_deltas, regression_targets) / pred_bbox_deltas.shape[0]
+            loss_box_list.append(self.smooth_l1_loss(pred_bbox_delta, regression_targets_per_im) / pred_bbox_delta.shape[0])
+        loss_box = sum(loss_box_list)/len(loss_box_list)
+        #return label_pred, label_target
         #loss_box = self.smooth_l1_loss(pred_bbox_deltas, regression_targets) 
         #loss_box = det_utils.smooth_l1_loss(
         #    pred_bbox_deltas,
@@ -238,26 +243,28 @@ class RetinaNetHead(nn.Module):
                 iou_mat = box_iou(anchor_image, boxes) # anchor N and target boxes M, iou mat: NxM
                 # set up the max iou for each box as positive 
                 # set up the iou bigger than a value as positive
-                ind_pos_anchor, ind_pos_boxes, ind_neg_anchor = self.match_boxes(iou_mat, low_thresh=0.4, high_thresh=0.5)
+                ind_pos_anchor, ind_pos_boxes, ind_neg_anchor = self.match_boxes(iou_mat, low_thresh=0.4, high_thresh=0.5, allow_weak_match=True)
                 ind_pos_anchor_all.append(ind_pos_anchor)
                 ind_neg_anchor_all.append(ind_neg_anchor)
                 ind_pos_boxes_all.append(ind_pos_boxes)
         return ind_pos_anchor_all, ind_neg_anchor_all, ind_pos_boxes_all
 
-    def match_boxes(self, iou_mat, low_thresh, high_thresh):
+    def match_boxes(self, iou_mat, low_thresh, high_thresh, allow_weak_match=True):
         # according to faster RCNN paper, the max iou and the one bigger than 
         # high_thresh are positive matches, lower than low_thresh are negtive matches
         # the iou in between are ignored during the training
         # iou mat NxM, N anchor and M target boxes
         #N, M = iou_mat.shape
+        # if one groundtruth box cannot be matched by the thresh, we allow weak match by set allow_weak_match=True
 
         # set up the possible weak but biggest anchors that cover boxes
         # There are possible more than one anchors have same biggest 
         # value with the boxes  
 
+        # The box ind for each anchor
         match_box_ind = torch.full_like(iou_mat[:,0], -1, dtype=torch.int64)
 
-        # set the negtive index
+        # set the negtive index, the box ind will be overwrite later by the weak match if it is allowed
         max_val_anchor, max_box_ind = iou_mat.max(dim=1)
         index_neg_anchor = torch.where(max_val_anchor<low_thresh)
         match_box_ind[index_neg_anchor] = -2 # -2 means negtive anchors
@@ -270,10 +277,11 @@ class RetinaNetHead(nn.Module):
 
         # set the vague ones
         # if a anchor can match two boxes, still keep the biggest one!!!!
-        max_val, _ = iou_mat.max(dim=0)
-        inds_anchor, ind_box = torch.where(iou_mat==max_val.expand_as(iou_mat))
-        #match_box_ind[inds_anchor] = ind_box
-        match_box_ind[inds_anchor] = max_box_ind[inds_anchor]
+        if allow_weak_match:
+            max_val, _ = iou_mat.max(dim=0)
+            inds_anchor, ind_box = torch.where(iou_mat==max_val.expand_as(iou_mat))
+            #match_box_ind[inds_anchor] = ind_box
+            match_box_ind[inds_anchor] = max_box_ind[inds_anchor]
 
         #index_mat = torch.zeros_like(iou_mat)
         #ind1 = torch.arange(M)

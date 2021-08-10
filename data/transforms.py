@@ -260,7 +260,8 @@ class GeneralRCNNTransformTV(object):
         images = []
         image_path = []
         dataset_label = []
-        scales = np.zeros(len(inputs))
+        #scales = np.zeros(len(inputs))
+        scales = []
         if targets is None:
             targets=[None]*len(inputs)
 
@@ -275,7 +276,7 @@ class GeneralRCNNTransformTV(object):
                 ainput, target = self.resize_min_max(ainput, target)
             # set the tensor to device before normalize
             #ainput['data'].to(self.device)
-            scales[i] = ainput['scale']
+            scales.append(ainput['scale'])
             images.append(ainput['data'])
 
             if 'path' in ainput:

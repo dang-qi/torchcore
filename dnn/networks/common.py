@@ -37,8 +37,7 @@ def init( m ):
         return
     #print('{} is already initialized'.format(type(m)))
 
-def init_focal_loss_head(head):
-    pi = 0.01
+def init_focal_loss_head(head, pi=0.01):
     b_value = -1 * math.log((1-pi)/pi)
     last_conv = None
     for m in head.modules():

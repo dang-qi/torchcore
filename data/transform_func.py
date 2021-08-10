@@ -85,8 +85,8 @@ def resize(img, size, interpolation=Image.BILINEAR, smaller_edge=None):
 
 def resize_tensor_min_max(image, min_size, max_size):
     h, w = image.shape[-2:]
-    min_side=min(w,h) 
-    max_side=max(w,h) 
+    min_side=float(min(w,h))
+    max_side=float(max(w,h)) 
     if min_size / min_side * max_side > max_size:
         scale = max_size / max_side
     else:
@@ -94,6 +94,10 @@ def resize_tensor_min_max(image, min_size, max_size):
     image = torch.nn.functional.interpolate(
         image[None], scale_factor=scale, mode='bilinear', recompute_scale_factor=True,
         align_corners=False)[0]
+    new_h, new_w = image.shape[-2:]
+    scale_w = new_w / w
+    scale_h = new_h / h
+    scale = (scale_w, scale_h)
         
     return image, scale
 

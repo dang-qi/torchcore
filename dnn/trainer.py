@@ -1,4 +1,5 @@
 import torch
+import sys
 import torch.optim as optim
 from torch import nn
 import numpy as np
@@ -407,12 +408,12 @@ class DistributedTrainer(BaseTrainer):
         loss_sum_num = loss_sum.item()
         if not math.isfinite(loss_sum_num):
             #print("Loss is {}, stopping training".format(loss_sum))
-            self._optimizer.zero_grad()
+            self._optimizer.zero_grad(set_to_none=True)
             print('wrong targets:',targets)
             print("Loss is {}, skip this batch".format(loss_sum_num))
             print(loss_dict)
             return
-            #sys.exit(1)
+            sys._exit(1)
         self.loss_logger.update(loss_dict)
 
         # Computing gradient and do SGD step

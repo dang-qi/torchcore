@@ -4,7 +4,7 @@ from torch import nn
 #from ..heads.retina_head import RetinaHead
 from ..tools import AnchorBoxesCoder
 #from ..rpn import MyRegionProposalNetwork, RegionProposalNetwork
-from torchvision.ops.boxes import batched_nms, box_iou
+from torchvision.ops.boxes import batched_nms, box_area, box_iou, nms
 from ..losses import FocalLossSigmoid,FocalLoss,SigmoidFocalLoss
 
 class RetinaNetHead(nn.Module):
@@ -123,7 +123,12 @@ class RetinaNetHead(nn.Module):
         #pred_bbox_deltas = [pred_box[ind] for pred_box, ind in zip(pred_bbox_deltas, ind_pos_anchor)]
         #pred_bbox_deltas = torch.cat(pred_bbox_deltas, dim=0)
         # TODO this is the loss from torchvision, reduced the wight of box loss
-            loss_box_list.append(self.smooth_l1_loss(pred_bbox_delta, regression_targets_per_im) / pred_bbox_delta.shape[0])
+            #loss_box_list.append(self.smooth_l1_loss(pred_bbox_delta, regression_targets_per_im) / pred_bbox_delta.shape[0])
+            loss_box_list.append(torch.nn.functional.l1_loss(
+                pred_bbox_delta,
+                regression_targets_per_im,
+                size_average=False
+            ) / max(1, pred_bbox_delta.shape[0]))
         loss_box = sum(loss_box_list)/len(loss_box_list)
         #return label_pred, label_target
         #loss_box = self.smooth_l1_loss(pred_bbox_deltas, regression_targets) 
@@ -136,6 +141,76 @@ class RetinaNetHead(nn.Module):
         return loss_class, loss_box
 
     def post_detection(self, pred_class, pred_bbox, image_shapes, num_anchors_per_level):
+        # pre nms for each feature layers in each image
+        # crop the boxes so they are inside the image
+        # delete very small boxes
+        # post nms for all the proposals for each image
+        # proposal shape: N * Num_anchor_all * 4
+        # pred_class shape: N * Num_anchor_all * C
+
+
+        pred_class = torch.sigmoid_(pred_class)
+
+        class_num = pred_class.shape[-1]
+
+        batch_size, num_anchors_all, C = pred_class.shape
+
+        boxes_all = []
+        scores_all = []
+        labels_all = []
+        for i in range(batch_size):
+            pred_class_image = pred_class[i]
+            pred_bbox_image = pred_bbox[i]
+            image_shape = image_shapes[i]
+
+            # crop the box inside the image
+            pred_bbox_image = self.crop_boxes(pred_bbox_image, image_shape)
+
+            boxes_image = []
+            scores_image = []
+            labels_image = []
+            for class_ind in range(class_num):
+                pred_class_image_the_class= pred_class_image[:,class_ind]
+
+                # remove detection with low score
+                keep = pred_class_image_the_class > self.score_thresh
+                scores_class = pred_class_image_the_class[keep]
+                boxes_class = pred_bbox_image[keep]
+
+                # remove too small detections
+                keep = self.remove_small_boxes(boxes_class, min_size=1e-2)
+                boxes_class = boxes_class[keep]
+                scores_class = scores_class[keep]
+
+                # doing non maximum surpress
+                keep = nms(boxes_class, scores_class, self.nms_thresh)
+
+                # get topk score boxes for the level
+                keep = keep[:self.get_post_nms_top_n()]
+                boxes_class = boxes_class[keep]
+                scores_class = scores_class[keep]
+                labels_class = torch.full_like(scores_class, class_ind, dtype=int)
+
+                boxes_image.append(boxes_class)
+                scores_image.append(scores_class)
+                labels_image.append(labels_class)
+            
+            boxes_image = torch.cat(boxes_image,dim=0)
+            scores_image = torch.cat(scores_image,dim=0)
+            labels_image = torch.cat(labels_image,dim=0)
+
+            
+            boxes_all.append(boxes_image)
+            scores_all.append(scores_image)
+            labels_all.append(labels_image+1)
+
+        results = dict()
+        results['boxes'] = boxes_all
+        results['scores'] = scores_all
+        results['labels'] = labels_all
+        return results
+
+    def post_detection_old(self, pred_class, pred_bbox, image_shapes, num_anchors_per_level):
         # pre nms for each feature layers in each image
         # crop the boxes so they are inside the image
         # delete very small boxes
@@ -207,6 +282,10 @@ class RetinaNetHead(nn.Module):
         results['labels'] = labels_all
         return results
 
+    def remove_small_boxes(self, boxes, min_size):
+        area = box_area(boxes)
+        keep = area >= min_size
+        return keep
 
     def crop_boxes(self, boxes, image_size):
         # boxes: N * 4 tensor, x1, y1, x2, y2 format

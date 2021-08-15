@@ -8,7 +8,7 @@ from torchvision.ops import roi_align, nms
 from .faster_rcnn_roi_fpn import RoITargetConverter
 
 class RetinaRoINet(GeneralDetector):
-    def __init__(self, backbone, target_converter_cfg, neck=None, heads=None, cfg=None, training=True, feature_names=['0','1','2','p6', 'p7'], debug_time=False, just_rpn=False):
+    def __init__(self, backbone, target_converter_cfg, neck=None, heads=None, cfg=None, training=True, feature_names=['0','1','2','p6', 'p7'], roi_box_key='input_box', debug_time=False, just_rpn=False):
         super(GeneralDetector, self).__init__()
         self.backbone = backbone
         self.neck = neck
@@ -16,6 +16,7 @@ class RetinaRoINet(GeneralDetector):
         self.training = training
         self.feature_names = feature_names
         self.strides = None
+        self.roi_box_key = roi_box_key
         self.just_rpn=just_rpn
         self.target_converter = RoITargetConverter(target_converter_cfg.roi_pool_w, target_converter_cfg.roi_pool_h, target_converter_cfg.stride, target_converter_cfg.boxes_key, target_converter_cfg.keep_key, target_converter_cfg.mask_key, allow_box_outside=target_converter_cfg.allow_box_outside)
 

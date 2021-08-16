@@ -311,7 +311,8 @@ class ResNetRoI(nn.Module):
         if self.multi_feature:
             out_feature = OrderedDict()
             for ind, i in enumerate(range(self.roi_layer,5)):
-                out_feature[str(ind)] = out[i]
+                #out_feature[str(ind)] = out[i]
+                out_feature[str(i-1)] = out[i]
             #for o in out:
             #    print(o.shape)
             #for k,v in out_feature.items():

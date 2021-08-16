@@ -127,7 +127,7 @@ class RetinaNetHead(nn.Module):
             loss_box_list.append(torch.nn.functional.l1_loss(
                 pred_bbox_delta,
                 regression_targets_per_im,
-                size_average=False
+                reduction='sum'
             ) / max(1, pred_bbox_delta.shape[0]))
         loss_box = sum(loss_box_list)/len(loss_box_list)
         #return label_pred, label_target

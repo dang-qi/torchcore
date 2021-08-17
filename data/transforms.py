@@ -100,7 +100,14 @@ class ResizeMinMaxTV(object):
         if 'scale' not in inputs:
             inputs['scale'] = scale
         else:
-            inputs['scale'] = scale * inputs['scale']
+            if isinstance(scale, tuple) and isinstance(inputs['scale'], tuple):
+                inputs['scale'] = (scale[0]*inputs['scale'][0], scale[1]*inputs['scale'][1])
+            elif isinstance(scale, tuple) and isinstance(inputs['scale'], float):
+                inputs['scale'] = (scale[0]*inputs['scale'], scale[1]*inputs['scale'])
+            elif isinstance(scale, float) and isinstance(inputs['scale'], tuple):
+                inputs['scale'] = (scale*inputs['scale'][0], scale*inputs['scale'][1])
+            else:
+                inputs['scale'] = scale * inputs['scale']
         #inputs['scale'] = self.scale
         
         if targets is not None:

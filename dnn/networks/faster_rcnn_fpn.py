@@ -89,7 +89,13 @@ class FasterRCNNFPN(GeneralDetector):
             if len(boxes)>0:
                 if 'scale' in inputs:
                     scale = inputs['scale'][i]
-                    boxes /= scale
+                    if isinstance(scale, float):
+                        boxes /= scale
+                    else:  # scale w and scale h are seperated
+                        boxes[...,0] = boxes[...,0] / scale[0]
+                        boxes[...,2] = boxes[...,2] / scale[0]
+                        boxes[...,1] = boxes[...,1] / scale[1]
+                        boxes[...,3] = boxes[...,3] / scale[1]
 
             results['boxes'][i] = boxes
             results['scores'][i] = scores

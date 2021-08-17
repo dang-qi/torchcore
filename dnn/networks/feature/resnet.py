@@ -203,12 +203,15 @@ class ResNetRoI(nn.Module):
         roi_w: int = 128,
         roi_h: int = 128,
         roi_layer: int = 2,
+        returned_layers: list = [1,2,3,4],
         multi_feature: bool = True
     ) -> None:
         super(ResNetRoI, self).__init__()
         if norm_layer is None:
             norm_layer = nn.BatchNorm2d
         self._norm_layer = norm_layer
+
+        self.returned_layers = returned_layers
 
         self.inplanes = 64
         self.dilation = 1
@@ -234,8 +237,8 @@ class ResNetRoI(nn.Module):
                                        dilate=replace_stride_with_dilation[1])
         self.layer4 = self._make_layer(block, 512, layers[3], stride=2,
                                        dilate=replace_stride_with_dilation[2])
-        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-        self.fc = nn.Linear(512 * block.expansion, num_classes)
+        #self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
+        #self.fc = nn.Linear(512 * block.expansion, num_classes)
         self.roi_layer = roi_layer
         self.multi_feature = multi_feature
 
@@ -312,7 +315,8 @@ class ResNetRoI(nn.Module):
             out_feature = OrderedDict()
             for ind, i in enumerate(range(self.roi_layer,5)):
                 #out_feature[str(ind)] = out[i]
-                out_feature[str(i-1)] = out[i]
+                if i in self.returned_layers:
+                    out_feature[str(i-1)] = out[i]
             #for o in out:
             #    print(o.shape)
             #for k,v in out_feature.items():

@@ -403,7 +403,7 @@ class DistributedTrainer(BaseTrainer):
         #loss_sum = sum(loss for loss in loss_dict.values())
         loss_sum=0
         for single_loss in loss_dict:
-            loss_sum = loss_sum + loss_dict[single_loss]
+            loss_sum = loss_sum + (loss_dict[single_loss]/self._cfg.accumulation_step)
 
         loss_sum_num = loss_sum.item()
         if not math.isfinite(loss_sum_num):
@@ -461,7 +461,7 @@ class DistributedTrainer(BaseTrainer):
             #loss_sum = sum(loss for loss in loss_dict.values())
             loss_sum=0
             for single_loss in loss_dict:
-                loss_sum = loss_sum + loss_dict[single_loss]
+                loss_sum = loss_sum + (loss_dict[single_loss]/self._cfg.accumulation_step)
                 #if self.rank==0 or not self.distributed:
                 if self.is_main_process():
                     if single_loss in average_losses:

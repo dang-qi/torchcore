@@ -88,3 +88,17 @@ class FashionPediaDataset(Dataset):
             for obj in image['objects']:
                 obj['bbox'][2]+=obj['bbox'][0]
                 obj['bbox'][3]+=obj['bbox'][1]
+
+    def generate_id_dict(self):
+        print('generating id dict...')
+        self.id_dict = dict()
+        for i,im in enumerate(self._images):
+            im_id = im['id']
+            self.id_dict[im_id] = i
+
+    def extract_by_id(self, im_id):
+        if not hasattr(self,'id_dict'):
+            self.generate_id_dict()
+        index = self.id_dict[im_id]
+        return self.__getitem__(index)
+

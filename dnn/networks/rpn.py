@@ -3,6 +3,7 @@ import math
 import traceback
 import sys
 from torch import nn
+from collections.abc import Iterable
 
 from torchvision.models.detection.rpn import AnchorGenerator, RegionProposalNetwork
 from torchvision.ops import nms
@@ -118,10 +119,19 @@ class RoIAnchorGenerator(MyAnchorGenerator):
         aspect_ratios=((0.5, 1.0, 2.0),),
     ):
         '''
-        base_stride is the stride for the first feature level before roi pool
+        base_stride has two mode: 
+            If base_stride is float/int:it is the stride of the first feature level sending to the FPN
+            If base_stride are tuple(tuple(stride_height, stride_width)...):
+            then the stride are fixed.
         '''
         super().__init__(sizes=sizes, aspect_ratios=aspect_ratios)
-        self.base_stride = base_stride
+        if isinstance(base_stride, Iterable):
+            self.base_stride = None
+            self.strides = base_stride
+        else:
+            self.base_stride = base_stride
+        
+
 
     def forward(self, inputs, feature_maps):
         grid_sizes = tuple([feature_map.shape[-2:] for feature_map in feature_maps])
@@ -129,7 +139,11 @@ class RoIAnchorGenerator(MyAnchorGenerator):
             batch_size = inputs['batch_size']
         else:
             batch_size = len(inputs['data'])
-        strides = tuple(((grid_sizes[0][0] // g[0])* self.base_stride, (grid_sizes[0][1] // g[1])*self.base_stride) for g in grid_sizes)
+        if self.base_stride is None:
+            assert len(self.strides) == len(grid_sizes)
+            strides = self.strides
+        else:
+            strides = tuple(((grid_sizes[0][0] // g[0])* self.base_stride, (grid_sizes[0][1] // g[1])*self.base_stride) for g in grid_sizes)
         try:
             # for earlier version torchvision
             self.set_cell_anchors(feature_maps[0].device)

@@ -156,8 +156,8 @@ class RoITargetConverter():
                 if self.allow_box_outside:
                     boxes[:,0] = boxes[:,0] - roi_box[0] 
                     boxes[:,1] = boxes[:,1] - roi_box[1]
-                    boxes[:,2] = boxes[:,2] - roi_box[2]
-                    boxes[:,3] = boxes[:,3] - roi_box[3]
+                    boxes[:,2] = boxes[:,2] - roi_box[0]
+                    boxes[:,3] = boxes[:,3] - roi_box[1]
 
                     intersection = (torch.minimum(boxes[:,2], torch.full_like(boxes[:,2],roi_w))- torch.maximum(torch.full_like(boxes[:,0],0), boxes[:,0]))\
                         *(torch.minimum(boxes[:,3], torch.full_like(boxes[:,3], roi_h))-torch.maximum(boxes[:,1],torch.full_like(boxes[:,1],0)))

@@ -19,6 +19,10 @@ class RetinaNetHead(nn.Module):
         #self.class_loss = FocalLossSigmoid(alpha=0.25, gamma=2)
         self.class_loss = SigmoidFocalLoss(alpha=0.25, gamma=2, reduction='sum')
         self.smooth_l1_loss = nn.SmoothL1Loss(reduction='sum', beta= 1.0 / 9) 
+        if hasattr(cfg, 'no_post_clip'):
+            self.no_post_clip = cfg.no_post_clip
+        else:
+            self.no_post_clip = False
 
     def forward(self, inputs, features, targets=None):
         # convert features to list
@@ -164,7 +168,8 @@ class RetinaNetHead(nn.Module):
             image_shape = image_shapes[i]
 
             # crop the box inside the image
-            pred_bbox_image = self.crop_boxes(pred_bbox_image, image_shape)
+            if not self.no_post_clip:
+                pred_bbox_image = self.crop_boxes(pred_bbox_image, image_shape)
 
             boxes_image = []
             scores_image = []

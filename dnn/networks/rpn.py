@@ -187,7 +187,7 @@ class MyRegionProposalNetwork(RegionProposalNetwork):
     def forward(self, inputs, features, targets):
         """
         Arguments:
-            inputs (dict with 'data', 'image_size'): images for which we want to compute the predictions
+            inputs (dict with 'data', 'image_sizes'): images for which we want to compute the predictions
             features (List[Tensor]): features computed from the images that are
                 used for computing the predictions. Each tensor in the list
                 correspond to different feature levels

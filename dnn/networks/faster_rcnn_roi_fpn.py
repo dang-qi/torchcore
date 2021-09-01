@@ -21,6 +21,8 @@ class FasterRCNNRoIFPN(GeneralDetector):
         self.just_rpn=just_rpn
         self.base_stride = base_stride
         self.target_converter = RoITargetConverter(target_converter_cfg.roi_pool_w, target_converter_cfg.roi_pool_h, target_converter_cfg.stride, target_converter_cfg.boxes_key, target_converter_cfg.keep_key, target_converter_cfg.mask_key, allow_box_outside=target_converter_cfg.allow_box_outside)
+        self.roi_pool_w = target_converter_cfg.roi_pool_w
+        self.roi_pool_h = target_converter_cfg.roi_pool_h
 
         if debug_time:
             self.total_time = {'feature':0.0, 'rpn':0.0, 'roi_head':0.0}
@@ -36,11 +38,16 @@ class FasterRCNNRoIFPN(GeneralDetector):
         if debug_time:
             feature_time = time.time()
             self.total_time['feature'] += feature_time - start
+
+
         #print('feature keys:', features.keys())
         #for k,v in features.items():
         #    print('{}:{}'.format(k, v.shape))
         if self.neck is not None:
             features = self.neck(features)
+
+        # TODO add input image size here
+        inputs['image_sizes'] = [(self.base_stride * self.roi_pool_h, self.base_stride*self.roi_pool_w) for i in range(len(features))]
 
         #print('strides', strides)
         # This is new place to try

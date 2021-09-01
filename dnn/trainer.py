@@ -290,6 +290,13 @@ class DistributedTrainer(BaseTrainer):
             self.train_step()
 
     def train_step( self ):
+        self._model.train()
+        if hasattr(self._cfg,'freeze_bn'):
+            if self._cfg.freeze_bn:
+                if isinstance(self._model, DDP):
+                    self._model.module.freeze_bn()
+                else:
+                    self._model.freeze_bn()
 
         self._optimizer.zero_grad()
         for step in tqdm.tqdm(range(self.start_step, self.end_step+1),desc='Training'):
@@ -315,6 +322,13 @@ class DistributedTrainer(BaseTrainer):
     def train_epoch( self ):
         #if self._testset is not None :
         #    self._validate()
+        self._model.train()
+        if hasattr(self._cfg,'freeze_bn'):
+            if self._cfg.freeze_bn:
+                if isinstance(self._model, DDP):
+                    self._model.module.freeze_bn()
+                else:
+                    self._model.freeze_bn()
 
         for i in range( self._epoch+1, self._niter+1 ):
             if self._train_sampler is not None:
@@ -322,7 +336,7 @@ class DistributedTrainer(BaseTrainer):
             if self.is_main_process():
                 print("Epoch %d/%d" % (i,self._niter))
                 self._logger.info('epoch {}\n'.format(i))
-            self._model.train()
+            #self._model.train()
             self._train_epoch()
 
             if self._testset is not None and i%1 == 0 :
@@ -385,7 +399,14 @@ class DistributedTrainer(BaseTrainer):
         self.train_set_iter = iter(self._trainset)
 
     def _train_step( self ):
-        self._model.train()
+        if not self._model.training:
+            self._model.train()
+            if hasattr(self._cfg,'freeze_bn'):
+                if self._cfg.freeze_bn:
+                    if isinstance(self._model, DDP):
+                        self._model.module.freeze_bn()
+                    else:
+                        self._model.freeze_bn()
 
         try:
             data = next(self.train_set_iter)
@@ -441,7 +462,14 @@ class DistributedTrainer(BaseTrainer):
             
 
     def _train_epoch( self ):
-        self._model.train()
+        if not self._model.training:
+            self._model.train()
+            if hasattr(self._cfg,'freeze_bn'):
+                if self._cfg.freeze_bn:
+                    if isinstance(self._model, DDP):
+                        self._model.module.freeze_bn()
+                    else:
+                        self._model.freeze_bn()
 
         loss_values = []
         average_losses = {}

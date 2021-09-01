@@ -18,7 +18,7 @@ class RetinaNet(GeneralDetector):
         self.just_rpn=just_rpn
 
         if debug_time:
-            self.total_time = {'feature':0.0, 'rpn':0.0, 'roi_head':0.0}
+            self.total_time = {'feature':0.0, 'neck':0.0, 'retina_head':0.0}
         self.debug_time = debug_time
         
 
@@ -35,6 +35,9 @@ class RetinaNet(GeneralDetector):
         #    print('{}:{}'.format(k, v.shape))
         if self.neck is not None:
             features = self.neck(features)
+        if debug_time:
+            neck_time = time.time()
+            self.total_time['neck'] += neck_time - feature_time
 
         #print('strides', strides)
         # This is new place to try
@@ -48,6 +51,9 @@ class RetinaNet(GeneralDetector):
         else:
             results = self.retina_head(inputs, rpn_features, targets)
             results = self.post_process(results, inputs)
+            if debug_time:
+                head_time = time.time()
+                self.total_time['retina_head'] += head_time - neck_time
             return results
 
 

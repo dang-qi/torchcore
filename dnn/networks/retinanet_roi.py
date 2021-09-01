@@ -21,7 +21,7 @@ class RetinaRoINet(GeneralDetector):
         self.target_converter = RoITargetConverter(target_converter_cfg.roi_pool_w, target_converter_cfg.roi_pool_h, target_converter_cfg.stride, target_converter_cfg.boxes_key, target_converter_cfg.keep_key, target_converter_cfg.mask_key, allow_box_outside=target_converter_cfg.allow_box_outside)
 
         if debug_time:
-            self.total_time = {'feature':0.0, 'rpn':0.0, 'roi_head':0.0}
+            self.total_time = {'feature':0.0, 'neck':0.0, 'retina_head':0.0}
         self.debug_time = debug_time
         
 
@@ -40,6 +40,9 @@ class RetinaRoINet(GeneralDetector):
         #    print('{}:{}'.format(k, v.shape))
         if self.neck is not None:
             features = self.neck(features)
+        if debug_time:
+            neck_time = time.time()
+            self.total_time['neck'] += neck_time - feature_time
 
         #print('strides', strides)
         # This is new place to try
@@ -56,6 +59,9 @@ class RetinaRoINet(GeneralDetector):
             results = self.retina_head(inputs, rpn_features, targets)
             results = self.target_converter.convert_back(roi_boxes, results)
             results = self.post_process(results, inputs)
+            if debug_time:
+                head_time = time.time()
+                self.total_time['retina_head'] += head_time - neck_time
             return results
 
 

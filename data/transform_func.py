@@ -438,3 +438,33 @@ def crop_masks(masks, position):
     out = np.zeros((c, height, width),dtype=masks.dtype)
     out[:,0:h-y1,0:w-x1] = masks[:,y1:y2, x1:x2]
     return out
+
+def extend_boxes(boxes, scale, im_width, im_height):
+    '''
+    Extend the boxes from the center to up down left right, the boxes doesn't change when scale=1
+    im_width and im_height is for boxes cropping in case when the boxes are extended too much
+    '''
+    x1 = boxes[...,0].copy()
+    y1 = boxes[...,1].copy()
+    x2 = boxes[...,2].copy()
+    y2 = boxes[...,3].copy()
+
+    h_half = (y2 - y1) / 2
+    w_half = (x2 - x1) / 2
+
+    x1 -= w_half*(scale-1)
+    y1 -= h_half*(scale-1)
+    x2 += w_half*(scale-1)
+    y2 += h_half*(scale-1)
+
+    x1 = x1.clip(0, im_width)
+    y1 = y1.clip(0, im_height)
+    x2 = x2.clip(0, im_width)
+    y2 = y2.clip(0, im_height)
+
+    boxes[...,0] = x1
+    boxes[...,1] = y1
+    boxes[...,2] = x2
+    boxes[...,3] = y2
+
+    return boxes

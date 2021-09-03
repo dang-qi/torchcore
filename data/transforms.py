@@ -546,7 +546,7 @@ class AddSurrandingBox(object):
         return inputs, targets
 
 class AddPersonBox(object):
-    def __init__(self, anno_path, name='input_box', out_name='input_box', targets_boxes_name='boxes', add_extra_dim=False, extend_to_target_boxes=False, extra_padding=None, random_scale_and_crop=None):
+    def __init__(self, anno_path, name='input_box', out_name='input_box', targets_boxes_name='boxes', add_extra_dim=False, extend_to_target_boxes=None, extra_padding=None, random_scale_and_crop=None, extend_ratio=None):
         '''
         name: the key of person box in annotation file
         out_name: the key in output targets
@@ -554,6 +554,9 @@ class AddPersonBox(object):
         add_extra_dim: if we need to add extra dimension for person box since its size can be (4,), instead of (n,4)
         extra_padding: do we need to add extra padding for person box so it can be devided by the number
         random_scale_and_crop: List or tuple(min_scale, max_scale) randomly extend or shrink the person box for training, random scale ONLY SUPPORT ONE PERSON BOX
+        extend_ratio: extend the person box by the ratio from center, the 
+        code does nothing when extend_ratio=1, the output box will have the
+        side_length=side_length*extend_ratio
         '''
         self.name = name
         self.out_name = out_name
@@ -562,6 +565,8 @@ class AddPersonBox(object):
         self.extend_to_target_boxes = extend_to_target_boxes
         self.extra_padding = extra_padding
         self.random_scale = random_scale_and_crop
+        self.extend_ratio = extend_ratio
+        assert sum([x is not None for x in [self.extend_to_target_boxes, self.random_scale, self.extend_ratio]]) <= 1
         with open(anno_path, 'rb') as f:
             self.anno = pickle.load(f)
     
@@ -585,6 +590,10 @@ class AddPersonBox(object):
             roi_box[...,2] = max(x2, roi_box[...,2])
             roi_box[...,3] = max(y2, roi_box[...,3])
 
+        if self.extend_ratio is not None:
+            im_width, im_height = inputs['data'].size
+            roi_box = F.extend_boxes(roi_box, self.extend_ratio, im_width, im_height)
+
         if self.random_scale is not None:
             assert self.random_scale[1] > self.random_scale[0]
             # only support one person box
@@ -600,8 +609,8 @@ class AddPersonBox(object):
                 h_half = (y2 - y1) / 2
                 w_half = (x2 - x1) / 2
 
-                x1 += w_half*(scale[0]-1)
-                y1 += h_half*(scale[1]-1)
+                x1 -= w_half*(scale[0]-1)
+                y1 -= h_half*(scale[1]-1)
                 x2 += w_half*(scale[2]-1)
                 y2 += h_half*(scale[3]-1)
 

@@ -595,7 +595,7 @@ class AddPersonBox(object):
             roi_box = F.extend_boxes(roi_box, self.extend_ratio, im_width, im_height)
 
         if self.random_scale is not None:
-            assert self.random_scale[1] > self.random_scale[0]
+            assert self.random_scale[1] >= self.random_scale[0]
             # only support one person box
             assert roi_box.shape == (1,4) or roi_box.shape == (4,)
             while True:

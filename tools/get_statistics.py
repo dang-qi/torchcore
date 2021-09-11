@@ -1,7 +1,7 @@
 import sys
 sys.path.append('..')
 sys.path.append('.')
-from tools.hdf5_generater import *
+from .hdf5_generater import *
 
 def xywh_to_xyxy(box):
     box_new = box.copy()
@@ -38,7 +38,23 @@ def intersection_status(human_box, objects, ratio=0.7):
 
     return good_box, bad_box
 
-def get_statistics(part, human_detections, imageset, expand_rate, im_root=None):
+def intersection_status_by_category(human_box, objects, category_num, ratio=0.7):
+    '''objects"[{'bbox':bbox(x,y,w,h), 'category_id':cat_id}]'''
+    good_box = np.zeros(category_num)
+    bad_box = np.zeros(category_num)
+    for obj in objects:
+        bbox = obj['bbox']
+        category_id = obj['category_id']
+        bbox = xywh_to_xyxy(bbox)
+        IoR = cal_IoR(human_box, bbox)
+        if IoR >= ratio:
+            good_box[category_id-1]+=1
+        else:
+            bad_box[category_id-1]+=1
+
+    return good_box, bad_box
+
+def get_statistics(part, human_detections, imageset, expand_rate, im_root=None, gen_id_map=True, intersection_ratio_thresh=0.7):
     no_detection = 0
     has_human_detection = 0
     invalid_num = 0
@@ -62,7 +78,10 @@ def get_statistics(part, human_detections, imageset, expand_rate, im_root=None):
     ratio_box = 2
     out_size = (128, 256)
     assert out_size[0] * ratio_box == out_size[1]
-    human_map = gen_human_id_map(human_detections)
+    if gen_id_map:
+        human_map = gen_human_id_map(human_detections)
+    else:
+        human_map = human_detections
     for image in imageset:
         im_id = image['id']
         im_w, im_h = image['width'], image['height']
@@ -141,6 +160,122 @@ def get_statistics(part, human_detections, imageset, expand_rate, im_root=None):
     print('Without extention good garments in garments in good ratio image ratio is {}'.format(g_in_good/garments_with_good_human))
     print('With extention good garments in garments in good ratio image ratio is {}'.format(g_in_ext_good/garments_with_good_human))
 
+def get_garments_in_human_statistics(human_detections, imageset, expand_rate, category_num, gen_id_map=False, intersection_ratio_thresh=0.7, print_result=True):
+    '''
+    category id in the imageset should start from 1
+    '''
+    no_detection = 0
+    has_human_detection = 0
+    invalid_num = 0
+    bad_ratio = 0
+    good_ratio = 0
+    lost_garments_all = 0
+    lost_garments_roi = 0
+    garments = np.zeros(category_num)
+    garments_with_human = 0
+    garments_with_good_human = 0
+    g_in = np.zeros(category_num) # garments in box (ratio>0.7)
+    g_out = np.zeros(category_num)
+    g_in_ext = np.zeros(category_num) # garments in extended box (ratio>0.7)
+    g_out_ext = np.zeros(category_num)
+
+    # only count the one with good human detecion(human box ratio > 2)
+    g_in_good = np.zeros(category_num) # garments in box (ratio>0.7)
+    g_out_good = np.zeros(category_num)
+    g_in_ext_good = np.zeros(category_num) # garments in extended box (ratio>0.7)
+    g_out_ext_good = np.zeros(category_num)
+    #ratio_box = 2
+    #out_size = (128, 256)
+    #assert out_size[0] * ratio_box == out_size[1]
+    if gen_id_map:
+        human_map = gen_human_id_map(human_detections)
+    else:
+        human_map = human_detections
+    for image in imageset:
+        im_id = image['id']
+        im_w, im_h = image['width'], image['height']
+
+        objects = image['objects']
+        for obj in objects:
+            garments[obj['category_id']-1] += 1
+        if im_id not in human_map:
+            print('image {} has no human detection'.format(im_id))
+            continue
+        human_boxes = human_map[im_id]
+        if len(human_boxes)==0:
+            no_detection += 1
+            lost_garments_all += len(objects)
+            continue
+        else:
+            has_human_detection += 1
+        garments_with_human += len(objects)
+        #biggest_box = get_biggest_box(human_boxes)
+        biggest_box = human_boxes['input_box']
+        ratio = (biggest_box[3]-biggest_box[1]) / (biggest_box[2]-biggest_box[0])
+        if ratio < 2:
+            bad_ratio += 1
+            good_human = False
+            #continue
+        else:
+            good_ratio += 1
+            good_human = True
+            garments_with_good_human += len(objects)
+
+        #img_path = os.path.join(im_root, 'train', image['file_name'] )
+        #im = Image.open(img_path).convert('RGB')
+
+        # before box extend 
+        good_box, bad_box = intersection_status_by_category(biggest_box, objects, category_num, intersection_ratio_thresh)
+        g_in += good_box
+        g_out += bad_box
+        if good_human:
+            g_in_good += good_box
+            g_out_good += bad_box
+
+        if expand_rate > 0:
+            biggest_box = expand_box(biggest_box, expand_rate, im_w, im_h)
+
+        # after box extension
+        good_box, bad_box = intersection_status_by_category(biggest_box, objects, category_num, intersection_ratio_thresh)
+        g_in_ext += good_box
+        g_out_ext += bad_box
+        if good_human:
+            g_in_ext_good += good_box
+            g_out_ext_good += bad_box
+
+        # make the box correct ratio to crop
+        #biggest_box = pad_box_by_ratio(biggest_box, ratio_box)
+
+    image_number = len(imageset)
+    if print_result:
+        print('total image number is {}'.format(image_number))
+
+        print('--%Person Detection--')
+        print('Person detection rate is {}'.format(has_human_detection/image_number))
+        print()
+
+        print('---%Garments in all image---')
+        print('Without extention good garments ratio is {}'.format( g_in/garments))
+        print('With extention good garments ratio is {}'.format( g_in_ext/garments))
+        print('With extention bad garments ratio is {}'.format( g_out_ext/garments))
+        print()
+
+        print('---%Garments in images with person---')
+        print('Without extention good garments ratio is {}'.format(g_in/garments_with_human))
+        print('With extention good garments ratio is {}'.format(g_in_ext/garments_with_human))
+        print()
+
+        print('---%Person detection with h>2*w ---')
+        print('Good person detection rate is {}'.format(good_ratio/ image_number))
+        print()
+
+        print('---% Garments for h>2*w---')
+        print('Without extention good garments in all garments ratio is {}'.format(g_in_good/garments))
+        print('With extention good garments in all garments ratio is {}'.format(g_in_ext_good/garments))
+        print('Without extention good garments in garments in good ratio image ratio is {}'.format(g_in_good/garments_with_good_human))
+        print('With extention good garments in garments in good ratio image ratio is {}'.format(g_in_ext_good/garments_with_good_human))
+    return g_in, g_in_ext, garments
+
 def image_test(human_detections, imageset, im_root):
     human_map = gen_human_id_map(human_detections)
     for image in imageset:
@@ -154,6 +289,43 @@ def image_test(human_detections, imageset, im_root):
         draw_plain_boxes(im, human_boxes)
         im.show()
         break
+
+def get_dataset_category_statics(path, part, names=None):
+    with open(path, 'rb') as f:
+        anno = pickle.load(f)[part]
+        labels = []
+        boxes = []
+        for image in anno:
+            for obj in image['objects']:
+                labels.append(obj['category_id'])
+                boxes.append(obj['bbox'])
+
+        boxes = np.array(boxes, dtype=np.float32)
+        labels = np.array(labels, dtype=np.int64)
+
+        max_label = labels.max()
+        min_label = labels.min()
+
+        if names is None:
+            names = [str(i) for i in range(min_label, max_label+1)]
+
+        assert len(names) >= max_label - min_label + 1
+
+        label_num = np.zeros(max_label-min_label+1)
+        for i,j in enumerate(range(min_label, max_label+1)):
+            num = np.sum(labels==j)
+            label_num[i] = num
+        item_num = len(labels)
+
+        result = {name:num for name,num in zip(names, label_num)}
+        return result
+        
+
+
+
+            
+
+
 
 
 if __name__ == '__main__':

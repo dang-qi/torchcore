@@ -242,3 +242,31 @@ def visulize_colored_heatmaps_with_image(heatmap, image):
     blend_im = Image.blend(heatmap, image, 0.5)
     #blend_im.show()
     return blend_im
+
+def draw_category_distribution_barh(stat_dict, sorted=False, title=None):
+    '''
+    stat_dict: dict(category_name:item_number)
+    sorted: do you what to sort the category distribution
+    '''
+    names=[]
+    val = []
+    for k,v in stat_dict.items():
+        names.append(k)
+        val.append(v)
+    if sorted:
+        val = np.array(val)
+        order = np.argsort(val)
+        names = np.array(names)
+        names = names[order]
+        val = val[order]
+
+    x = np.arange(len(names))
+    #plt.figure(figsize=(8,10))
+    fig, ax = plt.subplots(figsize=(8,10))
+    ax.barh(x, val,log=True, tick_label=names)
+    ax.set_xlabel('Number')
+    ax.set_ylabel('Category')
+    ax.bar_label(ax.containers[0])
+    if title is not None:
+        ax.set_title(title)
+    plt.show()

@@ -6,6 +6,7 @@ from PIL import Image
 import os
 from ..dataset_util import get_binary_mask
 from torchvision.transforms.functional import to_tensor
+import copy
 
 class FashionPediaDataset(Dataset):
     '''FashionPedia dataset'''
@@ -101,4 +102,55 @@ class FashionPediaDataset(Dataset):
             self.generate_id_dict()
         index = self.id_dict[im_id]
         return self.__getitem__(index)
+
+    def set_category_subset(self, cat_id, ignore_other_category=True):
+        '''
+        cat_id: int or list
+        make the dataset the subset with only some of the category
+        '''
+        if not hasattr(self, 'category_index_dict'):
+            self.generate_cat_dict()
+        if isinstance(cat_id, int):
+            cat_id = [cat_id]
+        the_sets = [set(self.category_index_dict[i]) for i in cat_id]
+        im_indexs = set.union(set(), *the_sets)
+
+        if ignore_other_category:
+            cat_id = set(cat_id)
+            self._images = []
+            for i in im_indexs:
+                im = copy.deepcopy(self._original_images[i])
+                im_objs = im['objects']
+                im['objects'] = []
+                for obj in im_objs:
+                    if obj['category_id'] in cat_id:
+                        im['objects'].append(obj)
+                self._images.append(im)
+        else:
+            self._images = [self._original_images[i] for i in im_indexs]
+
+    def generate_cat_dict(self):
+        if hasattr(self, 'category_index_dict'):
+            print('category_index_dict has been generated')
+            return
+
+        self.category_im_dict = {}
+        self.category_index_dict = {}
+        if not hasattr(self, '_original_images'):
+            self._original_images = self._images
+        
+        for i,im in enumerate(self._original_images):
+            im_cat_id = set()
+            for obj in im['objects']:
+                cat_id = obj['category_id']
+                if cat_id in im_cat_id:
+                    continue
+                else:
+                    im_cat_id.add(cat_id)
+                if cat_id not in self.category_im_dict:
+                    self.category_im_dict[cat_id] = []
+                    self.category_index_dict[cat_id] = []
+                else:
+                    self.category_im_dict[cat_id].append(im)
+                    self.category_index_dict[cat_id].append(i)
 

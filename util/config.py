@@ -126,5 +126,3 @@ class Config:
         else:
             text = ''
         super(Config, self).__setattr__('_text', text)
-
-        

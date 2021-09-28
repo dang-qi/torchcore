@@ -319,8 +319,149 @@ def get_dataset_category_statics(path, part, names=None):
 
         result = {name:num for name,num in zip(names, label_num)}
         return result
+
+def get_dataset_area_statics_by_category(path, part, area_bin, longer_side_len, names=None):
+    '''
+    area_bin should be a iterable [] or numpy array that contains the thresh 
+    set longer_side_len as None if you don't want to resize the image
+    '''
+    with open(path, 'rb') as f:
+        anno = pickle.load(f)[part]
+        labels = []
+        boxes = []
+        for image in anno:
+            im_width = image['width']
+            im_height = image['height']
+            if longer_side_len is not None:
+                scale = max(im_width, im_height) / 1024
+            else:
+                scale = 1
+            for obj in image['objects']:
+                labels.append(obj['category_id'])
+                boxes.append(obj['bbox'])
+
+        boxes = np.array(boxes, dtype=np.float32) / scale
+        labels = np.array(labels, dtype=np.int64)
+        box_areas = (boxes[:,3]) * (boxes[:,2])
+
+        max_label = labels.max()
+        min_label = labels.min()
+
+        if area_bin is not None:
+            bin_len = len(area_bin)+1
+
+        if names is None:
+            names = [str(i) for i in range(min_label, max_label+1)]
+
+        assert len(names) >= max_label - min_label + 1
+
+        result_all = []
+        for i,label in enumerate(range(min_label, max_label+1)):
+            box_areas_with_label = box_areas[labels==label]
+            if area_bin is None:
+                cat_result = box_areas_with_label
+            else:
+                cat_result = np.zeros(bin_len)
+                for k in range(bin_len):
+                    if k==0:
+                        num = (box_areas_with_label<area_bin[0]).sum()
+                    elif k== bin_len-1:
+                        num = (box_areas_with_label>= area_bin[k-1]).sum()
+                    else:
+                        num = np.bitwise_and(box_areas_with_label>=area_bin[k-1], box_areas_with_label<area_bin[k]).sum()
+                    cat_result[k] = num
+            result_all.append(cat_result)
+
+        result = {name:num for name,num in zip(names, result_all)}
+        return result
+
+def get_dataset_aspect_ratio_statics_by_category(path, part, aspect_ratio_bin, longer_side_len, names=None):
+    '''
+    area_bin should be a iterable [] or numpy array that contains the thresh 
+    set longer_side_len as None if you don't want to resize the image
+    '''
+    with open(path, 'rb') as f:
+        anno = pickle.load(f)[part]
+        labels = []
+        boxes = []
+        for image in anno:
+            im_width = image['width']
+            im_height = image['height']
+            if longer_side_len is not None:
+                scale = max(im_width, im_height) / 1024
+            else:
+                scale = 1
+            for obj in image['objects']:
+                labels.append(obj['category_id'])
+                boxes.append(obj['bbox'])
+
+        boxes = np.array(boxes, dtype=np.float32) / scale
+        labels = np.array(labels, dtype=np.int64)
+        box_aspect_ratio = (boxes[:,3]) / (boxes[:,2])
+
+        max_label = labels.max()
+        min_label = labels.min()
+
+        if aspect_ratio_bin is not None:
+            bin_len = len(aspect_ratio_bin)+1
+
+        if names is None:
+            names = [str(i) for i in range(min_label, max_label+1)]
+
+        assert len(names) >= max_label - min_label + 1
+
+        result_all = []
+        for i,label in enumerate(range(min_label, max_label+1)):
+            box_aspect_ratio_with_label = box_aspect_ratio[labels==label]
+            if aspect_ratio_bin is None:
+                cat_result = box_aspect_ratio_with_label
+            else:
+                cat_result = np.zeros(bin_len)
+                for k in range(bin_len):
+                    if k==0:
+                        num = (box_aspect_ratio_with_label<aspect_ratio_bin[0]).sum()
+                    elif k== bin_len-1:
+                        num = (box_aspect_ratio_with_label>= aspect_ratio_bin[k-1]).sum()
+                    else:
+                        num = np.bitwise_and(box_aspect_ratio_with_label>=aspect_ratio_bin[k-1], box_aspect_ratio_with_label<aspect_ratio_bin[k]).sum()
+                    cat_result[k] = num
+            result_all.append(cat_result)
+
+        result = {name:num for name,num in zip(names, result_all)}
+        return result
         
 
+def get_human_size_statistics(human_detections, imageset, gen_id_map=False):
+    '''
+    category id in the imageset should start from 1
+    '''
+    human_ratios = []
+    no_detection = 0
+    has_human_detection = 0
+    if gen_id_map:
+        human_map = gen_human_id_map(human_detections)
+    else:
+        human_map = human_detections
+    for image in imageset:
+        im_id = image['id']
+        im_w, im_h = image['width'], image['height']
+
+        if im_id not in human_map:
+            print('image {} has no human detection'.format(im_id))
+            continue
+
+        human_boxes = human_map[im_id]
+        if len(human_boxes)==0:
+            no_detection += 1
+            continue
+        else:
+            has_human_detection += 1
+        biggest_box = human_boxes['input_box']
+        max_ratio = max((biggest_box[3]-biggest_box[1])/im_h, (biggest_box[2]-biggest_box[0])/im_w)
+
+        human_ratios.append(max_ratio)
+
+    return human_ratios
 
 
             

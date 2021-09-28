@@ -13,7 +13,7 @@ def gen_human_id_map(human_detections):
     return human_map
 
 def get_biggest_box(boxes):
-    area = (boxes[:,2]-boxes[:,0])*(boxes[:,3]-boxes[:,1])
+    area = (boxes[...,2]-boxes[...,0])*(boxes[...,3]-boxes[...,1])
     max_ind = np.argmax(area)
     biggest_box = boxes[max_ind][:4]
     return biggest_box

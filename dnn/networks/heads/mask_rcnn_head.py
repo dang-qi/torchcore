@@ -1,5 +1,8 @@
 from torch import nn
 
+from .build import HEAD_REG
+
+@HEAD_REG.register()
 class MaskRCNNHead(nn.Module):
     def __init__(self, cfg):
         super().__init__()

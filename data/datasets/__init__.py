@@ -28,11 +28,12 @@ from .coco_person_cv2 import COCOPersonCV2Dataset
 from .modanet_dataset_cv2 import ModanetCV2Dataset
 from .madanet_center import ModanetCenterDataset
 from .coco import COCODataset
+from .fashion_pedia import FashionPediaDataset
 from .coco_torchvision import COCOTorchVisionDataset
 from .deepfashion2 import DeepFashion2Dataset
 from .multi_mix_dataset import MultiMixDataset
-from .fashion_pedia import FashionPediaDataset
 from .toy_dataset import ToyDataset
+from .build import build_dataloader, build_dataset
 
 selector = {}
 selector['coco'] = coco_dataset

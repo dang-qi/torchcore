@@ -2,17 +2,16 @@ import torch
 from torch import nn
 from ..tools import AnchorBoxesCoder
 
+from .build import HEAD_REG
+
+@HEAD_REG.register()
 class FastRCNNHead(nn.Module):
-    def __init__(self, cfg):
+    def __init__(self, class_num, pool_w, pool_h, out_feature_num):
         super().__init__()
-        self.class_num = cfg.class_num
-        class_num = cfg.class_num
-        self.cfg = cfg
+        self.class_num = class_num
         feature_num = 1024
-        pool_h = cfg.pool_h
-        pool_w = cfg.pool_w
         self.feature_head = nn.Sequential( 
-            nn.Linear(cfg.out_feature_num*pool_h*pool_w, feature_num),
+            nn.Linear(out_feature_num*pool_h*pool_w, feature_num),
             nn.ReLU(inplace=True),
             nn.Linear(feature_num, feature_num),
             nn.ReLU(inplace=True)

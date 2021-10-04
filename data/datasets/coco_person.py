@@ -8,7 +8,7 @@ import os
 class COCOPersonDataset(Dataset):
     '''COCO dataset only contarin person class'''
     def __init__( self, root, anno, part, transforms=None, xyxy=True, dataset_label=None, debug=False ):
-        super().__init__( root, transforms )
+        super().__init__( root, transforms=transforms )
         self._part = part
 
         # load annotations

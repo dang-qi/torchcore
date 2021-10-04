@@ -3,6 +3,9 @@ from torch import nn
 import collections
 from ..common import init_focal_loss_head, init_head_gaussian
 
+from .build import HEAD_REG
+
+@HEAD_REG.register()
 class RetinaHead(nn.Module):
     def __init__(self, in_channels, num_anchors, num_classes):
         #super(RPNHead, self).__init__()

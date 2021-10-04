@@ -1,9 +1,29 @@
+# adopted from https://github.com/open-mmlab/mmcv/blob/8cac7c25ee5bc199d6e4059297ef2fa92d9c069c/mmcv/utils/config.py
 import os
 import importlib
+from addict import Dict
 
 SUPPORT_EXT = ['.py']
 RESERVED_KEYS = ['filename', 'text', 'pretty_text']
 BASE_KEY = '_base_'
+REPLACE_KEY = '_replace_'
+
+class ConfigDict(Dict):
+
+    def __missing__(self, name):
+        raise KeyError(name)
+
+    def __getattr__(self, name):
+        try:
+            value = super(ConfigDict, self).__getattr__(name)
+        except KeyError:
+            ex = AttributeError(f"'{self.__class__.__name__}' object has no "
+                                f"attribute '{name}'")
+        except Exception as e:
+            ex = e
+        else:
+            return value
+        raise ex
 
 class Config:
     @staticmethod
@@ -29,7 +49,8 @@ class Config:
         """
         b = b.copy()
         for k, v in a.items():
-            if isinstance(v,dict) and k in b:
+            replace = v.pop(REPLACE_KEY, False)
+            if isinstance(v,dict) and k in b and not replace:
                 allowed_types = dict
                 if not isinstance(b[k], allowed_types):
                     raise TypeError(
@@ -116,7 +137,7 @@ class Config:
             if key in RESERVED_KEYS:
                 raise KeyError(f'{key} is reserved for config file')
 
-        super(Config, self).__setattr__('_cfg_dict', cfg_dict)
+        super(Config, self).__setattr__('_cfg_dict', ConfigDict(cfg_dict))
         super(Config, self).__setattr__('_filename', filename)
         if cfg_text:
             text = cfg_text
@@ -126,3 +147,33 @@ class Config:
         else:
             text = ''
         super(Config, self).__setattr__('_text', text)
+
+    @property
+    def filename(self):
+        return self._filename
+
+    @property
+    def text(self):
+        return self._text
+
+    def __len__(self):
+        return len(self._cfg_dict)
+
+    def __getattr__(self, name):
+        return getattr(self._cfg_dict, name)
+
+    def __getitem__(self, name):
+        return self._cfg_dict.__getitem__(name)
+
+    def __setattr__(self, name, value):
+        if isinstance(value, dict):
+            value = ConfigDict(value)
+        self._cfg_dict.__setattr__(name, value)
+
+    def __setitem__(self, name, value):
+        if isinstance(value, dict):
+            value = ConfigDict(value)
+        self._cfg_dict.__setitem__(name, value)
+
+    def __iter__(self):
+        return iter(self._cfg_dict)

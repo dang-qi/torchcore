@@ -7,12 +7,10 @@ import os
 class DeepFashion2Dataset(Dataset):
     '''COCO dataset'''
     def __init__( self, root, anno, part, transforms=None, debug=False, xyxy=True, only_contain_human=False ):
-        super().__init__( root, transforms )
+        super().__init__( root, anno=anno, part=part, transforms=transforms )
         self._part = part
 
         # load annotations
-        with open(anno, 'rb') as f:
-            self._images = pickle.load(f)[0][part] 
 
         self.remove_wrong_labels()
 
@@ -85,6 +83,9 @@ class DeepFashion2Dataset(Dataset):
     #    for image in self._images:
     #        for obj in image['objects']:
     #            obj['category_id'] = id_map[obj['category_id']]
+    def _load_anno(self):
+        with open(self._anno, 'rb') as f:
+            self._images = pickle.load(f)[0][self._part] 
 
     def remove_wrong_labels(self):
         i = 0

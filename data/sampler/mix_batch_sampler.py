@@ -1,6 +1,8 @@
 import numpy as np
 from torch.utils.data.sampler import Sampler, SequentialSampler
+from .build import SAMPLER_REG
 
+@SAMPLER_REG.register()
 class MixBatchSampler(Sampler):
     def __init__(self, dataset_len, mode, batch_size, shuffle=False, drop_last=True):
         self.dataset_len = dataset_len

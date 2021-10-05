@@ -237,7 +237,7 @@ class ResNet(TorchResNet):
 
         out = OrderedDict()
         for i in self._returned_layers:
-            out['out{}'.format(i)] = outputs[i]
+            out['{}'.format(i)] = outputs[i]
         return out
     
     def forward(self, x):

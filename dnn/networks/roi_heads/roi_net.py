@@ -20,7 +20,7 @@ from .build import ROI_HEADS_REG
 
 @ROI_HEADS_REG.register()
 class RoINet(nn.Module):
-    def __init__(self, box_head, sampler, box_coder, roi_extractor, class_num, box_loss, class_loss, score_thresh=0.01, nms_thresh=0.5, detection_per_image=100, dataset_label=None, iou_low_thresh=0.5, iou_high_thresh=0.5, feature_names=None, mask_head=None):
+    def __init__(self, box_head, sampler, box_coder, roi_extractor, class_num, box_loss, class_loss, feature_strides, score_thresh=0.01, nms_thresh=0.5, detection_per_image=100, dataset_label=None, iou_low_thresh=0.5, iou_high_thresh=0.5, feature_names=None, mask_head=None):
         super().__init__()
         #self.cfg = cfg
 
@@ -34,6 +34,7 @@ class RoINet(nn.Module):
         self.iou_high_thresh = iou_high_thresh
 
         self.feature_names = feature_names
+        self.feature_strides = feature_strides
 
         #self.pos_neg_sampler = PosNegSampler(pos_num=cfg.pos_sample_num, neg_num=cfg.neg_sample_num)
         self.sampler = build_sampler(sampler)
@@ -55,13 +56,13 @@ class RoINet(nn.Module):
         self.class_loss = build_loss(class_loss)
         #self.label_loss = nn.CrossEntropyLoss(reduction='mean')
 
-    def forward(self, proposals, features, strides, targets=None, inputs=None):
+    def forward(self, proposals, features, targets=None, inputs=None):
         if self.feature_names is not None:
             features = OrderedDict((k,features[k]) for k in self.feature_names)
         if self.training:
             proposals, target_labels, target_boxes = self.select_proposals(proposals, targets)
 
-        rois = self.roi_align(features, proposals, strides)
+        rois = self.roi_align(features, proposals, self.feature_strides)
 
         label_pre, bbox_pre = self.faster_rcnn_head(rois)
         #return proposals, rois, label_pre, bbox_pre

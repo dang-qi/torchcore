@@ -1,2 +1,2 @@
 from .rpn import RPN
-from .roi_net import RoINet
+from .faster_rcnn_fpn import FasterRCNNFPN

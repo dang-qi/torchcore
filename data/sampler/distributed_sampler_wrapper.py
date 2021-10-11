@@ -5,10 +5,10 @@ from operator import itemgetter
 from torch.utils.data import Dataset, Sampler
 from torch.utils.data import DistributedSampler
 
-from .build import SAMPLER_REG
+#from .build import SAMPLER_REG
 
 
-@SAMPLER_REG.register(DistributedSampler)
+#@SAMPLER_REG.register(DistributedSampler)
 
 #@SAMPLER_REG.register()
 class DistributedSamplerWrapper(DistributedSampler):

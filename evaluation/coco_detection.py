@@ -3,27 +3,33 @@ import json
 
 from pycocotools.coco import COCO
 from pycocotools.cocoeval import COCOeval
+
+from .build import EVALUATOR_REG
+
+@EVALUATOR_REG.register()
 class COCOEvaluator():
     def __init__(self, evaluate_type='bbox', dataset_name=None, gt_path=None) -> None:
-        assert dataset_name is not None or gt_path is not None
+        assert dataset_name is not None
         self.dataset_name = dataset_name
-        if gt_path is not None:
-            self.gt_path = gt_path
-        else:
-            self.set_gt_path(dataset_name)
+        self.set_gt_path(dataset_name, gt_path)
         self.evaluate_type = evaluate_type
 
-    def set_gt_path(self, dataset_name):
-        if dataset_name not in ['coco','coco_person', 'modanet', 'fashionpedia']:
-            raise ValueError('only support coco, coco_person and modanet dataset')
-        if dataset_name == 'coco_person':
-            gt_json=os.path.expanduser('~/data/datasets/COCO/annotations/instances_val2014.json')
-        elif dataset_name == 'coco':
-            gt_json=os.path.expanduser('~/data/datasets/COCO/annotations/instances_val2017.json')
-        elif dataset_name == 'fashionpedia':
-            gt_json=os.path.expanduser('~/data/datasets/Fashionpedia/annotations/instances_attributes_val2020.json')
-        elif dataset_name == 'modanet':
-            gt_json=os.path.expanduser('~/data/datasets/modanet/Annots/modanet_instances_val.json')
+    def set_gt_path(self, dataset_name=None, gt_path=None):
+        if gt_path is not None:
+            assert os.path.exists(gt_path) and os.path.splitext(gt_path)[-1] == '.json'
+            gt_json = gt_path
+        else:
+            if dataset_name not in ['coco','coco_person', 'modanet', 'fashionpedia']:
+                raise ValueError('only support coco, coco_person and modanet dataset')
+            if dataset_name is not None:
+                if dataset_name == 'coco_person':
+                    gt_json=os.path.expanduser('~/data/datasets/COCO/annotations/instances_val2014.json')
+                elif dataset_name == 'coco':
+                    gt_json=os.path.expanduser('~/data/datasets/COCO/annotations/instances_val2017.json')
+                elif dataset_name == 'fashionpedia':
+                    gt_json=os.path.expanduser('~/data/datasets/Fashionpedia/annotations/instances_attributes_val2020.json')
+                elif dataset_name == 'modanet':
+                    gt_json=os.path.expanduser('~/data/datasets/modanet/Annots/modanet_instances_val.json')
 
         self.gt_path = gt_json
 

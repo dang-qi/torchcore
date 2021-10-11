@@ -10,14 +10,16 @@ def build_dataset(cfg):
     dataset = build_with_config(cfg, DATASET_REG)
     return dataset
 
-def build_dataloader(cfg):
+def build_dataloader(cfg, distributed=False):
     cfg = cfg.copy()
     dataset_cfg = cfg.pop('dataset')
     dataset = build_dataset(dataset_cfg)
 
     sampler_cfg = cfg.pop('sampler', None)
     if sampler_cfg is not None:
-        sampler = build_sampler(sampler_cfg)
+        if 'data_source' in sampler_cfg and sampler_cfg['data_source'] is None:
+            sampler_cfg['data_source']= dataset
+        sampler = build_sampler(sampler_cfg, distributed)
     else:
         sampler = None
 

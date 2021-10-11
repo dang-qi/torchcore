@@ -5,6 +5,7 @@ from torch import nn
 import numpy as np
 import os
 import progressbar
+from torch.optim import optimizer
 import tqdm
 import json
 import datetime
@@ -16,6 +17,8 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 
 from ..tools.logger import Logger
 from ..evaluation import COCOEvaluator
+
+from .optimizer.build import build_optimizer, build_lr_scheduler
 
 
 class BaseTrainer :
@@ -56,23 +59,26 @@ class BaseTrainer :
 
     def _set_optimizer( self ):
         if self._optimizer is None:
-            params = self._cfg.optimizer
-        if params['type'] == 'SGD':
-            self._optimizer = optim.SGD( self._model.parameters(),
-                                        lr=params['lr'],
-                                        momentum=params.get('momentum',0.9),
-                                        weight_decay=params.get('weight_decay',0))
-        elif params['type'] == 'Adam':
-            self._optimizer = optim.Adam(self._model.parameters(),
-                                         lr = params['lr'],
-                                         betas=params.get('betas',(0.9, 0.999)),
-                                         eps = params.get('eps', 1e-8)
-                                         )
-        else:
-            raise ValueError('Optimiser type wrong, {} is not a valid optimizer type!')
+            optimizer_cfg = self._cfg.optimizer.copy()
+        self._optimizer = build_optimizer(optimizer_cfg)
+        #if params['type'] == 'SGD':
+        #    self._optimizer = optim.SGD( self._model.parameters(),
+        #                                lr=params['lr'],
+        #                                momentum=params.get('momentum',0.9),
+        #                                weight_decay=params.get('weight_decay',0))
+        #elif params['type'] == 'Adam':
+        #    self._optimizer = optim.Adam(self._model.parameters(),
+        #                                 lr = params['lr'],
+        #                                 betas=params.get('betas',(0.9, 0.999)),
+        #                                 eps = params.get('eps', 1e-8)
+        #                                 )
+        #else:
+        #    raise ValueError('Optimiser type wrong, {} is not a valid optimizer type!')
 
     def _set_scheduler(self):
-        raise NotImplementedError
+        if self._scheduler is None:
+            scheduler_cfg = copy.deepcopy(self._cfg.scheduler)
+        self._optimizer = build_lr_scheduler(self._optimizer, scheduler_cfg)
         #self._scheduler = optim.lr_scheduler.MultiStepLR( self._optimizer,
         #                                            milestones=params['decay_steps'],
         #                                            gamma=params['decay_rate'] )

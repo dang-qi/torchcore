@@ -173,7 +173,7 @@ class Config:
         mkdir(exp_dir)
         log_path = os.path.join(exp_dir,'logs')
         checkpoint_path = os.path.join(exp_dir,'checkpoints')
-        config_path = os.path.join(exp_dir, tag+self.filename)
+        config_path = os.path.join(exp_dir, tag+os.path.basename(self.filename))
         mkdir(log_path)
         mkdir(checkpoint_path)
         path_config.config_path = config_path

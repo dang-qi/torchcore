@@ -15,3 +15,6 @@ class BaseDetector(nn.Module):
         for layer in self.modules():
             if isinstance(layer, nn.BatchNorm2d):
                 layer.eval()
+
+    def has_neck(self):
+        return self.neck is not None

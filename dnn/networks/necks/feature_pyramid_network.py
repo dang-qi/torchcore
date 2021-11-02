@@ -83,14 +83,18 @@ class FPN(nn.Module):
                             'last_level_p6p7': LastLevelP6P7(in_channels=256, out_channels=256)}
         self.inner_blocks = nn.ModuleList()
         self.layer_blocks = nn.ModuleList()
-        self.layer_num = len(in_channels_list) 
+        #self.layer_num = len(in_channels_list) 
+        self.layer_num = 0 
         for in_channels in in_channels_list:
             if in_channels == 0:
+                # just skip the layer when in_channel is zero
+                continue 
                 raise ValueError("in_channels=0 is currently not supported")
             inner_block_module = nn.Conv2d(in_channels, out_channels, 1)
             layer_block_module = nn.Conv2d(out_channels, out_channels, 3, padding=1)
             self.inner_blocks.append(inner_block_module)
             self.layer_blocks.append(layer_block_module)
+            self.layer_num += 1
 
         # initialize parameters now to avoid modifying the initialization of top_blocks
         for m in self.modules():
@@ -155,19 +159,22 @@ class FPN(nn.Module):
         last_inner = self.get_result_from_inner_blocks(x[-1], -1)
         results = []
         results.append(self.get_result_from_layer_blocks(last_inner, -1))
+        used_names = [names[-1]]
 
-        for idx_layer, idx in zip(range(self.layer_num - 2, self.layer_num-len(x)-1, -1),range(len(x)-2,-1,-1)):
+        #for idx_layer, idx in zip(range(self.layer_num - 2, self.layer_num-len(x)-1, -1),range(len(x)-2,-1,-1)):
+        for idx_layer, idx in zip(range(self.layer_num - 2, -1, -1),range(len(x)-2,-1,-1)):
             inner_lateral = self.get_result_from_inner_blocks(x[idx], idx_layer)
             feat_shape = inner_lateral.shape[-2:]
             inner_top_down = F.interpolate(last_inner, size=feat_shape, mode="nearest")
             last_inner = inner_lateral + inner_top_down
             results.insert(0, self.get_result_from_layer_blocks(last_inner, idx_layer))
+            used_names.insert(0, names[idx])
 
         if self.extra_blocks is not None:
-            results, names = self.extra_blocks(results, x, names)
+            results, used_names = self.extra_blocks(results, x, used_names)
 
         # make it back an OrderedDict
-        out = OrderedDict([(k, v) for k, v in zip(names, results)])
+        out = OrderedDict([(k, v) for k, v in zip(used_names, results)])
 
         return out
 
@@ -341,6 +348,7 @@ class LastLevelP6P7(ExtraFPNBlock):
     ) -> Tuple[List[Tensor], List[str]]:
         p5, c5 = p[-1], c[-1]
         x = p5 if self.use_P5 else c5
+        names[-1] = 'p5' if self.use_P5 else 'c5'
         p6 = self.p6(x)
         p7 = self.p7(F.relu(p6))
         p.extend([p6, p7])

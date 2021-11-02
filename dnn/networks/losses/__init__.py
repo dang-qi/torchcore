@@ -3,3 +3,4 @@ from .focal_loss import FocalLossHeatmap, FocalLoss, FocalLossSigmoid, SigmoidFo
 from .l1_loss import L1LossWithMask, L1LossWithInd
 from .build import build_loss
 from .cross_entropy_loss import CrossEntropyLoss, BCEWithLogitsLoss
+from .iou_loss import IoULoss

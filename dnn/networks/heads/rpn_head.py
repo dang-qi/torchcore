@@ -2,7 +2,9 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 import collections
+from .build import HEAD_REG
 
+@HEAD_REG.register()
 class RPNHead(nn.Module):
     def __init__(self, in_channels, num_anchors):
         #super(RPNHead, self).__init__()

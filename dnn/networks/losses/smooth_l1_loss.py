@@ -1,7 +1,14 @@
 import torch
 import torch.nn as nn
+from torch.nn import SmoothL1Loss
 
-class SmoothL1Loss( nn.Module ):
+
+from .build import LOSS_REG
+
+LOSS_REG.register(SmoothL1Loss, 'SmoothL1Loss')
+
+
+class SmoothL1LossOld( nn.Module ):
     def __init__( self, sigma ):
         super().__init__()
         self._sigma2 = sigma*sigma

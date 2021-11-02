@@ -4,6 +4,9 @@ import math
 from torch import nn
 from torchvision.ops import roi_align, RoIAlign
 
+from .build import POOLER_REG
+
+@POOLER_REG.register()
 class RoiAliagnFPN(nn.Module):
     def __init__(self, pool_h, pool_w, sampling=-1, aligned=True):
         super().__init__()

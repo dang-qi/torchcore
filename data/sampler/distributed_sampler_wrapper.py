@@ -4,6 +4,13 @@ from operator import itemgetter
 
 from torch.utils.data import Dataset, Sampler
 from torch.utils.data import DistributedSampler
+
+#from .build import SAMPLER_REG
+
+
+#@SAMPLER_REG.register(DistributedSampler)
+
+#@SAMPLER_REG.register()
 class DistributedSamplerWrapper(DistributedSampler):
     """
     Wrapper over `Sampler` for distributed training.
@@ -49,6 +56,7 @@ class DistributedSamplerWrapper(DistributedSampler):
         subsampler_indexes = self.dataset
         return iter(itemgetter(*indexes_of_indexes)(subsampler_indexes))
 
+#@SAMPLER_REG.register()
 class DatasetFromSampler(Dataset):
     """Dataset to create indexes from `Sampler`.
     Args:

@@ -8,3 +8,6 @@ from .fast_rcnn_head import FastRCNNHead
 from .multi_conv_head import MultiConvHead
 from .mask_rcnn_head import MaskRCNNHead
 from .retina_head import RetinaHead
+from .fcos_head import FCOSFeatureHead
+
+from .build import build_head

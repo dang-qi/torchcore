@@ -4,6 +4,9 @@ from torch import nn
 from .roi_align_batch import ROIAlignBatch
 from torchvision.ops.boxes import box_area
 
+from .build import POOLER_REG
+
+@POOLER_REG.register()
 class TargetInRoIPool(nn.Module):
     '''
         This class is to select and add the human rois and then do the roi align

@@ -2,6 +2,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from .build import LOSS_REG
+
+@LOSS_REG.register()
 class SigmoidFocalLoss(nn.Module):
     def __init__(self, alpha: float=0.25, gamma:float=2, reduction: str='none'):
         super().__init__()
@@ -9,7 +12,7 @@ class SigmoidFocalLoss(nn.Module):
         self.gamma = gamma
         self.reduction = reduction
 
-    def forward(self, inputs, targets):
+    def forward(self, inputs, targets, average_factor=None):
         """
         Original implementation from https://github.com/facebookresearch/fvcore/blob/master/fvcore/nn/focal_loss.py .
         Loss used in RetinaNet for dense detection: https://arxiv.org/abs/1708.02002.
@@ -42,10 +45,16 @@ class SigmoidFocalLoss(nn.Module):
             alpha_t = self.alpha * targets + (1 - self.alpha) * (1 - targets)
             loss = alpha_t * loss
 
-        if self.reduction == "mean":
-            loss = loss.mean()
-        elif self.reduction == "sum":
-            loss = loss.sum()
+        if average_factor is None:
+            if self.reduction == "mean":
+                loss = loss.mean()
+            elif self.reduction == "sum":
+                loss = loss.sum()
+        else:
+            if self.reduction == "mean":
+                loss = loss.sum() / average_factor
+            else:
+                raise NotImplementedError()
 
         return loss
 

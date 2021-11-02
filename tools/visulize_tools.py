@@ -1,7 +1,10 @@
+from posixpath import splitext
 import matplotlib.pyplot as plt
 import numpy as np
+import math
 from PIL.ImageDraw import Draw
 from PIL import ImageFont, Image
+from numpy.core.fromnumeric import argmax
 from .color_gen import random_colors
 import os
 import io
@@ -21,6 +24,36 @@ def cv_put_text(im, text, position, font=cv2.FONT_HERSHEY_COMPLEX, font_scale=1,
     pos = (position[0], position[1]+retval[1])
     #cv2.rectangle(im, position, retval, box_color, thickness=-1)
     cv2.putText(im, text, pos, font, font_scale, font_color, thickness=thickness )
+
+def put_text_with_box(im, text, position, size=26, box_color=(0,0,0), text_color=(255,255,255), box_opacity=0.5, text_opacity=0.5, text_margin=10):
+    font = get_font(size=size)
+    # get text size
+    nlines = text.count('\n') + 1
+    split_text = text.split('\n')
+    max_text_ind = argmax([len(t) for t in split_text])
+    text_size = font.getsize(split_text[max_text_ind])
+    text_size = (text_size[0], text_size[1]*nlines)
+
+    margin = text_margin
+
+    # set button size + 10px margins
+    button_size = (text_size[0]+2*margin, text_size[1]+2*margin)
+
+    # create correct color with opacity
+    if isinstance(box_color,tuple) and len(box_color) == 3:
+        box_color = box_color + (int(255*box_opacity),)
+    if isinstance(text_color,tuple) and len(text_color) == 3:
+        text_color = text_color + (int(255*text_opacity),)
+    #button_img = Image.new('RGBA', button_size, box_color)
+
+    # put text on button with 10px margins
+    button_draw = Draw(im, 'RGBA')
+    box = (position[0], position[1], position[0]+button_size[0], position[1]+button_size[1])
+    button_draw.rectangle(box, fill=box_color)
+    button_draw.text((position[0]+margin, position[1]+margin), text, font=font, fill=text_color)
+
+    # put button on source image in position (0, 0)
+    #im.paste(button_img, position)
 
 def parse_loss_log(log_path, losses_names):
     epoch = 0
@@ -128,9 +161,10 @@ def get_font(size):
     font = ImageFont.truetype(FONT_PATH, size)
     return font
 
-def draw_single_image(image, boxes, scores, class_inds, colors, class_names, font_size=26): 
+def draw_single_image(image, boxes, scores, class_inds, colors, class_names, font_size=26, box_line_width=3, box_opacity=0.5, text_opacity=0.5, use_invert_text_color=True): 
     # (x1, y1, x2, y2, object_conf, class_score, class_pred)
     font = get_font(font_size)
+    invert_colors = [tuple(255-i for i in color) for color in colors]
     if boxes is not None:
         draw = Draw(image)
         for i, (box, class_ind) in enumerate(zip(boxes, class_inds)):
@@ -143,9 +177,21 @@ def draw_single_image(image, boxes, scores, class_inds, colors, class_names, fon
             if type(box) is not np.ndarray:
                 box = box.detach().cpu().numpy()
             box_rec = box[:4]
-            draw.rectangle(box_rec, outline=colors[class_ind], width=3)
-            draw.text((box[0], box[1]), '{:.2f} {}'.format(score, class_names[class_ind]), font=font, fill=colors[class_ind] )
+            box_rec = tuple(np.array(box_rec))
+            draw.rectangle(box_rec, outline=colors[class_ind], width=box_line_width)
+            text = '{:.2f} {}'.format(score, class_names[class_ind])
+            #draw.text((box[0], box[1]), text, font=font, fill=colors[class_ind] )
+            if use_invert_text_color:
+                text_color = invert_colors[class_ind]
+            else:
+                text_color = (0,0,0)
+            put_text_with_box(image, text, (int(box[0]),int(box[1])), size=font_size, 
+                                box_color=colors[class_ind],text_color=text_color, 
+                                box_opacity=box_opacity, text_opacity=text_opacity)
     return image
+
+def put_text_on_the_leftup_corner(image, text, font_size=26, box_color=(0,0,0)):
+    put_text_with_box(image, text, position=(0,0),size=font_size, box_color=box_color)
 
 def draw_boxes_old(images, batch_boxes, batch_scores, batch_class_ind, class_names, font_size=26):
     class_num = len(class_names)
@@ -270,3 +316,89 @@ def draw_category_distribution_barh(stat_dict, sorted=False, title=None):
     if title is not None:
         ax.set_title(title)
     plt.show()
+
+def visulize_random_sample(dataset, category_ids, sample_num, category_names, category_num):
+    colors = random_colors(category_num)
+    dataset.set_category_subset(category_ids, ignore_other_category=True)
+    dataset_len = len(dataset)
+    if dataset_len < sample_num:
+        print('sample in the dataset is not enough ({} vs {}), set sample num to dataset length'.format(dataset_len, sample_num))
+        sample_num = dataset_len
+    inds = np.random.choice(dataset_len, sample_num, replace=False)
+    for i in inds:
+        inputs, targets = dataset[i]
+        im = inputs['data']
+        boxes = targets['boxes']
+        labels = targets['labels']-1
+        draw_single_image(im, boxes, scores=None, class_inds=labels, colors=colors, class_names=category_names)
+        plt.figure(figsize=(8,8))
+        plt.imshow(im)
+
+def visulize_coco_result(cocoEval, im_id, im_folder, category_num, cat_ids=[], names=None, thresh=0.5, with_gt=False, tag=None):
+    '''cocoEval should be a COCOEval object'''
+    def get_anno(anno_id, coco_obj, thresh=None,no_score=False):
+        im_ids = [anno_id]
+        anno_ids = coco_obj.getAnnIds(imgIds=im_ids, catIds=cat_ids)
+        annos = coco_obj.loadAnns(ids=anno_ids)
+        if thresh is not None:
+            annos = [a for a in annos if a['score']>thresh]
+        if len(annos)==0:
+            return None, None, None
+        boxes = np.stack([anno['bbox'] for anno in annos],axis=0)
+        boxes[:,2] += boxes[:,0]
+        boxes[:,3] += boxes[:,1]
+        if no_score:
+            scores = np.ones(len(annos))
+        else:
+            scores = np.array([anno['score'] for anno in annos])
+        class_inds = np.array([anno['category_id'] for anno in annos])
+        return boxes, scores, class_inds
+
+    im_ids = [im_id]
+    colors = random_colors(category_num)
+    img = cocoEval.cocoDt.loadImgs(ids=im_ids)[0]
+    img_path = os.path.join(im_folder,img['file_name'])
+    if names is None:
+        names = cocoEval.get_names()
+    image = Image.open(img_path)
+    boxes, scores, class_inds = get_anno(im_id, cocoEval.cocoDt, thresh)
+    if boxes is None:
+        put_text_on_the_leftup_corner(image, 'NO DETECTION', font_size=26, box_color=(0,0,0))
+    if tag is not None:
+        put_text_on_the_leftup_corner(image, tag, font_size=26, box_color=(0,0,0))
+
+    draw_single_image(image, boxes, scores, class_inds, colors, names, box_opacity=0.25, text_opacity=0.5)
+    image_gt = Image.open(img_path)
+    if with_gt:
+        if tag is not None:
+            put_text_on_the_leftup_corner(image_gt, 'ground truth', font_size=26, box_color=(0,0,0))
+        boxes, scores, class_inds = get_anno(im_id, cocoEval.cocoGt, thresh=None, no_score=True)
+        draw_single_image(image_gt, boxes, scores, class_inds, colors, names, box_line_width=5,)
+        return image, image_gt
+
+    return image
+
+def cat_images_with_same_size(images, layout_col, w_margin=10, h_margin=10):
+    '''concat the images for easier show
+    images is List(PIL Images)
+    layout_col: column number of expect image
+    '''
+    layout_row = math.ceil(len(images)/layout_col)
+
+    im_w = images[0].width
+    im_h = images[0].height
+
+    out_w = int(im_w*layout_col + w_margin*(layout_col-1))
+    out_h = int(im_h*layout_row+h_margin*(layout_row-1))
+    dst = Image.new('RGB', (out_w, out_h))
+    im_ind = 0
+    for i in range(layout_row):
+        for j in range(layout_col):
+            x = j*im_w + j*w_margin
+            y = i*im_h + i*h_margin
+            dst.paste(images[im_ind], (x,y))
+            im_ind +=1
+            if im_ind == len(images):
+                break
+    return dst
+

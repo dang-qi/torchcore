@@ -9,7 +9,7 @@ import torch
 class COCOTorchVisionDataset(Dataset):
     '''COCO dataset'''
     def __init__( self, root, anno, part, transforms=None  ):
-        super().__init__( root, transforms )
+        super().__init__( root, transforms=transforms )
         self._part = part
 
         # load annotations

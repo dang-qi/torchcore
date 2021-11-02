@@ -31,7 +31,7 @@ class StepBasedTrainer(BaseTrainer):
         #            self._model.freeze_bn()
 
         self._optimizer.zero_grad()
-        for step in tqdm.tqdm(range(self._start_step, self._end_step+1),desc='Training', initial=self._start_step):
+        for step in tqdm.tqdm(range(self._start_step, self._end_step+1),desc='Training', initial=self._start_step, dynamic_ncols=True):
             self._step = step
             self._train_step()
 

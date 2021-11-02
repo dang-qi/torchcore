@@ -72,7 +72,7 @@ class EpochBasedTrainer(BaseTrainer):
         average_losses = {}
 
         self._optimizer.zero_grad()
-        for idx, (inputs, targets) in enumerate(tqdm.tqdm(self._trainset, desc='Training')):
+        for idx, (inputs, targets) in enumerate(tqdm.tqdm(self._trainset, desc='Training',dynamic_ncols=True)):
             #print('inputs:', inputs)
             #print('targets:', targets)
 

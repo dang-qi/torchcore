@@ -117,7 +117,7 @@ class BaseTrainer :
 
         results = []
         with torch.no_grad() :
-            for idx,(inputs, targets) in enumerate(tqdm.tqdm(self._testset, 'evaluating')):
+            for idx,(inputs, targets) in enumerate(tqdm.tqdm(self._testset, 'evaluating', dynamic_ncols=True)):
             #for idx,(inputs, targets) in enumerate(self._testset):
                 inputs = self._set_device( inputs )
                 output = test_model( inputs)

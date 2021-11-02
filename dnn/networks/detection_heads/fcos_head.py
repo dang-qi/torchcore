@@ -302,17 +302,22 @@ class FCOSHead(nn.Module):
                 #print('topk inds shape',topk_inds.shape)
                 #print('p class shape', p_class.shape)
                 #print('lables', labels[0,:5])
+                #print(labels)
+                #print('label max', torch.max(labels))
+                #print('label min', torch.min(labels))
+                #assert torch.max(labels)<46
+                #assert torch.min(labels)>=0
 
                 batch_inds = torch.arange(batch_size).view(
                     -1, 1).expand_as(topk_inds).long()
 
-                batch_inds_class = torch.arange(batch_size).view(
-                    -1, 1).expand_as(labels).long()
+                #batch_inds_class = torch.arange(batch_size).view(
+                #    -1, 1).expand_as(labels).long()
                 x,y = torch.meshgrid(torch.arange(batch_size), torch.arange(labels.size(1)))
 
                 mesh = mesh[batch_inds, topk_inds, :]
                 p_bbox = p_bbox[batch_inds, topk_inds, :]
-                p_class = p_class[batch_inds_class, labels]
+                #p_class = p_class[batch_inds_class, labels]
                 p_class = p_class[x.flatten(), y.flatten(), labels.flatten()].reshape(batch_size, -1)
                 p_class = p_class[batch_inds, topk_inds]
                 labels = labels[batch_inds, topk_inds]

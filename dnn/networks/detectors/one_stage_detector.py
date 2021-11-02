@@ -42,7 +42,7 @@ class OneStageDetector(BaseDetector):
             losses = self.det_head(inputs=inputs,features=features, targets=targets)
             return losses
         else:
-            results = self.det_head(inputs=features, features=features, targets=targets)
+            results = self.det_head(inputs=inputs, features=features, targets=targets)
             results = self.post_process(results, inputs)
             return results
 

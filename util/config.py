@@ -68,15 +68,16 @@ class Config:
         """
         b = b.copy()
         for k, v in a.items():
-            replace = v.pop(REPLACE_KEY, False)
-            if isinstance(v,dict) and k in b and not replace:
+            #print(v)
+            #replace = v.pop(REPLACE_KEY, False)
+            if isinstance(v,dict) and k in b and not v.pop(REPLACE_KEY,False):
                 allowed_types = dict
                 if not isinstance(b[k], allowed_types):
                     raise TypeError(
                         f'{k}={v} in child config cannot inherit from base '
                         f'because {k} is a dict in the child config but is of '
                         f'type {type(b[k])} in base config.' )
-                b[k] = Config._merge_a_into_b(v, b[k])
+                b[k] = Config._merge_dict_a_to_b(v, b[k])
             else:
                 b[k] = v
         return b

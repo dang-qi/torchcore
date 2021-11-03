@@ -101,22 +101,11 @@ class StepBasedTrainer(BaseTrainer):
             self._optimizer.zero_grad()
 
         if self.is_main_process():
-            if self._step % self.log_print_iter == 1:
-                if not self.log_with_tensorboard:
-                    self._logger.info('{} '.format(self._step))
-                loss_str = ''
+            if self._step % self._log_save_iter == 1:
                 average_losses = self.loss_logger.get_last_average()
-                for loss in average_losses:
-                    loss_num = average_losses[loss]
-                    if not self.log_with_tensorboard:
-                        self._logger.info('{} '.format(loss_num))
-                    else:
-                        self._logger.add_scalars('loss',{})
-                    loss_str += (' {} loss:{}, '.format(loss, loss_num))
-                print(loss_str[:-2])
-                average_losses = {}
-                if not self.log_with_tensorboard:
-                    self._logger.info('\n')
+                self.save_log(average_losses)
+                if self._step % self._log_print_iter == 1:
+                    self.print_log(average_losses)
             
     #def save_training(self, path, to_print=True):
     #    if isinstance(self._model, DDP):

@@ -68,7 +68,7 @@ class BaseTrainer :
         #    self.resume_training(path, device)
 
         if self.is_main_process():
-            self.init_logger(self._log_with_tensorboard)
+            self.init_logger()
         
 
     def _set_optimizer( self ):
@@ -222,34 +222,34 @@ class BaseTrainer :
         self.train_set_iter = iter(self._trainset)
 
     def init_logger(self):
-        if self.log_with_tensorboard:
-            self._logger = SummaryWriter(log_dir=self._path_config.log_dir, comment=self._tag)
+        if self._log_with_tensorboard:
+            self._writer = SummaryWriter(log_dir=self._path_config.log_dir, comment=self._tag)
         else:
             train_path = self._path_config.log_path
             console_formatter = '{} {{}}'.format(datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
             self._logger = Logger(level='info', file=train_path, console=False, console_formatter=console_formatter)
             print('Loss log path is: {}'.format(train_path))
     
-    def print_log(self):
+    def print_log(self, average_losses):
         log_str = ''
-        average_losses = self.loss_logger.get_last_average()
+        #average_losses = self.loss_logger.get_last_average()
         for loss in average_losses:
             loss_num = average_losses[loss]
             log_str += (' {} loss:{}, '.format(loss, loss_num))
         print(log_str[:-2])
 
-    def save_log(self):
-        average_losses = self.loss_logger.get_last_average()
-        if not self.log_with_tensorboard:
+    def save_log(self, average_losses):
+        #average_losses = self.loss_logger.get_last_average()
+        if not self._log_with_tensorboard:
             self._logger.info('{} '.format(self._step))
             for loss in average_losses:
                 loss_num = average_losses[loss]
                 self._logger.info('{} '.format(loss_num))
             self._logger.info('\n')
         else:
-            self._logger.add_scalars('loss', average_losses, global_step=self._step)
-            self._logger.add_scalar('lr', self._scheduler.get_last_lr(), global_step=self._step)
-            self._logger.add_scalar('epoch', self._epoch, global_step=self._step)
+            self._writer.add_scalars('loss', average_losses, global_step=self._step)
+            self._writer.add_scalar('lr', self._scheduler.get_last_lr()[0], global_step=self._step)
+            self._writer.add_scalar('epoch', self._epoch, global_step=self._step)
 
         
 

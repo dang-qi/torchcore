@@ -12,8 +12,8 @@ from .build import TRAINER_REG
 
 @TRAINER_REG.register()
 class EpochBasedTrainer(BaseTrainer):
-    def __init__(self, model, trainset, max_epoch, tag='', rank=0, log_print_iter=1000, testset=None, optimizer=None, scheduler=None, clip_gradient=None, evaluator=None, accumulation_step=1, path_config=None, eval_epoch_interval=1, save_epoch_interval=1):
-        super().__init__(model, trainset, tag=tag, rank=rank, log_print_iter=log_print_iter, testset=testset, optimizer=optimizer, scheduler=scheduler, clip_gradient=clip_gradient, evaluator=evaluator, accumulation_step=accumulation_step, path_config=path_config)
+    def __init__(self, model, trainset, max_epoch, tag='', rank=0, log_print_iter=1000, log_save_iter=50, testset=None, optimizer=None, scheduler=None, clip_gradient=None, evaluator=None, accumulation_step=1, path_config=None, log_with_tensorboard=False, eval_epoch_interval=1, save_epoch_interval=1):
+        super().__init__(model, trainset, tag=tag, rank=rank, log_print_iter=log_print_iter, log_save_iter=log_save_iter, testset=testset, optimizer=optimizer, scheduler=scheduler, clip_gradient=clip_gradient, evaluator=evaluator, accumulation_step=accumulation_step, path_config=path_config, log_with_tensorboard=log_with_tensorboard)
         self._max_epoch = max_epoch
         self._start_step=0
         self._epoch = 0
@@ -115,7 +115,7 @@ class EpochBasedTrainer(BaseTrainer):
                 self._optimizer.zero_grad()
             loss_values.append( loss_sum.cpu().detach().numpy() )
 
-            if idx%self.log_print_iter == 0:
+            if idx%self._log_print_iter == 0:
                 #if self.rank == 0 or not self.distributed:
                 if self.is_main_process():
                     self._logger.info('{} '.format(idx+1))
@@ -124,7 +124,7 @@ class EpochBasedTrainer(BaseTrainer):
                         if idx==0:
                             loss_num = average_losses[loss]
                         else:
-                            loss_num = average_losses[loss] / self.log_print_iter
+                            loss_num = average_losses[loss] / self._log_print_iter
                         self._logger.info('{} '.format(loss_num))
                         loss_str += (' {} loss:{}, '.format(loss, loss_num))
                     print(loss_str[:-2])

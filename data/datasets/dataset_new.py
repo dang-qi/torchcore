@@ -1,6 +1,7 @@
 import os
 import copy
 import pickle
+from pycocotools.coco import COCO
 from ..transforms import Compose
 
 class Dataset:
@@ -113,3 +114,12 @@ class Dataset:
             self.generate_id_dict()
         index = self.id_dict[im_id]
         return self.__getitem__(index)
+
+    def get_coco_style_names(self,json_path, with_cat_id=False):
+        json_path = os.path.expanduser(json_path)
+        fpGt=COCO(json_path)
+        if with_cat_id:
+            names= {fpGt.cats[i]['id']:fpGt.cats[i]['name'] for i in range(len(fpGt.cats))}
+        else:
+            names = [fpGt.cats[i]['name'] for i in range(len(fpGt.cats))]
+        return names

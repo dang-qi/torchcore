@@ -10,8 +10,8 @@ from .build import TRAINER_REG
 
 @TRAINER_REG.register()
 class StepBasedTrainer(BaseTrainer):
-    def __init__(self, model, trainset, max_step, tag='', rank=0, log_print_iter=1000, testset=None, optimizer=None, scheduler=None, clip_gradient=None, evaluator=None, accumulation_step=1, path_config=None, eval_step_interval=10000, save_step_interval=10000 ):
-        super().__init__(model, trainset, tag=tag, rank=rank, log_print_iter=log_print_iter, testset=testset, optimizer=optimizer, scheduler=scheduler, clip_gradient=clip_gradient, evaluator=evaluator, accumulation_step=accumulation_step,path_config=path_config)
+    def __init__(self, model, trainset, max_step, tag='', rank=0, log_print_iter=1000, log_save_iter=50, testset=None, optimizer=None, scheduler=None, clip_gradient=None, evaluator=None, accumulation_step=1, path_config=None, log_with_tensorboard=False, eval_step_interval=10000, save_step_interval=10000 ):
+        super().__init__(model, trainset, tag=tag, rank=rank, log_print_iter=log_print_iter, log_save_iter=log_save_iter, testset=testset, optimizer=optimizer, scheduler=scheduler, clip_gradient=clip_gradient, evaluator=evaluator, accumulation_step=accumulation_step,path_config=path_config, log_with_tensorboard=log_with_tensorboard)
         self._max_step = max_step
         self._start_step=1
         self._end_step = max_step
@@ -102,16 +102,21 @@ class StepBasedTrainer(BaseTrainer):
 
         if self.is_main_process():
             if self._step % self.log_print_iter == 1:
-                self._logger.info('{} '.format(self._step))
+                if not self.log_with_tensorboard:
+                    self._logger.info('{} '.format(self._step))
                 loss_str = ''
                 average_losses = self.loss_logger.get_last_average()
                 for loss in average_losses:
                     loss_num = average_losses[loss]
-                    self._logger.info('{} '.format(loss_num))
+                    if not self.log_with_tensorboard:
+                        self._logger.info('{} '.format(loss_num))
+                    else:
+                        self._logger.add_scalars('loss',{})
                     loss_str += (' {} loss:{}, '.format(loss, loss_num))
                 print(loss_str[:-2])
                 average_losses = {}
-                self._logger.info('\n')
+                if not self.log_with_tensorboard:
+                    self._logger.info('\n')
             
     #def save_training(self, path, to_print=True):
     #    if isinstance(self._model, DDP):

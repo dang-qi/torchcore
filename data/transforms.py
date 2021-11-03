@@ -546,7 +546,7 @@ class AddSurrandingBox(object):
         return inputs, targets
 
 class AddPersonBox(object):
-    def __init__(self, anno_path, name='input_box', out_name='input_box', targets_boxes_name='boxes', add_extra_dim=False, extend_to_target_boxes=None, extra_padding=None, random_scale_and_crop=None, extend_ratio=None):
+    def __init__(self, anno_path, name='input_box', out_name='input_box', targets_boxes_name='boxes', add_extra_dim=False, extend_to_target_boxes=None, extra_padding=None, random_scale_and_crop=None, extend_ratio=None, score_thresh=None):
         '''
         name: the key of person box in annotation file
         out_name: the key in output targets
@@ -566,6 +566,7 @@ class AddPersonBox(object):
         self.extra_padding = extra_padding
         self.random_scale = random_scale_and_crop
         self.extend_ratio = extend_ratio
+        self.score_thresh = score_thresh
         assert sum([x is not None for x in [self.extend_to_target_boxes, self.random_scale, self.extend_ratio]]) <= 1
         with open(anno_path, 'rb') as f:
             self.anno = pickle.load(f)
@@ -577,6 +578,10 @@ class AddPersonBox(object):
             roi_box = np.expand_dims(np.array(input_box), axis=0)
         else:
             roi_box = np.array(input_box)
+        if self.score_thresh is not None:
+            scores = self.anno[im_id]['scores']
+            keep = scores > self.score_thresh
+            roi_box = roi_box[keep]
 
         if self.extend_to_target_boxes:
             boxes = targets[self.targets_boxes_name]

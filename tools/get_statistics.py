@@ -375,6 +375,85 @@ def get_dataset_area_statics_by_category(path, part, area_bin, longer_side_len, 
         result = {name:num for name,num in zip(names, result_all)}
         return result
 
+def get_dataset_aspect_ratio_statics_by_category_after_human_resize(path, human_detections, part, aspect_ratio_bin, longer_side_len, resize_size, names=None):
+    '''
+    area_bin should be a iterable [] or numpy array that contains the thresh 
+    set longer_side_len as None if you don't want to resize the image
+    resize_size: (h, w)
+    '''
+    human_map=human_detections
+    with open(path, 'rb') as f:
+        anno = pickle.load(f)[part]
+        labels = []
+        boxes = []
+        for image in anno:
+            im_width = image['width']
+            im_height = image['height']
+            im_id = image['id']
+            if im_id not in human_map:
+                print('im: {} dose not have human detection'.format(im_id))
+                continue
+            human_box = human_map[im_id]['input_box']
+            boxes_image = []
+            if longer_side_len is not None:
+                scale = max(im_width, im_height) / 1024
+            else:
+                scale = 1
+            for obj in image['objects']:
+                labels.append(obj['category_id'])
+                boxes_image.append(obj['bbox'])
+            h_scale = (human_box[3]-human_box[1])/resize_size[0]
+            w_scale = (human_box[2]-human_box[0])/resize_size[1]
+            boxes_image = np.array(boxes_image)
+            boxes_image[:,0] = boxes_image[:,0]- human_box[0]
+            boxes_image[:,1] = boxes_image[:,1]- human_box[1]
+            boxes_image[:,2] = boxes_image[:,2]+boxes_image[:,0]
+            boxes_image[:,3] = boxes_image[:,3]+boxes_image[:,1]
+            boxes_image[:,0] = np.clip(boxes_image[:,0], 0, human_box[2]) / w_scale
+            boxes_image[:,2] = np.clip(boxes_image[:,2], 0, human_box[2]) / w_scale
+            boxes_image[:,1] = np.clip(boxes_image[:,1], 0, human_box[3]) / h_scale
+            boxes_image[:,3] = np.clip(boxes_image[:,3], 0, human_box[3]) / h_scale
+
+            boxes.append(boxes_image)
+
+        boxes = np.concatenate(boxes, axis=0) / scale
+        labels = np.array(labels, dtype=np.int64)
+        keep = np.bitwise_and(boxes[:,3]>boxes[:,1],boxes[:,2]>boxes[:,0])
+        boxes = boxes[keep]
+        labels = labels[keep]
+
+        box_aspect_ratio = (boxes[:,3]-boxes[:,1]) / (boxes[:,2]-boxes[:,0])
+
+        max_label = labels.max()
+        min_label = labels.min()
+
+        if aspect_ratio_bin is not None:
+            bin_len = len(aspect_ratio_bin)+1
+
+        if names is None:
+            names = [str(i) for i in range(min_label, max_label+1)]
+
+        assert len(names) >= max_label - min_label + 1
+
+        result_all = []
+        for i,label in enumerate(range(min_label, max_label+1)):
+            box_aspect_ratio_with_label = box_aspect_ratio[labels==label]
+            if aspect_ratio_bin is None:
+                cat_result = box_aspect_ratio_with_label
+            else:
+                cat_result = np.zeros(bin_len)
+                for k in range(bin_len):
+                    if k==0:
+                        num = (box_aspect_ratio_with_label<aspect_ratio_bin[0]).sum()
+                    elif k== bin_len-1:
+                        num = (box_aspect_ratio_with_label>= aspect_ratio_bin[k-1]).sum()
+                    else:
+                        num = np.bitwise_and(box_aspect_ratio_with_label>=aspect_ratio_bin[k-1], box_aspect_ratio_with_label<aspect_ratio_bin[k]).sum()
+                    cat_result[k] = num
+            result_all.append(cat_result)
+
+        result = {name:num for name,num in zip(names, result_all)}
+        return result
 def get_dataset_aspect_ratio_statics_by_category(path, part, aspect_ratio_bin, longer_side_len, names=None):
     '''
     area_bin should be a iterable [] or numpy array that contains the thresh 

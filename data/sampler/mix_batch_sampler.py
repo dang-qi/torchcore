@@ -5,6 +5,9 @@ from .build import SAMPLER_REG
 @SAMPLER_REG.register()
 class MixBatchSampler(Sampler):
     def __init__(self, dataset_len, mode, batch_size, shuffle=False, drop_last=True):
+        '''
+            dataseat_len: List(len(dataset1),len(dataset2),...)
+        '''
         self.dataset_len = dataset_len
         self.group_num = len(dataset_len)
         self.mode = mode
@@ -38,6 +41,13 @@ class MixBatchSampler(Sampler):
         self.sampler = self.get_sampler(index_group)
 
     def gen_index_group(self):
+        '''
+            mode:
+                'balance': in each batch, the sample number from each dataset are same, the dataset with less sample would be resample in each batch
+                'single': just get data from the first dataset
+                'alternative': in each batch, there is only data from one dataset, the dataset change alternatively. For example, the first batch has data from dataset1, the second batch has data from dataset2.
+        
+        '''
         if self.mode=='balance':
             if self.batch_size % self.group_num != 0:
                 raise ValueError('The number of dataset should be divide by batch size in balance mode')
@@ -76,6 +86,35 @@ class MixBatchSampler(Sampler):
                 np.random.shuffle(inds)
             index_group.append(inds)
             return index_group
+        elif self.mode == 'alternative': #TODO change it to correct
+            max_len = max(self.dataset_len)
+            index_group = []
+            totol_data = 0
+            for data_len in self.dataset_len:
+                inds = np.arange(data_len)
+                inds = inds + totol_data
+                if self.shuffle:
+                    np.random.shuffle(inds)
+                n_times = max_len // data_len
+                rest_num = max_len % data_len
+                inds_all = []
+                for _ in range(n_times):
+                    if self.shuffle:
+                        np.random.shuffle(inds)
+                    inds_all.append(inds.copy())
+                if rest_num > 0:
+                    if self.shuffle:
+                        np.random.shuffle(inds)
+                    inds_all.append(inds[:rest_num])
+                inds = np.concatenate(inds_all)
+
+                #rest = inds[:rest_num]
+                #inds = np.tile(inds, n_times)
+                #inds = np.concatenate((inds, rest))
+                index_group.append(inds)
+                totol_data += data_len
+            return index_group
+
         else:
             raise ValueError('Unknow mode: {}'.format(self.mode))
 

@@ -481,6 +481,24 @@ class FCOSHead(nn.Module):
         return pred_class, pred_bbox_deltas, pred_centerness
 
 
+    def get_heatmaps(self, features):
+        # convert features to list
+        if isinstance(features, dict):
+            features = list(features.values())
+        elif torch.is_tensor(features):
+            features = [features]
+
+        #pred_out: List(tuple(class_pred(N,class_num,h,w), bbox_pred(N,4,class_num,h,w), centerness(N,1,class_num,h,w))...)
+        pred_out = self.head(features)
+        if isinstance(pred_out, dict):
+            pred_out = list(pred_out.values())
+        
+        pred_class = [p[0].sigmoid() for p in pred_out]
+        pred_bbox = [p[1] for p in pred_out]
+        pred_centerness = [p[2].sigmoid() for p in pred_out]
+        pred_class = pred_class
+        pred_centerness = pred_centerness
+        return pred_class, pred_bbox, pred_centerness
 
             
 def permute_and_flatten(pred ):

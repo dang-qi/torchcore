@@ -43,3 +43,14 @@ class FCOS(OneStageDetector):
             results['scores'][i] = scores
             results['labels'][i] = labels
         return results
+
+
+    def get_heatmaps(self, inputs, targets=None):
+        if self.training and targets is None:
+            raise ValueError('targets should not be None during the training')
+        features = self.backbone(inputs['data'])
+        if  self.has_neck():
+            features = self.neck(features)
+
+        class_map, bbox_map, centerness_map = self.det_head.get_heatmaps(features=features)
+        return class_map, bbox_map, centerness_map

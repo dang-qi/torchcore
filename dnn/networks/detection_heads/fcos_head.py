@@ -1,3 +1,4 @@
+import enum
 import torch
 from functools import partial
 import math
@@ -15,6 +16,21 @@ from .build import DETECTION_HEAD_REG
 INF=1000000
 BG_LABLE=1000000
 
+def reduce_sum(tensor):
+    import torch.distributed as dist
+    if not (dist.is_available() and dist.is_initialized()):
+        return tensor
+    tensor = tensor.clone()
+    dist.all_reduce(tensor, op=dist.ReduceOp.SUM)
+    return tensor
+
+def reduce_mean(tensor):
+    import torch.distributed as dist
+    if not (dist.is_available() and dist.is_initialized()):
+        return tensor
+    tensor = tensor.clone()
+    dist.all_reduce(tensor.div_(dist.get_world_size()), op=dist.ReduceOp.SUM)
+    return tensor
 
 @DETECTION_HEAD_REG.register()
 class FCOSHead(nn.Module):
@@ -63,6 +79,7 @@ class FCOSHead(nn.Module):
         self.loss_bbox = build_loss(loss_bbox)
         self.loss_centerness = build_loss(loss_centerness)
         self.test_cfg = test_cfg
+        self.norm_on_bbox = norm_on_bbox
 
     def forward(self, inputs, features, targets=None):
         # convert features to list
@@ -121,6 +138,9 @@ class FCOSHead(nn.Module):
         pos_num = pos_ind_mask.sum()
         class_targets_one_hot[pos_ind_mask,pos_labels-1] = 1
 
+        #if self.norm_on_bbox:
+        #    feature_mesh = [mesh/self.strides[i] for i,mesh in enumerate(feature_mesh)]
+
         flatten_mesh = torch.cat(
             [mesh.repeat(batch_size, 1) for mesh in feature_mesh])
 
@@ -135,9 +155,13 @@ class FCOSHead(nn.Module):
 
         pred_centerness_pos = pred_centerness[pos_ind_mask]
         centerness_targets = self.generate_centerness_target(bbox_targets_pos)
+        #centerness_denorm = max(
+        #    reduce_sum(centerness_targets.sum().detach()), 1e-6)
+        centerness_denorm = max(
+            reduce_mean(centerness_targets.sum().detach()), 1e-6)
 
         loss_class = self.loss_cls(pred_class, class_targets_one_hot, average_factor=pos_num) 
-        loss_box = self.loss_bbox(pred_bbox_decode, bbox_targets_decode)
+        loss_box = self.loss_bbox(pred_bbox_decode, bbox_targets_decode, weight=centerness_targets, avg_factor=centerness_denorm)
         loss_centerness = self.loss_centerness(pred_centerness_pos, centerness_targets)
         #print(loss_centerness)
         return loss_class, loss_box, loss_centerness
@@ -163,6 +187,8 @@ class FCOSHead(nn.Module):
         labels_targets_list = [l.split(mesh_per_level) for l in labels_targets_list]
 
         boxes_targets_per_level = [torch.cat([b[i] for b in boxes_targets_list], dim=0) for i in range(len(mesh_per_level))]
+        if self.norm_on_bbox:
+            boxes_targets_per_level = [b/self.strides[i] for i,b in enumerate(boxes_targets_per_level)]
         labels_targets_per_level = [torch.cat([b[i] for b in labels_targets_list], dim=0) for i in range(len(mesh_per_level))]
         return labels_targets_per_level, boxes_targets_per_level
 

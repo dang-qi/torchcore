@@ -10,6 +10,7 @@ from typing import Type, Any, Callable, Union, List, Optional
 from .build import BACKBONE_REG
 from ..base.norm import build_norm_layer
 from ..base.conv import build_conv_layer
+from torch.nn.modules.batchnorm import _BatchNorm
 
 model_urls = {
     'resnet18': 'https://download.pytorch.org/models/resnet18-5c106cde.pth',
@@ -119,6 +120,8 @@ class ResNet(TorchResNet):
                  zero_init_residual=False,
                  groups=1, 
                  width_per_group=64, 
+                 frozen_stage=-1,
+                 norm_eval=True,
                  replace_stride_with_dilation=None,
                  norm_layer_cfg=dict(type='BN', requires_grad=True),
                  conv_layer_cfg=dict(type='Conv2d'),
@@ -141,6 +144,9 @@ class ResNet(TorchResNet):
         layers = arch_by_depth[depth][1]
         self._norm_layer_cfg = norm_layer_cfg
         self._returned_layers = returned_layers
+
+        self.frozen_stage = frozen_stage
+        self.norm_eval = norm_eval
 
         self.inplanes = 64
         self.dilation = 1
@@ -198,6 +204,21 @@ class ResNet(TorchResNet):
                         nn.init.constant_(m.bn2.weight, 0)
         else:
             raise KeyError('Unsupported init type {}!'.format(init_type))
+        
+        self._freeze_stages()
+
+    def _freeze_stages(self):
+        if self.frozen_stage >= 0:
+            self.bn1.eval()
+            for m in [self.conv1, self.bn1]:
+                for param in m.parameters():
+                    param.requires_grad = False
+
+        for i in range(1, self.frozen_stage + 1):
+            m = getattr(self, f'layer{i}')
+            m.eval()
+            for param in m.parameters():
+                param.requires_grad = False
 
     def _make_layer(self, block, planes, blocks, stride=1, dilate=False):
         norm_layer_cfg = self._norm_layer_cfg
@@ -242,6 +263,17 @@ class ResNet(TorchResNet):
     
     def forward(self, x):
         return self._forward_impl(x)
+
+    def train(self, mode=True):
+        """Convert the model into training mode while keep normalization layer
+        freezed."""
+        super(ResNet, self).train(mode)
+        self._freeze_stages()
+        if mode and self.norm_eval:
+            for m in self.modules():
+                # trick: eval have effect on BatchNorm only
+                if isinstance(m, _BatchNorm):
+                    m.eval()
 
 
 class ResNetRoI(nn.Module):

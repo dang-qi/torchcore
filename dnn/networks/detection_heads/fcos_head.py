@@ -252,7 +252,6 @@ class FCOSHead(nn.Module):
             center_bbox = torch.stack(
                 (cb_dist_left, cb_dist_top, cb_dist_right, cb_dist_bottom), -1)
             inside_bbox_mask = center_bbox.min(-1)[0] > 0
-            raise NotImplementedError
         else:
             inside_bbox_mask = bbox_targets.min(dim=-1)[0] > 0 # (M,N)
             #print('mask size', inside_bbox_mask.shape)

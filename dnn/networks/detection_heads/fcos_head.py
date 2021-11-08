@@ -220,9 +220,10 @@ class FCOSHead(nn.Module):
             ys = mesh[:,1][:, None].expand(mesh_num, num_gts)
             # condition1: inside a `center bbox`
             radius = self.center_sample_radius
-            center_xs = (boxes[..., 0] + boxes[..., 2]) / 2
-            center_ys = (boxes[..., 1] + boxes[..., 3]) / 2
-            center_gts = torch.zeros_like(boxes)
+            gt_bboxes = boxes[None].expand(mesh_num, num_gts, 4)
+            center_xs = (gt_bboxes[..., 0] + gt_bboxes[..., 2]) / 2
+            center_ys = (gt_bboxes[..., 1] + gt_bboxes[..., 3]) / 2
+            center_gts = torch.zeros_like(gt_bboxes)
             stride = center_xs.new_zeros(center_xs.shape)
 
             # project the points on current lvl back to the `original` sizes
@@ -232,18 +233,18 @@ class FCOSHead(nn.Module):
                 stride[lvl_begin:lvl_end] = self.strides[lvl_idx] * radius
                 lvl_begin = lvl_end
 
-            x_mins = center_xs - stride
+            x_mins = center_xs - stride # N; box center min
             y_mins = center_ys - stride
             x_maxs = center_xs + stride
             y_maxs = center_ys + stride
-            center_gts[..., 0] = torch.where(x_mins > boxes[..., 0],
-                                             x_mins, boxes[..., 0])
-            center_gts[..., 1] = torch.where(y_mins > boxes[..., 1],
-                                             y_mins, boxes[..., 1])
-            center_gts[..., 2] = torch.where(x_maxs > boxes[..., 2],
-                                             boxes[..., 2], x_maxs)
-            center_gts[..., 3] = torch.where(y_maxs > boxes[..., 3],
-                                             boxes[..., 3], y_maxs)
+            center_gts[..., 0] = torch.where(x_mins > gt_bboxes[..., 0],
+                                             x_mins, gt_bboxes[..., 0])
+            center_gts[..., 1] = torch.where(y_mins > gt_bboxes[..., 1],
+                                             y_mins, gt_bboxes[..., 1])
+            center_gts[..., 2] = torch.where(x_maxs > gt_bboxes[..., 2],
+                                             gt_bboxes[..., 2], x_maxs)
+            center_gts[..., 3] = torch.where(y_maxs > gt_bboxes[..., 3],
+                                             gt_bboxes[..., 3], y_maxs)
 
             cb_dist_left = xs - center_gts[..., 0]
             cb_dist_right = center_gts[..., 2] - xs

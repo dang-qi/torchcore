@@ -43,7 +43,6 @@ class FCOSHead(nn.Module):
                  center_sampling=False,
                  center_sample_radius=1.5,
                  norm_on_bbox=False,
-                 centerness_on_reg=False,
                  loss_cls=dict(
                      type='SigmoidFocalLoss',
                      gamma=2.0,
@@ -71,7 +70,6 @@ class FCOSHead(nn.Module):
         self.regress_ranges = regress_ranges
         self.center_sampling = center_sampling
         self.center_sample_radius =center_sample_radius
-        self.centerness_on_reg = centerness_on_reg
         self.strides=strides
         self.num_class = num_class
         assert num_class < BG_LABLE

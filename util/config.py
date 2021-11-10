@@ -4,6 +4,7 @@ import os
 import importlib
 from addict import Dict
 import functools
+import pathlib
 
 from yapf.yapflib.yapf_api import FormatCode
 
@@ -13,8 +14,7 @@ BASE_KEY = '_base_'
 REPLACE_KEY = '_replace_'
 
 def mkdir( d ):
-    if not os.path.isdir( d ) :
-        os.mkdir( d )
+    pathlib.Path(d).mkdir(parents=False, exist_ok=True) 
 
 class ConfigDict(Dict):
 

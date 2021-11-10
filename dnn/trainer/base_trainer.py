@@ -218,8 +218,12 @@ class BaseTrainer :
     def reset_trainset(self):
         self._epoch += 1
         if self._trainset.sampler is not None:
-            self._trainset.sampler.set_epoch(self._epoch)
+            if self.distributed:
+                self._trainset.sampler.set_epoch(self._epoch)
         self.train_set_iter = iter(self._trainset)
+
+    def clip_gradient(self):
+        torch.nn.utils.clip_grad_norm_(self._model.parameters(), self._clip_gradient)
 
     def init_logger(self):
         if self._log_with_tensorboard:

@@ -34,13 +34,17 @@ class EpochBasedTrainer(BaseTrainer):
         #            self._model.module.freeze_bn()
         #        else:
         #            self._model.freeze_bn()
+        if hasattr(self, '_scheduler') and hasattr(self._scheduler, 'update_milestone_from_epoch_to_iter'):
+            dataset_len = len(self._trainset)
+            self._scheduler.update_milestone_from_epoch_to_iter(dataset_len)
 
-        for i in range( self._epoch+1, self._niter+1 ):
-            if self._train_sampler is not None:
-                self._train_sampler.set_epoch(i)
+
+        for i in range( self._epoch+1, self._max_epoch+1 ):
+            #if self._train_sampler is not None:
+            #    self._train_sampler.set_epoch(i)
+            self.reset_trainset()
             if self.is_main_process():
-                print("Epoch %d/%d" % (i,self._niter))
-                self._logger.info('epoch {}\n'.format(i))
+                print("Epoch %d/%d" % (i,self._max_epoch))
             #self._model.train()
             self._train_epoch()
 
@@ -55,8 +59,6 @@ class EpochBasedTrainer(BaseTrainer):
             self._epoch = i
             if self.is_main_process():
                 self.save_training(self._path_config.checkpoint_path_tmp.format('epoch_'+str(self._epoch)))
-            if hasattr(self, '_scheduler'):
-                self._scheduler.step()
 
     def _train_epoch( self ):
         if not self._model.training:
@@ -68,13 +70,11 @@ class EpochBasedTrainer(BaseTrainer):
             #        else:
             #            self._model.freeze_bn()
 
-        loss_values = []
-        average_losses = {}
-
         self._optimizer.zero_grad()
         for idx, (inputs, targets) in enumerate(tqdm.tqdm(self._trainset, desc='Training',dynamic_ncols=True)):
             #print('inputs:', inputs)
             #print('targets:', targets)
+            self._step += 1
 
             inputs = self._set_device( inputs )
             targets = self._set_device( targets )
@@ -88,53 +88,45 @@ class EpochBasedTrainer(BaseTrainer):
             for single_loss in loss_dict:
                 loss_sum = loss_sum + (loss_dict[single_loss]/self._accumulation_step)
                 #if self.rank==0 or not self.distributed:
-                if self.is_main_process():
-                    if single_loss in average_losses:
-                        average_losses[single_loss]+= loss_dict[single_loss].mean()
-                    else:
-                        average_losses[single_loss] = loss_dict[single_loss].mean()
 
-            loss_sum = loss_sum.mean()
+            loss_sum_num = loss_sum.item()
             if not math.isfinite(loss_sum):
                 #print("Loss is {}, stopping training".format(loss_sum))
-                self._optimizer.zero_grad()
+                self._optimizer.zero_grad(set_to_none=True)
                 print('wrong targets:',targets)
-                print("Loss is {}, skip this batch".format(loss_sum))
+                print("Loss is {}, skip this batch".format(loss_sum_num))
                 print(loss_dict)
                 continue
                 #sys.exit(1)
+            self.loss_logger.update(loss_dict)
 
             # Computing gradient and do SGD step
             loss_sum.backward()
 
             if self._clip_gradient is not None:
-                torch.nn.utils.clip_grad_norm_(self._model.parameters(), self._clip_gradient)
+                self.clip_gradient()
+                #torch.nn.utils.clip_grad_norm_(self._model.parameters(), self._clip_gradient)
 
             if idx % self._accumulation_step == 0:
                 self._optimizer.step()
                 self._optimizer.zero_grad()
-            loss_values.append( loss_sum.cpu().detach().numpy() )
+            #loss_values.append( loss_sum.cpu().detach().numpy() )
 
-            if idx%self._log_print_iter == 0:
+            #if idx%self._log_print_iter == 0:
                 #if self.rank == 0 or not self.distributed:
-                if self.is_main_process():
-                    self._logger.info('{} '.format(idx+1))
-                    loss_str = ''
-                    for loss in average_losses:
-                        if idx==0:
-                            loss_num = average_losses[loss]
-                        else:
-                            loss_num = average_losses[loss] / self._log_print_iter
-                        self._logger.info('{} '.format(loss_num))
-                        loss_str += (' {} loss:{}, '.format(loss, loss_num))
-                    print(loss_str[:-2])
-                    average_losses = {}
-                    self._logger.info('\n')
+            if self.is_main_process():
+                if self._step % self._log_save_iter == 1:
+                    average_losses = self.loss_logger.get_last_average()
+                    self.save_log(average_losses)
+                    if self._step % self._log_print_iter == 1:
+                        self.print_log(average_losses)
 
+            if hasattr(self, '_scheduler'):
+                self._scheduler.step()
             #if idx > 20:
             #    break
             
-        print('Average loss : ', np.mean(loss_values))
+        #print('Average loss : ', np.mean(loss_values))
 
     #def save_training(self, path, to_print=True):
     #    if isinstance(self._model, DDP):

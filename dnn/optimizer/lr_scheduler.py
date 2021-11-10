@@ -47,3 +47,6 @@ class WarmupMultiStepLR(torch.optim.lr_scheduler._LRScheduler):
             * self.gamma ** bisect_right(self.milestones, self.last_epoch)
             for base_lr in self.base_lrs
         ]
+
+    def update_milestone_from_epoch_to_iter(self, dataset_len):
+        self.milestones = [m*dataset_len for m in self.milestones]

@@ -94,7 +94,8 @@ class StepBasedTrainer(BaseTrainer):
         loss_sum.backward()
 
         if self._clip_gradient is not None:
-            torch.nn.utils.clip_grad_norm_(self._model.parameters(), self._clip_gradient)
+            self.clip_gradient()
+            #torch.nn.utils.clip_grad_norm_(self._model.parameters(), self._clip_gradient)
 
         if self._step % self._accumulation_step == 0:
             self._optimizer.step()

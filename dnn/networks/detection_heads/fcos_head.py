@@ -381,6 +381,10 @@ class FCOSHead(nn.Module):
                 #p_class = p_class[batch_inds_class, labels]
                 p_class = p_class[x.flatten(), y.flatten(), labels.flatten()].reshape(batch_size, -1)
                 p_class = p_class[batch_inds, topk_inds]
+
+                #score = p_class[labels[...,None]][batch_inds, topk_inds]
+                #score = torch.gather(p_class, 2, labels.unsqueeze(2))
+                #score = score[batch_inds, topk_inds]
                 labels = labels[batch_inds, topk_inds]
                 score = max_score_topk
                 #print('p box shape',p_bbox.shape)
@@ -413,6 +417,8 @@ class FCOSHead(nn.Module):
             scores_im = scores_im[keep]
             labels_im = labels_im[keep]
 
+            # clip the boxes inside the image, already done when get p_bbox
+
             # remove super small boxes
             keep = self.remove_small_boxes(boxes_im, min_size=cfg['min_bbox_size'])
             boxes_im = boxes_im[keep]
@@ -435,70 +441,6 @@ class FCOSHead(nn.Module):
         results['boxes'] = boxes_out
         results['scores'] = scores_out
         results['labels'] = labels_out
-        return results
-
-
-
-        pred_class = torch.sigmoid_(pred_class)
-
-        class_num = pred_class.shape[-1]
-
-        batch_size, num_anchors_all, C = pred_class.shape
-
-        boxes_all = []
-        scores_all = []
-        labels_all = []
-        for i in range(batch_size):
-            pred_class_image = pred_class[i]
-            pred_bbox_image = pred_bbox[i]
-            image_shape = image_shapes[i]
-
-            # crop the box inside the image
-            if not self.no_post_clip:
-                pred_bbox_image = self.crop_boxes(pred_bbox_image, image_shape)
-
-            boxes_image = []
-            scores_image = []
-            labels_image = []
-            for class_ind in range(class_num):
-                pred_class_image_the_class= pred_class_image[:,class_ind]
-
-                # remove detection with low score
-                keep = pred_class_image_the_class > self.score_thresh
-                scores_class = pred_class_image_the_class[keep]
-                boxes_class = pred_bbox_image[keep]
-
-                # remove too small detections
-                keep = self.remove_small_boxes(boxes_class, min_size=1e-2)
-                boxes_class = boxes_class[keep]
-                scores_class = scores_class[keep]
-
-                # doing non maximum surpress
-                keep = nms(boxes_class, scores_class, self.nms_thresh)
-
-                # get topk score boxes for the level
-                keep = keep[:self.get_post_nms_top_n()]
-                boxes_class = boxes_class[keep]
-                scores_class = scores_class[keep]
-                labels_class = torch.full_like(scores_class, class_ind, dtype=int)
-
-                boxes_image.append(boxes_class)
-                scores_image.append(scores_class)
-                labels_image.append(labels_class)
-            
-            boxes_image = torch.cat(boxes_image,dim=0)
-            scores_image = torch.cat(scores_image,dim=0)
-            labels_image = torch.cat(labels_image,dim=0)
-
-            
-            boxes_all.append(boxes_image)
-            scores_all.append(scores_image)
-            labels_all.append(labels_image+1)
-
-        results = dict()
-        results['boxes'] = boxes_all
-        results['scores'] = scores_all
-        results['labels'] = labels_all
         return results
 
     def remove_small_boxes(self, boxes, min_size):

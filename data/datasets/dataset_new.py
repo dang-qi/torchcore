@@ -118,8 +118,9 @@ class Dataset:
     def get_coco_style_names(self,json_path, with_cat_id=False):
         json_path = os.path.expanduser(json_path)
         fpGt=COCO(json_path)
+        #print(fpGt.cats.keys())
         if with_cat_id:
-            names= {fpGt.cats[i]['id']:fpGt.cats[i]['name'] for i in range(len(fpGt.cats))}
+            names= {fpGt.cats[i]['id']:fpGt.cats[i]['name'] for i in fpGt.cats.keys()}
         else:
-            names = [fpGt.cats[i]['name'] for i in range(len(fpGt.cats))]
+            names = [fpGt.cats[i]['name'] for i in fpGt.cats.keys()]
         return names

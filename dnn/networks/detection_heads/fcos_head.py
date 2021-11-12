@@ -434,7 +434,7 @@ class FCOSHead(nn.Module):
             labels_im = labels_im[keep]
 
             boxes_out.append(boxes_im)
-            scores_out.append(scores_im)
+            scores_out.append(torch.sqrt(scores_im))
             labels_out.append(labels_im+1)
 
         results = dict()

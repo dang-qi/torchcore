@@ -6,18 +6,20 @@ from torch import nn
 from torch.nn import Module
 from ..rnn import build_rnn
 from .build import build_head
+from .build import HEAD_REG
 
-class FCOSHeadWithGrammarRNN(Module):
-    def __init__(self, head_cfg, rnn_cfg, strides, ref_scale_ind, grammar):
+@HEAD_REG.register()
+class HeadWithGrammarRNN(Module):
+    def __init__(self, head_cfg, rnn_cfg, ref_scale_ind, grammar):
         '''
             grammar(list((int, int, ...), (int, int, ..))): the grammar index, should start from 0
         '''
         super().__init__()
         self.head = build_head(head_cfg)
         self.rnn_cfg = rnn_cfg
-        self.strides = strides
+        #self.strides = strides
         self.ref_scale_ind = ref_scale_ind
-        self.scales = [s/strides[ref_scale_ind] for s in strides]
+        #self.scales = [s/strides[ref_scale_ind] for s in strides]
         self.grammar = grammar
         self.build_rnn_by_grammar()
         self.grammar_map = self._gen_grammar_map()

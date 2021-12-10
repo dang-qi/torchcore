@@ -9,5 +9,6 @@ from .multi_conv_head import MultiConvHead
 from .mask_rcnn_head import MaskRCNNHead
 from .retina_head import RetinaHead
 from .fcos_head import FCOSFeatureHead
+from .head_with_rnn import HeadWithGrammarRNN
 
 from .build import build_head

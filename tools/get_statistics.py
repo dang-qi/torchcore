@@ -1,4 +1,6 @@
 import sys
+
+from numpy.core.fromnumeric import argmax
 sys.path.append('..')
 sys.path.append('.')
 from .hdf5_generater import *
@@ -159,6 +161,119 @@ def get_statistics(part, human_detections, imageset, expand_rate, im_root=None, 
     print('With extention good garments in all garments ratio is {}'.format(g_in_ext_good/garments))
     print('Without extention good garments in garments in good ratio image ratio is {}'.format(g_in_good/garments_with_good_human))
     print('With extention good garments in garments in good ratio image ratio is {}'.format(g_in_ext_good/garments_with_good_human))
+
+def cal_pair_wise_IoR(boxes):
+    out = np.zeros((len(boxes),len(boxes)))
+    for i in range(len(boxes)):
+        for j in range(len(boxes)):
+            if i==j:
+                continue
+            out[i,j] = cal_IoR(boxes[i], boxes[j]) # how box[j] covered by boxes[i]
+    return out
+
+def cal_image_IoR(boxes, labels, overlap_list, max_only, set_zero_ind_end=None):
+    IoR_mat = cal_pair_wise_IoR(boxes)
+    #if IoR_mat.sum() > 0:
+    #    print('IoR mat:',IoR_mat)
+    #    print('boxes', boxes)
+    #    print('labels', labels)
+    col, row = IoR_mat.shape
+    if set_zero_ind_end is not None:
+        for i in range(col):
+            if labels[i] < set_zero_ind_end:
+                IoR_mat[:,i] = 0
+            elif labels[i] > set_zero_ind_end:
+                IoR_mat[i,:] = 0
+    #if IoR_mat.sum() > 0:
+    #    print('IoR mat after:',IoR_mat)
+    #    print('labels', labels)
+    #    print('IoR mat nonzero', IoR_mat.nonzero())
+    if max_only:
+        max_ind = np.argmax(IoR_mat, axis=0)
+        for i, ind in enumerate(max_ind):
+            overlap_list[labels[ind]][labels[i]].append(IoR_mat[ind][i])
+    else:
+        for i in range(col):
+            for j in range(row):
+                overlap_list[labels[i]][labels[j]].append(IoR_mat[i][j])
+
+
+def get_garment_overlap_by_category(anno_path, part, category_num,start_from_one=True, max_only=False, set_zero_ind_end=None):
+    with open(anno_path, 'rb') as f:
+        anno = pickle.load(f)[part]
+
+    overlap_list = [[[] for j in range(category_num)] for i in range(category_num)]
+    testi = 0
+    for image in anno:
+        #if image['id'] != 11099:
+        #    continue
+        image_labels = np.zeros(len(image['objects']),dtype=int)
+        image_boxes = np.zeros((len(image['objects']),4))
+        for i,obj in enumerate(image['objects']):
+            image_labels[i] = obj['category_id']
+            image_boxes[i] = obj['bbox']
+        image_boxes[:,2] += image_boxes[:,0]
+        image_boxes[:,3] += image_boxes[:,1]
+
+        if start_from_one:
+            assert (image_labels >=1).all()
+            image_labels-=1
+        cal_image_IoR(image_boxes, image_labels, overlap_list, max_only, set_zero_ind_end)
+        #testi += 1
+        #if testi > 50:
+        #    break
+    return overlap_list
+
+def gen_garment_overlap_heatmap(overlap_list, category_num, thresh=0, mode='mean', obj_num=None):
+    '''mode can be mean or category_mean'''
+    out = np.zeros((category_num,category_num))
+    if mode == 'mean':
+        for i in range(category_num):
+            for j in range(category_num):
+                overlap = np.array(overlap_list[i][j])
+                overlap = overlap[overlap>thresh]
+                if len(overlap)>0:
+                    out[i][j] = overlap.mean()
+    elif mode == 'category_mean':
+        overlap_sum = np.zeros((category_num,category_num))
+        for i in range(category_num):
+            for j in range(category_num):
+                overlap = np.array(overlap_list[i][j])
+                overlap = overlap[overlap>thresh]
+                overlap_sum[i][j] = overlap.sum()
+        overlap_sum_of_col = overlap_sum.sum(axis=0)
+        out = overlap_sum/(overlap_sum_of_col+1e-6)
+    elif mode == 'size':
+        assert obj_num is not None
+        overlap_sum = np.zeros((category_num,category_num))
+        for i in range(category_num):
+            for j in range(category_num):
+                overlap = np.array(overlap_list[i][j])
+                overlap = overlap[overlap>thresh]
+                overlap_sum[i][j] = overlap.size
+        #overlap_sum_of_col = np.array(obj_num)[:,None]
+        overlap_sum_of_col = np.array(obj_num)
+        #print('overlap sum', overlap_sum)
+        #print('obj num', obj_num)
+        out = overlap_sum/(overlap_sum_of_col+1e-6)
+        #out = overlap_sum
+    elif mode == 'size_reverse':
+        assert obj_num is not None
+        overlap_sum = np.zeros((category_num,category_num))
+        for i in range(category_num):
+            for j in range(category_num):
+                overlap = np.array(overlap_list[i][j])
+                overlap = overlap[overlap>thresh]
+                overlap_sum[i][j] = overlap.size
+        overlap_sum_of_col = np.array(obj_num)[:,None]
+        #overlap_sum_of_col = np.array(obj_num)
+        #print('overlap sum', overlap_sum)
+        #print('obj num', obj_num)
+        out = overlap_sum/(overlap_sum_of_col+1e-6)
+        #out = overlap_sum
+
+    return out
+
 
 def get_garments_in_human_statistics(human_detections, imageset, expand_rate, category_num, gen_id_map=False, intersection_ratio_thresh=0.7, print_result=True):
     '''

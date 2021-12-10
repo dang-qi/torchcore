@@ -50,12 +50,39 @@ def init_focal_loss_head(head, pi=0.01):
     else:
         print('no last conv')
 
+def init_focal_loss_partical_head(head, parts, pi=0.01,):
+    b_value = -1 * math.log((1-pi)/pi)
+    last_conv = None
+    for m in head.modules():
+        if isinstance(m, nn.Conv2d):
+            last_conv = m
+            nn.init.normal_(m.weight, std=0.01)
+            nn.init.constant_(m.bias, 0)
+    if last_conv is not None:
+        for i in parts:
+            nn.init.constant_(last_conv.bias[i], b_value)
+    else:
+        print('no last conv')
+
 def init_head_gaussian(head, std=0.01):
     for m in head.modules():
         if isinstance(m, nn.Conv2d):
             nn.init.normal_(m.weight, std=std)
             nn.init.constant_(m.bias, 0)
 
+def init_head_kaiming(head):
+    for m in head.modules():
+        if isinstance(m, nn.Conv2d):
+            nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+            if m.bias is not None:
+                nn.init.constant_(m.bias, 0)
+
+def init_head_xavier(head, scale=1.0):
+    for m in head.modules():
+        if isinstance(m, nn.Conv2d):
+            nn.init.xavier_normal_(m.weight, gain=scale)
+            if m.bias is not None:
+                nn.init.constant_(m.bias, 0)
 
 def fill_up_weights(up):
     w = up.weight.data

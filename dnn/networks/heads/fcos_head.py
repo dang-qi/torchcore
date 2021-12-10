@@ -1,7 +1,7 @@
 import torch
 from torch import nn
 import collections
-from ..common import init_focal_loss_head, init_head_gaussian
+from ..common import init_focal_loss_head, init_head_gaussian, init_focal_loss_partical_head
 import torch.nn.functional as F
 from ..base.norm import build_norm_layer
 
@@ -9,7 +9,7 @@ from .build import HEAD_REG
 
 @HEAD_REG.register()
 class FCOSFeatureHead(nn.Module):
-    def __init__(self, in_channels, num_classes, norm_layer_cfg, strides, centerness=True, center_with_cls=True, num_conv=4, norm_on_bbox=False,):
+    def __init__(self, in_channels, num_classes, norm_layer_cfg, strides, centerness=True, center_with_cls=True, num_conv=4, norm_on_bbox=False, focal_loss_init=True, focal_loss_init_parts=None):
         #super(RPNHead, self).__init__()
         super().__init__()
         cls_layers = []
@@ -34,7 +34,13 @@ class FCOSFeatureHead(nn.Module):
         init_head_gaussian(self.bbox_conv, std=0.01 )
         init_head_gaussian(self.bbox_pred, std=0.01 )
         init_head_gaussian(self.cls_conv, std=0.01 )
-        init_focal_loss_head(self.cls_logits, pi=0.01)
+        if focal_loss_init:
+            if focal_loss_init_parts is None:
+                init_focal_loss_head(self.cls_logits, pi=0.01)
+            else:
+                init_focal_loss_partical_head(self.cls_logits, focal_loss_init_parts, pi=0.01)
+        else:
+            init_head_gaussian(self.cls_logits, std=0.01 )
 
         if centerness:
             self.centerness_head = nn.Conv2d(in_channels, 1, kernel_size=3, stride=1,

@@ -12,15 +12,19 @@ from .build import TRAINER_REG
 
 @TRAINER_REG.register()
 class EpochBasedTrainer(BaseTrainer):
-    def __init__(self, model, trainset, max_epoch, tag='', rank=0, log_print_iter=1000, log_save_iter=50, testset=None, optimizer=None, scheduler=None, clip_gradient=None, evaluator=None, accumulation_step=1, path_config=None, log_with_tensorboard=False, eval_epoch_interval=1, save_epoch_interval=1):
-        super().__init__(model, trainset, tag=tag, rank=rank, log_print_iter=log_print_iter, log_save_iter=log_save_iter, testset=testset, optimizer=optimizer, scheduler=scheduler, clip_gradient=clip_gradient, evaluator=evaluator, accumulation_step=accumulation_step, path_config=path_config, log_with_tensorboard=log_with_tensorboard)
+    def __init__(self, model, trainset, max_epoch, tag='', rank=0, log_print_iter=1000, log_save_iter=50, testset=None, optimizer=None, scheduler=None, clip_gradient=None, evaluator=None, accumulation_step=1, path_config=None, log_with_tensorboard=False, log_api_token=None, eval_epoch_interval=1, save_epoch_interval=1):
+        super().__init__(model, trainset, tag=tag, rank=rank, log_print_iter=log_print_iter, log_save_iter=log_save_iter, testset=testset, optimizer=optimizer, scheduler=scheduler, clip_gradient=clip_gradient, evaluator=evaluator, accumulation_step=accumulation_step, path_config=path_config, log_with_tensorboard=log_with_tensorboard, log_api_token=log_api_token)
         self._max_epoch = max_epoch
+        self._max_step = max_epoch*len(trainset)
         self._start_step=0
         self._epoch = 0
         self._end_epoch = max_epoch
         self.eval_epoch_inteval = eval_epoch_interval
         self.save_step_interval = save_epoch_interval
     
+        if log_api_token is not None:
+            self.init_log_api()
+
     def train(self):
         self.train_epoch()
 

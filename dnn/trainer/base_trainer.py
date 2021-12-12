@@ -12,6 +12,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import _LRScheduler
 from torch.utils.tensorboard import SummaryWriter
+from ...mlblogapi.mlblogapi import MLBlogAPI
 from ...util.logging import LossLogger, Logger
 
 from ..optimizer.build import build_optimizer, build_lr_scheduler
@@ -22,7 +23,7 @@ from ...data.datasets.build import build_dataloader
 
 
 class BaseTrainer :
-    def __init__( self, model, trainset, tag='', rank=0, log_print_iter=1000, log_save_iter=50, testset=None, optimizer=None, scheduler=None, clip_gradient=None, evaluator=None, accumulation_step=1, path_config=None, log_with_tensorboard=False ):
+    def __init__( self, model, trainset, tag='', rank=0, log_print_iter=1000, log_save_iter=50, testset=None, optimizer=None, scheduler=None, clip_gradient=None, evaluator=None, accumulation_step=1, path_config=None, log_with_tensorboard=False, log_api_token=None ):
         device = torch.device( rank )
         self._device = device
         self._model=model
@@ -46,6 +47,7 @@ class BaseTrainer :
         else:
             self.distributed = False
         self._log_with_tensorboard=log_with_tensorboard
+        self._log_api_token = log_api_token
 
         self._epoch = 0
         self._step = 0
@@ -70,6 +72,10 @@ class BaseTrainer :
         if self.is_main_process():
             self.init_logger()
         
+
+    def init_log_api(self):
+        self._ml_log = MLBlogAPI(self._log_api_tocken)
+        self._ml_log.setup(nepoch=self._max_epoch,epoch_size=len(self._trainset))
 
     def _set_optimizer( self ):
         if isinstance(self._optimizer, dict):
@@ -233,7 +239,7 @@ class BaseTrainer :
             console_formatter = '{} {{}}'.format(datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
             self._logger = Logger(level='info', file=train_path, console=False, console_formatter=console_formatter)
             print('Loss log path is: {}'.format(train_path))
-    
+        
     def print_log(self, average_losses):
         log_str = ''
         #average_losses = self.loss_logger.get_last_average()
@@ -254,6 +260,10 @@ class BaseTrainer :
             self._writer.add_scalars('loss', average_losses, global_step=self._step)
             self._writer.add_scalar('lr', self._scheduler.get_last_lr()[0], global_step=self._step)
             self._writer.add_scalar('epoch', self._epoch, global_step=self._step)
+
+        if self._log_api_token is not None:
+            loss_sum = sum(average_losses.values())
+            self._ml_log.update(self._epoch, self._step, loss_sum)
 
         
 

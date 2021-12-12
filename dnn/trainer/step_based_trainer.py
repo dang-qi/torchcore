@@ -4,22 +4,32 @@ import torch
 import tqdm
 import math
 import torch.distributed as dist
+from ...mlblogapi.mlblogapi import MLBlogAPI
 
 from .base_trainer import BaseTrainer
 from .build import TRAINER_REG
 
 @TRAINER_REG.register()
 class StepBasedTrainer(BaseTrainer):
-    def __init__(self, model, trainset, max_step, tag='', rank=0, log_print_iter=1000, log_save_iter=50, testset=None, optimizer=None, scheduler=None, clip_gradient=None, evaluator=None, accumulation_step=1, path_config=None, log_with_tensorboard=False, eval_step_interval=10000, save_step_interval=10000 ):
-        super().__init__(model, trainset, tag=tag, rank=rank, log_print_iter=log_print_iter, log_save_iter=log_save_iter, testset=testset, optimizer=optimizer, scheduler=scheduler, clip_gradient=clip_gradient, evaluator=evaluator, accumulation_step=accumulation_step,path_config=path_config, log_with_tensorboard=log_with_tensorboard)
+    def __init__(self, model, trainset, max_step, tag='', rank=0, log_print_iter=1000, log_save_iter=50, testset=None, optimizer=None, scheduler=None, clip_gradient=None, evaluator=None, accumulation_step=1, path_config=None, log_with_tensorboard=False, log_api_token=None, eval_step_interval=10000, save_step_interval=10000 ):
+        super().__init__(model, trainset, tag=tag, rank=rank, log_print_iter=log_print_iter, log_save_iter=log_save_iter, testset=testset, optimizer=optimizer, scheduler=scheduler, clip_gradient=clip_gradient, evaluator=evaluator, accumulation_step=accumulation_step,path_config=path_config, log_with_tensorboard=log_with_tensorboard, log_api_token=log_api_token)
         self._max_step = max_step
+        self._max_epoch = math.ceil(self._max_step/len(trainset))
         self._start_step=1
         self._end_step = max_step
         self.eval_step_interval = eval_step_interval
         self.save_step_interval = save_step_interval
+        self._log_api_token = log_api_token
+        if log_api_token is not None:
+            self.init_log_api()
     
     def train(self):
         self.train_step()
+
+    def init_log_api(self):
+        self._ml_log = MLBlogAPI(self._log_api_tocken)
+        self._ml_log.setup(nepoch=self._max_epoch,epoch_size=len(self._trainset))
+
 
     def train_step( self ):
         self._model.train()

@@ -74,7 +74,7 @@ class BaseTrainer :
         
 
     def init_log_api(self):
-        self._ml_log = MLBlogAPI(self._log_api_tocken)
+        self._ml_log = MLBlogAPI(self._log_api_token)
         self._ml_log.setup(nepoch=self._max_epoch,epoch_size=len(self._trainset))
 
     def _set_optimizer( self ):

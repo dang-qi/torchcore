@@ -20,7 +20,7 @@ from .build import DETECTOR_REG
 #from .tools import AnchorBoxesCoder
 #from .tools import PosNegSampler
 
-@DETECTOR_REG.register()
+@DETECTOR_REG.register(force=True)
 class FCOS(OneStageDetector):
     def __init__(self, backbone, neck, det_head, hard_grammar=None ):
         '''
@@ -46,34 +46,123 @@ class FCOS(OneStageDetector):
                         boxes[...,3] = boxes[...,3] / scale[1]
 
             if self.hard_grammar is not None:
-                boxes, scores, labels = self.remove_by_hard_grammar()
+                boxes, scores, labels = self.remove_by_hard_grammar(boxes, scores, labels)
+                # for debug
+                #boxes, scores, labels = self.change_labels_by_hard_grammar(boxes, scores, labels)
 
             results['boxes'][i] = boxes
             results['scores'][i] = scores
             results['labels'][i] = labels
         return results
 
-    def remove_by_hard_grammar(self, boxes, scores, labels, ior_thresh=0.99):
-        # TODO: consider the main garment score thresh
+    def remove_by_hard_grammar(self, boxes, scores, labels, ior_thresh=0.99, main_box_score_thresh=0.1):
         unreasonable_pairs = self.hard_grammar['unreasonable_pairs']
+        reasonable_pairs = self.hard_grammar['reasonable_pairs']
+        #print('label min', labels.min())
 
-        keep = torch.ones_like(labels, dtype=torch.bool)
+        # calculate for unreasonable pairs
+        keepu = torch.ones_like(labels, dtype=torch.bool)
         for pair_ind in unreasonable_pairs:
             mi, pi = pair_ind
-            m_ind = (labels == mi)
-            p_ind = (labels == pi)
+            m_ind = (labels == mi+1)
+            p_ind = (labels == pi+1)
             m_boxes = boxes[m_ind] # shape Mx4
+            if main_box_score_thresh > 0:
+                m_scores = scores[m_ind]
+                m_boxes = m_boxes[m_scores>main_box_score_thresh]
             p_boxes = boxes[p_ind] # shape Nx4
+            if len(m_boxes)==0 or len(p_boxes)==0:
+                continue
             ior = cal_IoR_batch(m_boxes, p_boxes) # shape MxN
             v, _ = ior.max(axis=0) # shape N, get the biggest overlap
             remove_sub = v > ior_thresh
-            keep[p_ind][remove_sub] = False
+            keep_ind = torch.where(p_ind)[0][remove_sub]
+            keepu[keep_ind] = False
+            #removed = scores[p_ind][remove_sub]
+            #if len(removed)>0:
+            #    print('keep part after:',keep)
+            #    print('remove scores: {}'.format(removed))
+        # calculate for reasonable pairs
+        keepr = torch.zeros_like(labels, dtype=torch.bool)
+        for pair_ind in reasonable_pairs:
+            mi, pi = pair_ind
+            m_ind = (labels == mi+1)
+            p_ind = (labels == pi+1)
+            m_boxes = boxes[m_ind] # shape Mx4
+            if main_box_score_thresh > 0:
+                m_scores = scores[m_ind]
+                m_boxes = m_boxes[m_scores>main_box_score_thresh]
+            p_boxes = boxes[p_ind] # shape Nx4
+            if len(m_boxes)==0 or len(p_boxes)==0:
+                continue
+            ior = cal_IoR_batch(m_boxes, p_boxes) # shape MxN
+            v, _ = ior.max(axis=0) # shape N, get the biggest overlap
+            remove_sub = v > ior_thresh
+            keep_ind = torch.where(p_ind)[0][remove_sub]
+            keepr[keep_ind] = True
+
+        keep = keepu | keepr
+
         boxes = boxes[keep]
         scores = scores[keep]
         labels = labels[keep]
+        #print('box num after:',len(boxes))
         return boxes, scores, labels
 
             
+    # just for debug
+    def change_labels_by_hard_grammar(self, boxes, scores, labels, ior_thresh=0.99, main_box_score_thresh=0.2):
+        # TODO: consider the main garment score thresh
+        unreasonable_pairs = self.hard_grammar['unreasonable_pairs']
+        reasonable_pairs = self.hard_grammar['reasonable_pairs']
+        #print('label min', labels.min())
+
+        keepu = torch.ones_like(labels, dtype=torch.bool)
+        for pair_ind in unreasonable_pairs:
+            mi, pi = pair_ind
+            m_ind = (labels == mi+1)
+            p_ind = (labels == pi+1)
+            m_boxes = boxes[m_ind] # shape Mx4
+            if main_box_score_thresh > 0:
+                m_scores = scores[m_ind]
+                m_boxes = m_boxes[m_scores>main_box_score_thresh]
+            p_boxes = boxes[p_ind] # shape Nx4
+            if len(m_boxes)==0 or len(p_boxes)==0:
+                continue
+            ior = cal_IoR_batch(m_boxes, p_boxes) # shape MxN
+            v, _ = ior.max(axis=0) # shape N, get the biggest overlap
+            remove_sub = v > ior_thresh
+            keep_ind = torch.where(p_ind)[0][remove_sub]
+            keepu[keep_ind] = False
+            #removed = scores[p_ind][remove_sub]
+            #if len(removed)>0:
+            #    print('keep part after:',keep)
+            #    print('remove scores: {}'.format(removed))
+        #print('box num before:',len(boxes))
+        #boxes = boxes[keep]
+        #scores = scores[keep]
+        keepr = torch.zeros_like(labels, dtype=torch.bool)
+        for pair_ind in reasonable_pairs:
+            mi, pi = pair_ind
+            m_ind = (labels == mi+1)
+            p_ind = (labels == pi+1)
+            m_boxes = boxes[m_ind] # shape Mx4
+            if main_box_score_thresh > 0:
+                m_scores = scores[m_ind]
+                m_boxes = m_boxes[m_scores>main_box_score_thresh]
+            p_boxes = boxes[p_ind] # shape Nx4
+            if len(m_boxes)==0 or len(p_boxes)==0:
+                continue
+            ior = cal_IoR_batch(m_boxes, p_boxes) # shape MxN
+            v, _ = ior.max(axis=0) # shape N, get the biggest overlap
+            remove_sub = v > ior_thresh
+            keep_ind = torch.where(p_ind)[0][remove_sub]
+            keepr[keep_ind] = True
+
+        abandon = ~(keepu | keepr)
+        labels[abandon] = labels[abandon] + 19
+        #print('box num after:',len(boxes))
+        return boxes, scores, labels
             
         
 
@@ -98,7 +187,7 @@ def cal_IoR_batch(main_boxes, part_boxes):
     y_min = torch.max(main_boxes[...,1], part_boxes[...,1])
     x_max = torch.min(main_boxes[...,2], part_boxes[...,2])
     y_max = torch.min(main_boxes[...,3], part_boxes[...,3])
-    intersection = torch.max(x_max-x_min,0)*torch.max(y_max-y_min,0)
+    intersection = torch.maximum(x_max-x_min,torch.zeros_like(x_max))*torch.maximum(y_max-y_min,torch.zeros_like(y_max))
     part_area = (part_boxes[...,2]-part_boxes[...,0]) * (part_boxes[...,3]-part_boxes[...,1]) # N
     IoR = intersection / part_area
     return IoR

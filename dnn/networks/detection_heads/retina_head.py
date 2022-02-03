@@ -3,26 +3,51 @@ import math
 from torch import nn
 #from ..heads.retina_head import RetinaHead
 from ..tools import AnchorBoxesCoder
+from ..tools.box_coder.build import build_box_coder
 #from ..rpn import MyRegionProposalNetwork, RegionProposalNetwork
 from torchvision.ops.boxes import batched_nms, box_area, box_iou, nms
 from ..losses import FocalLossSigmoid,FocalLoss,SigmoidFocalLoss
+from ..losses.build import build_loss
+from ..heads.build import build_head 
+from ..tools.anchor.build import build_anchor_generator
+from .build import DETECTION_HEAD_REG
 
+@DETECTION_HEAD_REG.register()
 class RetinaNetHead(nn.Module):
-    def __init__(self, head, anchor_generator, cfg):
+    def __init__(self, 
+                 head, 
+                 anchor_generator, 
+                 nms_thresh, 
+                 score_thresh,
+                 class_loss=dict(
+                     type='SigmoidFocalLoss',
+                     gamma=2.0,
+                     alpha=0.25,
+                     reduction='sum'
+                     ),
+                 #loss_bbox=dict(type='SmoothL1Loss', beta=1.0/9),
+                 box_loss=dict(type='L1Loss',reduction='sum'),
+                 box_coder=dict(type='AnchorBoxesCoder',box_code_clip=math.log(1000./16)),
+                 post_clip=True,
+                 post_nms_top_n_train=1000,
+                 post_nms_top_n_test=100):
         super(RetinaNetHead, self).__init__()
-        self.cfg = cfg
-        self.head = head
-        self.anchor_generater = anchor_generator
-        self.box_coder = AnchorBoxesCoder(box_code_clip=math.log(1000./16))
-        self.nms_thresh = cfg.nms_thresh
-        self.score_thresh = cfg.score_thresh
+        #self.cfg = cfg
+        self.head = build_head(head)
+        #self.anchor_generater = anchor_generator
+        self.anchor_generater = build_anchor_generator(anchor_generator)
+        #self.box_coder = AnchorBoxesCoder(box_code_clip=math.log(1000./16))
+        self.box_coder = build_box_coder(box_coder)
+        self.nms_thresh = nms_thresh
+        self.score_thresh = score_thresh
         #self.class_loss = FocalLossSigmoid(alpha=0.25, gamma=2)
-        self.class_loss = SigmoidFocalLoss(alpha=0.25, gamma=2, reduction='sum')
-        self.smooth_l1_loss = nn.SmoothL1Loss(reduction='sum', beta= 1.0 / 9) 
-        if hasattr(cfg, 'no_post_clip'):
-            self.no_post_clip = cfg.no_post_clip
-        else:
-            self.no_post_clip = False
+        #self.class_loss = SigmoidFocalLoss(alpha=0.25, gamma=2, reduction='sum')
+        self.loss_class = build_loss(class_loss)
+        self.loss_bbox = build_loss(box_loss)
+        #self.smooth_l1_loss = nn.SmoothL1Loss(reduction='sum', beta= 1.0 / 9) 
+        self.post_clip = post_clip
+        self.post_nms_top_n_train = post_nms_top_n_train
+        self.post_nms_top_n_test = post_nms_top_n_test
 
     def forward(self, inputs, features, targets=None):
         # convert features to list
@@ -113,7 +138,7 @@ class RetinaNetHead(nn.Module):
 
             #loss_class = F.binary_cross_entropy_with_logits(label_pred, label_target)
             #label_pred = torch.sigmoid_(label_pred)
-            loss_class_list.append(self.class_loss(label_pred, label_target) / label_pos.size()[0])
+            loss_class_list.append(self.loss_class(label_pred, label_target) / label_pos.size()[0])
         loss_class = sum(loss_class_list) / len(loss_class_list)
         #print('label pos shape:', label_pos.shape)
         #print('targets shape:', regression_targets.shape)
@@ -168,7 +193,7 @@ class RetinaNetHead(nn.Module):
             image_shape = image_shapes[i]
 
             # crop the box inside the image
-            if not self.no_post_clip:
+            if self.post_clip:
                 pred_bbox_image = self.crop_boxes(pred_bbox_image, image_shape)
 
             boxes_image = []
@@ -302,17 +327,17 @@ class RetinaNetHead(nn.Module):
         boxes[...,3] = boxes[...,3].clamp(min=0, max=height)
         return boxes
 
-    def get_pre_nms_top_n(self):
-        if self.training:
-            return self.cfg.pre_nms_top_n_train
-        else:
-            return self.cfg.pre_nms_top_n_test
+    #def get_pre_nms_top_n(self):
+    #    if self.training:
+    #        return self.pre_nms_top_n_train
+    #    else:
+    #        return self.pre_nms_top_n_test
 
     def get_post_nms_top_n(self):
         if self.training:
-            return self.cfg.post_nms_top_n_train
+            return self.post_nms_top_n_train
         else:
-            return self.cfg.post_nms_top_n_test
+            return self.post_nms_top_n_test
 
     def assign_targets_to_anchors(self, anchors, targets):
         # return the indexes of the matched anchors and matched boxes

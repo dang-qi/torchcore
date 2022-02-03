@@ -1,6 +1,12 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from .build import LOSS_REG
+from torch.nn import L1Loss
+
+LOSS_REG.register(L1Loss)
+
+
 
 class L1LossWithMask(nn.Module):
     def __init__(self):

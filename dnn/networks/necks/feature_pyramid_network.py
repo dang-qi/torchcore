@@ -76,11 +76,13 @@ class FPN(nn.Module):
         self,
         in_channels_list: List[int],
         out_channels: int,
-        extra_blocks: str = 'last_level_max_pool'
+        extra_blocks: str = 'last_level_max_pool',
+        relu_before_p7=True
     ):
         super(FPN, self).__init__()
         extra_block_dict = {'last_level_max_pool':LastLevelMaxPool(),
-                            'last_level_p6p7': LastLevelP6P7(in_channels=256, out_channels=256)}
+                            'last_level_p6p7': LastLevelP6P7(in_channels=256, out_channels=256,relu_before_p7=relu_before_p7),
+                            'last_level_p6p7_on_c5': LastLevelP6P7(in_channels=2048, out_channels=256,relu_before_p7=relu_before_p7)}
         self.inner_blocks = nn.ModuleList()
         self.layer_blocks = nn.ModuleList()
         #self.layer_num = len(in_channels_list) 
@@ -103,7 +105,7 @@ class FPN(nn.Module):
                 nn.init.constant_(m.bias, 0)
 
         if extra_blocks is not None:
-            assert extra_blocks in ('last_level_max_pool', 'last_level_p6p7')
+            assert extra_blocks in extra_block_dict
             #assert isinstance(extra_blocks, ExtraFPNBlock)
             self.extra_blocks = extra_block_dict[extra_blocks]
         else:
@@ -331,7 +333,7 @@ class LastLevelP6P7(ExtraFPNBlock):
     """
     This module is used in RetinaNet to generate extra layers, P6 and P7.
     """
-    def __init__(self, in_channels: int, out_channels: int):
+    def __init__(self, in_channels: int, out_channels: int, relu_before_p7=True):
         super(LastLevelP6P7, self).__init__()
         self.p6 = nn.Conv2d(in_channels, out_channels, 3, 2, 1)
         self.p7 = nn.Conv2d(out_channels, out_channels, 3, 2, 1)
@@ -339,6 +341,7 @@ class LastLevelP6P7(ExtraFPNBlock):
             nn.init.kaiming_uniform_(module.weight, a=1)
             nn.init.constant_(module.bias, 0)
         self.use_P5 = in_channels == out_channels
+        self.relu_before_p7=relu_before_p7
 
     def forward(
         self,
@@ -350,7 +353,10 @@ class LastLevelP6P7(ExtraFPNBlock):
         x = p5 if self.use_P5 else c5
         names[-1] = 'p5' if self.use_P5 else 'c5'
         p6 = self.p6(x)
-        p7 = self.p7(F.relu(p6))
+        if self.relu_before_p7:
+            p7 = self.p7(F.relu(p6))
+        else:
+            p7 = self.p7(p6)
         p.extend([p6, p7])
         names.extend(["p6", "p7"])
         return p, names

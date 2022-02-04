@@ -1,14 +1,21 @@
+from typing import List, Optional
 import torch
 from torchvision.models.detection.rpn import AnchorGenerator as TorchAnchorGenerator
+#from zmq import device
 from .build import ANCHOR_GENERATOR_REG
 
-@ANCHOR_GENERATOR_REG.register()
+@ANCHOR_GENERATOR_REG.register(force=True)
 class AnchorGenerator(TorchAnchorGenerator):
     def __init__(
         self,
         sizes=((128, 256, 512),),
         aspect_ratios=((0.5, 1.0, 2.0),),
+        strides=None,
+        round_anchor=True,
     ):
+        '''
+        if strides is None, then the stride will be calculated in the process, if it is given, then use the given one. The difference is that the stride can be changed in the higher level of FPN since the conv calculation
+        '''
     # each tuple of sizes indicate the sizes in the layer for multi layer ouput settings
         super(TorchAnchorGenerator, self).__init__()
 
@@ -27,8 +34,11 @@ class AnchorGenerator(TorchAnchorGenerator):
         self.aspect_ratios = aspect_ratios
         self.cell_anchors = None
         self._cache = {}
+        self.strides = [(s,s) for s in strides]
+        self.round_anchor = round_anchor
 
     def forward(self, inputs, feature_maps):
+        '''anchors:List(anchors_per_im:ANCHOR_NUMx4)'''
         grid_sizes = tuple([feature_map.shape[-2:] for feature_map in feature_maps])
         if 'data' not in inputs:
             input_size = inputs['input_size']
@@ -36,7 +46,10 @@ class AnchorGenerator(TorchAnchorGenerator):
         else:
             input_size = inputs['data'].shape[-2:]
             batch_size = len(inputs['data'])
-        strides = tuple((input_size[0] // g[0], input_size[1] // g[1]) for g in grid_sizes)
+        if self.strides is None:
+            strides = tuple((input_size[0] // g[0], input_size[1] // g[1]) for g in grid_sizes)
+        else:
+            strides = self.strides
         try:
             # for earlier version torchvision
             self.set_cell_anchors(feature_maps[0].device)
@@ -100,3 +113,26 @@ class AnchorGenerator(TorchAnchorGenerator):
     #def grid_anchors(self, grid_sizes, strides):
     #    anchors = []
     #    cell_anchors = self.cell_anchors
+    # For every (aspect_ratios, scales) combination, output a zero-centered anchor with those values.
+    # (scales, aspect_ratios) are usually an element of zip(self.scales, self.aspect_ratios)
+    # This method assumes aspect ratio = height / width for an anchor.
+    def generate_anchors(
+        self,
+        scales: List[int],
+        aspect_ratios: List[float],
+        dtype: torch.dtype = torch.float32,
+        device: torch.device = torch.device("cpu"),
+    ):
+        scales = torch.as_tensor(scales, dtype=dtype, device=device)
+        aspect_ratios = torch.as_tensor(aspect_ratios, dtype=dtype, device=device)
+        h_ratios = torch.sqrt(aspect_ratios)
+        w_ratios = 1 / h_ratios
+
+        ws = (w_ratios[:, None] * scales[None, :]).view(-1)
+        hs = (h_ratios[:, None] * scales[None, :]).view(-1)
+
+        base_anchors = torch.stack([-ws, -hs, ws, hs], dim=1) / 2
+        if self.round_anchor:
+            return base_anchors.round()
+        else:
+            return base_anchors

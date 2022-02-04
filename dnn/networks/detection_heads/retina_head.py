@@ -11,6 +11,7 @@ from ..losses.build import build_loss
 from ..heads.build import build_head 
 from ..tools.anchor.build import build_anchor_generator
 from .build import DETECTION_HEAD_REG
+from ..tools.box_matcher.build import build_box_matcher
 
 @DETECTION_HEAD_REG.register()
 class RetinaNetHead(nn.Module):
@@ -24,6 +25,14 @@ class RetinaNetHead(nn.Module):
                      gamma=2.0,
                      alpha=0.25,
                      reduction='sum'
+                     ),
+                 box_matcher=dict(
+                     type='MaxIoUBoxMatcher',
+                     high_thresh=0.5,
+                     low_thresh=0.4,
+                     allow_low_quality_match=True,
+                     assign_all_gt_max=True,
+                     keep_max_iou_in_low_quality=True
                      ),
                  #loss_bbox=dict(type='SmoothL1Loss', beta=1.0/9),
                  box_loss=dict(type='L1Loss',reduction='sum'),
@@ -40,6 +49,7 @@ class RetinaNetHead(nn.Module):
         self.box_coder = build_box_coder(box_coder)
         self.nms_thresh = nms_thresh
         self.score_thresh = score_thresh
+        self.box_matcher = build_box_matcher(box_matcher)
         #self.class_loss = FocalLossSigmoid(alpha=0.25, gamma=2)
         #self.class_loss = SigmoidFocalLoss(alpha=0.25, gamma=2, reduction='sum')
         self.loss_class = build_loss(class_loss)
@@ -349,10 +359,16 @@ class RetinaNetHead(nn.Module):
             if len(boxes) == 0:
                 raise ValueError('there should be more than one item in each image')
             else:
-                iou_mat = box_iou(anchor_image, boxes) # anchor N and target boxes M, iou mat: NxM
-                # set up the max iou for each box as positive 
-                # set up the iou bigger than a value as positive
-                ind_pos_anchor, ind_pos_boxes, ind_neg_anchor = self.match_boxes(iou_mat, low_thresh=0.4, high_thresh=0.5, allow_weak_match=True)
+                match = self.box_matcher.match(boxes, anchor_image)
+                match_box_ind = match.matched_ind
+                #iou_mat = box_iou(anchor_image, boxes) # anchor N and target boxes M, iou mat: NxM
+                ## set up the max iou for each box as positive 
+                ## set up the iou bigger than a value as positive
+                #ind_pos_anchor, ind_pos_boxes, ind_neg_anchor = self.match_boxes(iou_mat, low_thresh=0.4, high_thresh=0.5, allow_weak_match=True)
+                pos_ind = match_box_ind>= 0
+                ind_pos_boxes = match_box_ind[pos_ind]
+                ind_pos_anchor = torch.where(pos_ind)[0]
+                ind_neg_anchor = torch.where(match_box_ind==-2)[0]
                 ind_pos_anchor_all.append(ind_pos_anchor)
                 ind_neg_anchor_all.append(ind_neg_anchor)
                 ind_pos_boxes_all.append(ind_pos_boxes)

@@ -160,14 +160,18 @@ class RetinaNetHead(nn.Module):
             valid_ind = matched_ind >= match_per_im.NEGATIVE_MATCH
             pos_ind = matched_ind >= 0
             pos_num = pos_ind.sum()
+            valid_num = valid_ind.sum()
             #neg_ind = matched_ind == match_per_im.NEGATIVE_MATCH
             pred_class_valid = pred_class_per_im[valid_ind]
 
-            gt_label_per_im = matched_labels[valid_ind]
+            # to use mm detection focal loss the label of negative sample should be class_num+1, class_label should start from ZERO
+            class_num = pred_class_per_im.shape[-1]
+            gt_label_per_im = matched_labels.new_full((valid_num,), class_num)
+            gt_label_per_im[pos_ind[valid_ind]] = matched_labels[pos_ind]-1
             #gt_label_per_im = torch.zeros_like(pred_class_valid,dtype=torch.long)
             #gt_pos_ind = matched_ind[valid_ind]>=0
             #gt_label_per_im[gt_pos_ind]=gt_label_per_im.new_zeros((pos_num,pred_class_valid.shape[1])).scatter_(1, (matched_labels[pos_ind]-1).view(-1,1), 1)
-            #print(gt_label_per_im[matched_ind[valid_ind]>=0][0])
+            #print(gt_label_per_im[matched_ind[valid_ind]<0][0])
             #print('pos num', pos_num)
             #print('all num', valid_ind.sum())
             #loss_class_all.append(self.loss_class(pred_class_valid, gt_label_per_im)/pos_num)

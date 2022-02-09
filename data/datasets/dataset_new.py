@@ -51,6 +51,9 @@ class Dataset:
                 obj['bbox'][2]+=obj['bbox'][0]
                 obj['bbox'][3]+=obj['bbox'][1]
 
+    def set_first_n_subset(self, n):
+        self._images = self._images[:n]
+
     def set_category_subset(self, cat_id, ignore_other_category=True):
         '''
         cat_id: int or list

@@ -11,7 +11,7 @@ from .build import DATASET_REG
 @DATASET_REG.register()
 class COCODataset(Dataset):
     '''COCO dataset'''
-    def __init__( self, root, anno, part, transforms=None, debug=False, xyxy=True, torchvision_format=False, add_mask=False):
+    def __init__( self, root, anno, part, transforms=None, debug=False, xyxy=True, torchvision_format=False, add_mask=False, first_n_subset=None):
         super().__init__( root=root, anno=anno, part=part, transforms=transforms )
         ## load annotations
         #with open(anno, 'rb') as f:
@@ -24,6 +24,8 @@ class COCODataset(Dataset):
         self.add_mask = add_mask
         if xyxy:
             self.convert_to_xyxy()
+        if first_n_subset is not None:
+            self.set_first_n_subset(first_n_subset)
 
     def __len__(self):
         return len(self._images)

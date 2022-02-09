@@ -286,7 +286,7 @@ class BaseTrainer :
                 self._writer.add_scalar('lr', self._scheduler.get_last_lr()[0], global_step=self._step)
                 self._writer.add_scalar('epoch', self._epoch, global_step=self._step)
                 if self._log_memory:
-                    self._writer.add_scalar('mem', self.get_max_mem())
+                    self._writer.add_scalar('mem', self.get_max_mem(), global_step=self._step)
 
             if self._log_api_token is not None:
                 loss_sum = sum(average_losses.values())

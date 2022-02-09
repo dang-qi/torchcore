@@ -1,6 +1,6 @@
 class MatchResult():
-    NEGATIVE_MATCH = -2
-    IGNORE_MATCH = -1
+    NEGATIVE_MATCH = -1
+    IGNORE_MATCH = -2
     def __init__(self, gt_nums, matched_ind, max_iou, labels=None) -> None:
         '''
             gt_nums: ground truth box number

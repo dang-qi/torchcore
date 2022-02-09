@@ -3,6 +3,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from .build import LOSS_REG
+from mmdet.models.losses.focal_loss import FocalLoss as MMFocalLoss
+
+LOSS_REG.register(MMFocalLoss, "MMFocalLoss")
 
 @LOSS_REG.register()
 class SigmoidFocalLoss(nn.Module):

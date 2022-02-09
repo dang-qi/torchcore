@@ -7,6 +7,7 @@ import copy
 import json
 import tqdm
 
+from collections import OrderedDict
 import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.optim import Optimizer
@@ -23,7 +24,7 @@ from ...data.datasets.build import build_dataloader
 
 
 class BaseTrainer :
-    def __init__( self, model, trainset, tag='', rank=0, log_print_iter=1000, log_save_iter=50, testset=None, optimizer=None, scheduler=None, clip_gradient=None, evaluator=None, accumulation_step=1, path_config=None, log_with_tensorboard=False, log_api_token=None ):
+    def __init__( self, model, trainset, tag='', rank=0, world_size=1, log_print_iter=1000, log_save_iter=50, testset=None, optimizer=None, scheduler=None, clip_gradient=None, evaluator=None, accumulation_step=1, path_config=None, log_with_tensorboard=False, log_api_token=None, empty_cache_iter=None, log_memory=False ):
         device = torch.device( rank )
         self._device = device
         self._model=model
@@ -40,7 +41,10 @@ class BaseTrainer :
             self._testset = testset
         self._accumulation_step=accumulation_step
         self.rank = rank
+        self._world_size = world_size
         self._path_config=path_config
+        self._empty_cache_iter= empty_cache_iter
+        self._log_memory=log_memory
 
         if isinstance(self._model, DDP):
             self.distributed = True
@@ -240,32 +244,100 @@ class BaseTrainer :
             self._logger = Logger(level='info', file=train_path, console=False, console_formatter=console_formatter)
             print('Loss log path is: {}'.format(train_path))
         
-    def print_log(self, average_losses):
-        log_str = ''
-        #average_losses = self.loss_logger.get_last_average()
-        for loss in average_losses:
-            loss_num = average_losses[loss]
-            log_str += (' {} loss:{}, '.format(loss, loss_num))
-        print(log_str[:-2])
+    def print_log(self, log_dict):
+            log_str = ''
+            #average_losses = self.loss_logger.get_last_average()
+            for k,v in log_dict.items():
+                log_str += (' {}: {}, '.format(k, v))
+            log_str = self.log_memory(log_str)
+            if self.is_main_process():
+                print(log_str[:-2])
+                #print(torch.cuda.memory_stats(self._device))
+                #print(torch.cuda.memory_summary(self._device))
+                #print('max:',torch.cuda.max_memory_allocated(self._device))
+                #print('current:',torch.cuda.memory_allocated(self._device))
+
+    def log_memory(self, log_str ):
+        if self._log_memory:
+            mem_mb=self.get_max_mem()
+            log_str = log_str + 'memory:{}MB, '.format(mem_mb)
+        return log_str
+
+    def get_max_mem(self):
+        mem = torch.cuda.max_memory_allocated(device=self._device)
+        mem_mb = torch.tensor([mem / (1024 * 1024)],
+                            dtype=torch.int,
+                            device=self._device)
+        #if self._world_size > 1:
+        #    dist.reduce(mem_mb, 0, op=dist.ReduceOp.MAX)
+        return mem_mb.item()
 
     def save_log(self, average_losses):
         #average_losses = self.loss_logger.get_last_average()
-        if not self._log_with_tensorboard:
-            self._logger.info('{} '.format(self._step))
-            for loss in average_losses:
-                loss_num = average_losses[loss]
-                self._logger.info('{} '.format(loss_num))
-            self._logger.info('\n')
-        else:
-            self._writer.add_scalars('loss', average_losses, global_step=self._step)
-            self._writer.add_scalar('lr', self._scheduler.get_last_lr()[0], global_step=self._step)
-            self._writer.add_scalar('epoch', self._epoch, global_step=self._step)
+        if self.is_main_process():
+            if not self._log_with_tensorboard:
+                self._logger.info('{} '.format(self._step))
+                for loss in average_losses:
+                    loss_num = average_losses[loss]
+                    self._logger.info('{} '.format(loss_num))
+                self._logger.info('\n')
+            else:
+                self._writer.add_scalars('loss', average_losses, global_step=self._step)
+                self._writer.add_scalar('lr', self._scheduler.get_last_lr()[0], global_step=self._step)
+                self._writer.add_scalar('epoch', self._epoch, global_step=self._step)
+                if self._log_memory:
+                    self._writer.add_scalar('mem', self.get_max_mem())
 
-        if self._log_api_token is not None:
-            loss_sum = sum(average_losses.values())
-            self._ml_log.update(self._epoch, self._step, loss_sum)
+            if self._log_api_token is not None:
+                loss_sum = sum(average_losses.values())
+                self._ml_log.update(self._epoch, self._step, loss_sum)
 
         
+    # from mmdet detector/base.py
+    def _parse_loss_dict(self,losses):
+        """Parse the raw outputs (losses) of the network.
+
+        Args:
+            losses (dict): Raw output of the network, which usually contain
+                losses and other necessary information.
+
+        Returns:
+            tuple[Tensor, dict]: (loss, log_vars), loss is the loss tensor \
+                which may be a weighted sum of all losses, log_vars contains \
+                all the variables to be sent to the logger.
+        """
+        log_vars = OrderedDict()
+        for loss_name, loss_value in losses.items():
+            if isinstance(loss_value, torch.Tensor):
+                log_vars[loss_name] = loss_value.mean()
+            elif isinstance(loss_value, list):
+                log_vars[loss_name] = sum(_loss.mean() for _loss in loss_value)
+            else:
+                raise TypeError(
+                    f'{loss_name} is not a tensor or list of tensors')
+
+        loss = sum(_value for _key, _value in log_vars.items()
+                    if 'loss' in _key)
+
+        # If the loss_vars has different length, GPUs will wait infinitely
+        if dist.is_available() and dist.is_initialized():
+            log_var_length = torch.tensor(len(log_vars), device=loss.device)
+            dist.all_reduce(log_var_length)
+            message = (f'rank {dist.get_rank()}' +
+                        f' len(log_vars): {len(log_vars)}' + ' keys: ' +
+                        ','.join(log_vars.keys()))
+            assert log_var_length == len(log_vars) * dist.get_world_size(), \
+                'loss log variables are different across GPUs!\n' + message
+
+        log_vars['loss'] = loss
+        for loss_name, loss_value in log_vars.items():
+            # reduce loss when distributed training
+            if dist.is_available() and dist.is_initialized():
+                loss_value = loss_value.data.clone()
+                dist.all_reduce(loss_value.div_(dist.get_world_size()))
+            log_vars[loss_name] = loss_value.item()
+
+        return loss, log_vars
 
 
     def load_checkpoint(self, path, to_print=True):

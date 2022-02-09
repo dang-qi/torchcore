@@ -16,7 +16,7 @@ class MaxIoUBoxMatcher():
         self.NEGATIVE_MATCH = MatchResult.NEGATIVE_MATCH
         self.BETWEEN_POS_NEG_MATCH = MatchResult.IGNORE_MATCH
 
-    def match(self, gt_boxes, anchor_boxes, gt_lables=None):
+    def match(self, gt_boxes, anchor_boxes, gt_labels=None):
         
         '''match the gt_boxes to the anchor boxes
 
@@ -24,7 +24,8 @@ class MaxIoUBoxMatcher():
         if the Iou(gt_box, anchor_box) >= high_thresh it should be positive, if IoU(gt_box, anchor_box) < low_thresh, it should be assigned as negative.
         if allow low quality assign, the gt_box can be assign to the biggest IoU anchor box even if the iou < low_thresh    
 
-        match_box_ind: the array that indicate which gt_box is assigned to the anchor box, -1 is not assigned, -2 is negativve,
+        match_box_ind: the array that indicate which gt_box is assigned to the anchor box, -1 is not assigned, -2 is negative. unlike one-based ind in mmdetection, our ind is zero based.
+        The unsigned matched_labels and background matched_labels are assigned to -1.
         '''
 
         # calculate IoU between gt_boxes and anchor boxes
@@ -34,6 +35,11 @@ class MaxIoUBoxMatcher():
 
         # The box ind for each anchor
         match_box_ind = torch.full_like(iou_mat[:,0], self.BETWEEN_POS_NEG_MATCH, dtype=torch.int64)
+        
+        if gt_labels is not None:
+            matched_labels = torch.full_like(match_box_ind, -1, dtype=gt_labels.dtype)
+        else:
+            matched_labels = None
 
         anchor_num, box_num = iou_mat.shape
         if anchor_num ==0 or box_num==0:
@@ -41,7 +47,7 @@ class MaxIoUBoxMatcher():
             if box_num == 0:
                 match_box_ind = self.NEGATIVE_MATCH
                 max_iou = torch.zeros_like(match_box_ind)
-            return MatchResult(box_num, match_box_ind, max_iou )
+            return MatchResult(box_num, match_box_ind, max_iou, matched_labels )
         # set the negtive index, the box ind will be overwrite later by the weak match if it is allowed
         max_val_anchor, max_box_ind = iou_mat.max(dim=1)
         index_neg_anchor = torch.where(max_val_anchor<self.low_thresh)
@@ -64,4 +70,7 @@ class MaxIoUBoxMatcher():
                     match_box_ind[max_anchor_ind] = max_box_ind[max_anchor_ind] # detectron
                 else:
                     match_box_ind[max_anchor_ind] = torch.arange(box_num) # mmdetection
-        return MatchResult(box_num, match_box_ind, max_val_anchor)
+        if gt_labels is not None:
+            pos_ind = match_box_ind >= 0
+            matched_labels[pos_ind] = gt_labels[match_box_ind[pos_ind]]
+        return MatchResult(box_num, match_box_ind, max_val_anchor, matched_labels)

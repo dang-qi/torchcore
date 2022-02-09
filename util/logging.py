@@ -1,4 +1,5 @@
 import os
+import numpy as np
 
 class Logger():
     def __init__(self, level='warning', console=True, file=None, console_formatter='{}', file_formatter='{}'):
@@ -46,33 +47,34 @@ class Logger():
 class LossLogger():
     def __init__(self) -> None:
         self.loss = None
-        self.loss_average = None
-        self.loss_count = 0
-        self.loss_average_count = 0
+        self.loss_count = None
 
-    def get_last_average(self):
+    def get_last_average(self, n=0):
         average = {}
-        for k,v in self.loss_average.items():
-            average[k] = v / self.loss_average_count
-        self.loss_average_count = 0
-        self.loss_average = None
+        for k,v in self.loss.items():
+            average[k] = np.array(v[-n:]).sum() / np.array(self.loss_count[-n:]).sum()
         return average
 
-    def update(self, loss_dict):
+    def clear(self):
+        self.loss = None
+        self.loss_count = None
+
+    def update(self, loss_dict, count=1):
         if self.loss is None:
             self.loss = {}
+            self.loss_count = []
             for k in loss_dict.keys():
-                self.loss[k] = 0
+                self.loss[k] = []
 
-        self.loss_count += 1
         for k,v in loss_dict.items():
-            self.loss[k] += v.item()
+            self.loss[k].append(v)
+        self.loss_count.append(count)
 
-        if self.loss_average is None:
-            self.loss_average = {}
-            for k in loss_dict.keys():
-                self.loss_average[k] = 0
+        #if self.loss_average is None:
+        #    self.loss_average = {}
+        #    for k in loss_dict.keys():
+        #        self.loss_average[k] = 0
 
-        self.loss_average_count += 1
-        for k,v in loss_dict.items():
-            self.loss_average[k] += v.item()
+        #self.loss_average_count += count
+        #for k,v in loss_dict.items():
+        #    self.loss_average[k] += v

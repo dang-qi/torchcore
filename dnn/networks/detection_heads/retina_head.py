@@ -13,7 +13,7 @@ from ..tools.anchor.build import build_anchor_generator
 from .build import DETECTION_HEAD_REG
 from ..tools.box_matcher.build import build_box_matcher
 
-@DETECTION_HEAD_REG.register()
+@DETECTION_HEAD_REG.register(force=True)
 class RetinaNetHead(nn.Module):
     def __init__(self, 
                  head, 
@@ -59,7 +59,7 @@ class RetinaNetHead(nn.Module):
         self.post_nms_top_n_train = post_nms_top_n_train
         self.post_nms_top_n_test = post_nms_top_n_test
 
-    def forward(self, inputs, features, targets=None):
+    def forward_old(self, inputs, features, targets=None):
         # convert features to list
         if isinstance(features, dict):
             features = list(features.values())
@@ -94,7 +94,8 @@ class RetinaNetHead(nn.Module):
             #generate regression target
             pos_boxes = [target['boxes'][ind] for target, ind in zip(targets, ind_pos_boxes)]
             pos_anchor = [target[ind] for target, ind in zip(anchors, ind_pos_anchor)]
-            regression_targets  = self.box_coder.encode(pos_anchor, pos_boxes )
+            with torch.no_grad():
+                regression_targets  = self.box_coder.encode(pos_anchor, pos_boxes )
 
             #generate classification target
             pos_labels = [target['labels'][ind] for target, ind in zip(targets, ind_pos_boxes)]
@@ -110,8 +111,86 @@ class RetinaNetHead(nn.Module):
                 "loss_box_reg": loss_rpn_box_reg,
             }
             return losses
+    def forward(self, inputs, features, targets=None):
+        # convert features to list
+        if isinstance(features, dict):
+            features = list(features.values())
+        elif torch.is_tensor(features):
+            features = [features]
 
-    def compute_loss(self, pred_class, pred_bbox_deltas, ind_pos_anchor, ind_neg_anchor, regression_targets, pos_labels):
+        pred_out = self.head(features)
+        anchors = self.anchor_generater(inputs, features)
+        
+        num_images = len(anchors)
+        num_anchors_per_level = [pred[1][0].numel()//4 for pred in pred_out]
+        pred_class, pred_bbox_deltas = self.combine_and_permute_predictions(pred_out)
+        #return features,pred_class, pred_bbox_deltas
+
+        # apply pred_bbox_deltas to anchors to obtain the decoded proposals
+        # note that we detach the deltas because Faster R-CNN do not backprop through
+        # the proposals
+        #boxes, scores = self.filter_proposals(proposals, pred_class.detach(), inputs['image_sizes'], num_anchors_per_level)
+
+        if not self.training:
+            proposals = self.box_coder.decode(pred_bbox_deltas.detach(), anchors)
+            proposals = proposals.view(num_images, -1, 4)
+
+            image_shapes = inputs['image_sizes']
+            results = self.post_detection(pred_class, proposals, image_shapes, num_anchors_per_level)
+            return results
+        else:
+            # list(MatchResult)
+            matches = self.assign_targets_to_anchors(anchors, targets)
+
+            loss_objectness, loss_rpn_box_reg = self.compute_loss( targets, pred_class, pred_bbox_deltas, matches, anchors)
+            #print('loss')
+            losses = {
+                "loss_objectness": loss_objectness,
+                "loss_box_reg": loss_rpn_box_reg,
+            }
+            return losses
+
+    def compute_loss(self, targets, pred_class, pred_bbox_deltas, matches, anchors):
+        loss_class_all = []
+        loss_box_all = []
+        # computer for per image and merge in the end
+        for target_per_im,  pred_class_per_im, pred_bbox_delta_per_im, match_per_im, anchors_per_im in zip(targets, pred_class, pred_bbox_deltas, matches, anchors):
+            matched_ind = match_per_im.matched_ind
+            matched_labels = match_per_im.labels
+            valid_ind = matched_ind >= match_per_im.NEGATIVE_MATCH
+            pos_ind = matched_ind >= 0
+            pos_num = pos_ind.sum()
+            #neg_ind = matched_ind == match_per_im.NEGATIVE_MATCH
+            pred_class_valid = pred_class_per_im[valid_ind]
+
+            gt_label_per_im = matched_labels[valid_ind]
+            #gt_label_per_im = torch.zeros_like(pred_class_valid,dtype=torch.long)
+            #gt_pos_ind = matched_ind[valid_ind]>=0
+            #gt_label_per_im[gt_pos_ind]=gt_label_per_im.new_zeros((pos_num,pred_class_valid.shape[1])).scatter_(1, (matched_labels[pos_ind]-1).view(-1,1), 1)
+            #print(gt_label_per_im[matched_ind[valid_ind]>=0][0])
+            #print('pos num', pos_num)
+            #print('all num', valid_ind.sum())
+            #loss_class_all.append(self.loss_class(pred_class_valid, gt_label_per_im)/pos_num)
+            loss_class_all.append(self.loss_class(pred_class_valid, gt_label_per_im, avg_factor=pos_num))
+
+            pred_boxes_pos = pred_bbox_delta_per_im[pos_ind]
+            pos_anchor = anchors_per_im[pos_ind]
+            pos_boxes = target_per_im['boxes'][matched_ind[pos_ind]]
+            with torch.no_grad():
+                regression_targets  = self.box_coder.encode_once(pos_anchor, pos_boxes )
+
+            loss_box_all.append(self.loss_bbox(
+                pred_boxes_pos,
+                regression_targets,
+            ) / max(1, pred_boxes_pos.shape[0]))
+
+            
+        loss_class = sum(loss_class_all) / len(loss_class_all)
+        loss_box = sum(loss_box_all)/len(loss_box_all)
+
+        return loss_class, loss_box
+
+    def compute_loss_old(self, pred_class, pred_bbox_deltas, ind_pos_anchor, ind_neg_anchor, regression_targets, pos_labels):
 
         #keep_pos, keep_neg = self.pos_neg_sampler.sample_batch(ind_pos_anchor, ind_neg_anchor)
 
@@ -349,7 +428,22 @@ class RetinaNetHead(nn.Module):
         else:
             return self.post_nms_top_n_test
 
+    @torch.no_grad()
     def assign_targets_to_anchors(self, anchors, targets):
+        # return the matched result
+        match_all = []
+        for anchor_image, target in zip(anchors, targets):
+            boxes = target['boxes']
+            labels = target['labels']
+            if len(boxes) == 0:
+                raise ValueError('there should be more than one item in each image')
+            else:
+                match = self.box_matcher.match(boxes, anchor_image, labels)
+                match_all.append(match)
+        return match_all
+    
+
+    def assign_targets_to_anchors_old(self, anchors, targets):
         # return the indexes of the matched anchors and matched boxes
         ind_pos_anchor_all = []
         ind_neg_anchor_all = []
@@ -361,14 +455,16 @@ class RetinaNetHead(nn.Module):
             else:
                 match = self.box_matcher.match(boxes, anchor_image)
                 match_box_ind = match.matched_ind
-                #iou_mat = box_iou(anchor_image, boxes) # anchor N and target boxes M, iou mat: NxM
-                ## set up the max iou for each box as positive 
-                ## set up the iou bigger than a value as positive
-                #ind_pos_anchor, ind_pos_boxes, ind_neg_anchor = self.match_boxes(iou_mat, low_thresh=0.4, high_thresh=0.5, allow_weak_match=True)
+                # try to release memory
+                #del match
                 pos_ind = match_box_ind>= 0
                 ind_pos_boxes = match_box_ind[pos_ind]
                 ind_pos_anchor = torch.where(pos_ind)[0]
                 ind_neg_anchor = torch.where(match_box_ind==-2)[0]
+                ## set up the max iou for each box as positive 
+                ## set up the iou bigger than a value as positive
+                #iou_mat = box_iou(anchor_image, boxes) # anchor N and target boxes M, iou mat: NxM
+                #ind_pos_anchor, ind_pos_boxes, ind_neg_anchor = self.match_boxes(iou_mat, low_thresh=0.4, high_thresh=0.5, allow_weak_match=True)
                 ind_pos_anchor_all.append(ind_pos_anchor)
                 ind_neg_anchor_all.append(ind_neg_anchor)
                 ind_pos_boxes_all.append(ind_pos_boxes)

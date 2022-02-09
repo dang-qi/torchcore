@@ -246,20 +246,20 @@ class ResNet(TorchResNet):
         return nn.Sequential(*layers)
 
     def _forward_impl(self, x):
+        out = OrderedDict()
         x = self.conv1(x)
         x = self.bn1(x)
-        layer0_out = self.relu(x)
-        layer1_1_out = self.maxpool(layer0_out)
+        x = self.relu(x)
 
-        layer1_out = self.layer1(layer1_1_out)
-        layer2_out = self.layer2(layer1_out)
-        layer3_out = self.layer3(layer2_out)
-        layer4_out = self.layer4(layer3_out)
-        outputs = [layer0_out, layer1_out, layer2_out, layer3_out, layer4_out]
+        if 0 in self._returned_layers:
+            out[0] = x
+        x = self.maxpool(x)
 
-        out = OrderedDict()
-        for i in self._returned_layers:
-            out['{}'.format(i)] = outputs[i]
+        for i in range(1,5):
+            x = getattr(self,'layer{}'.format(i))(x)
+            if i in self._returned_layers:
+                out[i] = x
+
         return out
     
     def forward(self, x):

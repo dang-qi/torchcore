@@ -11,8 +11,9 @@ from .build import TRAINER_REG
 
 @TRAINER_REG.register()
 class StepBasedTrainer(BaseTrainer):
-    def __init__(self, model, trainset, max_step, tag='', rank=0, log_print_iter=1000, log_save_iter=50, testset=None, optimizer=None, scheduler=None, clip_gradient=None, evaluator=None, accumulation_step=1, path_config=None, log_with_tensorboard=False, log_api_token=None, eval_step_interval=10000, save_step_interval=10000 ):
-        super().__init__(model, trainset, tag=tag, rank=rank, log_print_iter=log_print_iter, log_save_iter=log_save_iter, testset=testset, optimizer=optimizer, scheduler=scheduler, clip_gradient=clip_gradient, evaluator=evaluator, accumulation_step=accumulation_step,path_config=path_config, log_with_tensorboard=log_with_tensorboard, log_api_token=log_api_token)
+    def __init__(self, model, trainset, max_step, tag='', rank=0, world_size=1, log_print_iter=1000, log_save_iter=50, testset=None, optimizer=None, scheduler=None, clip_gradient=None, evaluator=None, accumulation_step=1, path_config=None, log_with_tensorboard=False, log_api_token=None, empty_cache_iter=None, log_memory=True, eval_step_interval=10000, save_step_interval=10000 ):
+        super().__init__(model, trainset, tag=tag, rank=rank, world_size=world_size, log_print_iter=log_print_iter, log_save_iter=log_save_iter, testset=testset, optimizer=optimizer, scheduler=scheduler, clip_gradient=clip_gradient, evaluator=evaluator, accumulation_step=accumulation_step,path_config=path_config, log_with_tensorboard=log_with_tensorboard, log_api_token=log_api_token, empty_cache_iter=empty_cache_iter,
+        log_memory=log_memory)
         self._max_step = max_step
         self._max_epoch = math.ceil(self._max_step/len(trainset))
         self._start_step=1
@@ -79,12 +80,33 @@ class StepBasedTrainer(BaseTrainer):
         targets = self._set_device( targets )
 
         loss_dict = self._model(inputs, targets)
+        #try:
+        #    loss_dict = self._model(inputs, targets)
+        #except RuntimeError as e1:
+        #    if 'out of memory' in str(e1):
+        #        print('out of memory 11111')
+        #        torch.cuda.empty_cache()
+        #        print('torch.cuda.empty_cache(),then try again')
+        #        try:
+        #            loss_dict = self._model(inputs, targets)
+        #        except RuntimeError as e2:
+        #            if 'out of memory' in str(e2):
+        #                print('out of memory 22222')
+        #                print('len(targets)',len(targets))
+        #                print('skip this iteration')
+        #                for target in targets:
+        #                    print(target)
+        #            else:
+        #                raise e2
+        #    else:
+        #        raise e1
 
         # add the losses for each part
         #loss_sum = sum(loss for loss in loss_dict.values())
-        loss_sum=0
-        for single_loss in loss_dict:
-            loss_sum = loss_sum + (loss_dict[single_loss]/self._accumulation_step)
+        loss_sum, loss_log = self._parse_loss_dict(loss_dict)
+        #loss_sum=0
+        #for single_loss in loss_dict:
+        #    loss_sum = loss_sum + (loss_dict[single_loss]/self._accumulation_step)
 
         loss_sum_num = loss_sum.item()
         if not math.isfinite(loss_sum_num):
@@ -95,7 +117,7 @@ class StepBasedTrainer(BaseTrainer):
             print(loss_dict)
             return
             sys._exit(1)
-        self.loss_logger.update(loss_dict)
+        self.loss_logger.update(loss_log)
 
         # Computing gradient and do SGD step
         loss_sum.backward()
@@ -108,12 +130,16 @@ class StepBasedTrainer(BaseTrainer):
             self._optimizer.step()
             self._optimizer.zero_grad()
 
-        if self.is_main_process():
-            if self._step % self._log_save_iter == 1:
-                average_losses = self.loss_logger.get_last_average()
-                self.save_log(average_losses)
-                if self._step % self._log_print_iter == 1:
-                    self.print_log(average_losses)
+        if self._empty_cache_iter is not None:
+            if self._step % self._empty_cache_iter == 0:
+                torch.cuda.empty_cache()
+
+        if self._step % self._log_save_iter == 0:
+            average_losses = self.loss_logger.get_last_average()
+            self.loss_logger.clear()
+            self.save_log(average_losses)
+            if self._step % self._log_print_iter == 0:
+                self.print_log(average_losses)
             
     #def save_training(self, path, to_print=True):
     #    if isinstance(self._model, DDP):

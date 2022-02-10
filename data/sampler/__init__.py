@@ -1,2 +1,3 @@
 from .mix_batch_sampler import MixBatchSampler
+from .group_sampler import GroupSampler
 #from .distributed_sampler_wrapper import DistributedSamplerWrapper

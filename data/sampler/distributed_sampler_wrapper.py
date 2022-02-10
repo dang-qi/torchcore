@@ -22,6 +22,15 @@ class DistributedSamplerWrapper(DistributedSampler):
     that is exclusive to it.
     .. note::
         Sampler is assumed to be of constant size.
+    WARNING:
+        The Distributed sampler sample index by indices[self.rank:self.total_size:self.num_replicas], 
+        suppose we have index = range(20) from ordinary smapler
+        and the num_replicas = 4
+        gpu0: [0,4,8,...]
+        gpu1: [1,5,9,...]
+        gpu2: [2,6,10,...]
+        gpu3: [3,7,11,...]
+
     """
 
     def __init__(
@@ -29,7 +38,7 @@ class DistributedSamplerWrapper(DistributedSampler):
         sampler,
         num_replicas: Optional[int] = None,
         rank: Optional[int] = None,
-        shuffle: bool = True,
+        shuffle: bool = False,
     ):
         """
         Args:
@@ -55,6 +64,11 @@ class DistributedSamplerWrapper(DistributedSampler):
         indexes_of_indexes = super().__iter__()
         subsampler_indexes = self.dataset
         return iter(itemgetter(*indexes_of_indexes)(subsampler_indexes))
+
+    def set_epoch(self, epoch: int) -> None:
+        super().set_epoch(epoch)
+        if hasattr(self.sampler, 'set_epoch') and callable(getattr(self.sampler, 'set_epoch')):
+            self.sampler.set_epoch(epoch)
 
 #@SAMPLER_REG.register()
 class DatasetFromSampler(Dataset):

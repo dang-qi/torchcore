@@ -3,6 +3,7 @@ import copy
 import pickle
 from pycocotools.coco import COCO
 from ..transforms import Compose
+import numpy as np
 
 class Dataset:
     '''Basic Dataset'''
@@ -20,6 +21,7 @@ class Dataset:
         if transforms is None:
             transforms = []
         self._transforms=Compose(transforms)
+        self._set_aspect_ratio_flag()
 
     def __getitem__(self, idx):
         raise NotImplementedError
@@ -53,6 +55,19 @@ class Dataset:
 
     def set_first_n_subset(self, n):
         self._images = self._images[:n]
+        self._set_aspect_ratio_flag()
+
+    def _set_aspect_ratio_flag(self):
+        '''We want to put the dataset that has similar aspect ratio together,
+           
+           So I put the flag here. The 0 means aspect ratio less than one.
+           1 means aspect ratio equal or bigger than one
+        '''
+        self.aspect_ratio_flag = np.zeros(len(self._images),dtype=np.uint8)
+        for i, im in enumerate(self._images):
+            aspect_ratio = im['height']/im['width']
+            if aspect_ratio >= 1:
+                self.aspect_ratio_flag[i] = 1
 
     def set_category_subset(self, cat_id, ignore_other_category=True):
         '''
@@ -79,6 +94,7 @@ class Dataset:
                 self._images.append(im)
         else:
             self._images = [self._original_images[i] for i in im_indexs]
+        self._set_aspect_ratio_flag()
 
     def generate_cat_dict(self):
         if hasattr(self, 'category_index_dict'):

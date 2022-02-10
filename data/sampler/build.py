@@ -20,7 +20,7 @@ def register_torch_sampler():
 TORCH_SAMPLER = register_torch_sampler()
 
 
-def build_sampler(cfg, distributed=False):
+def build_sampler(cfg, distributed=False, grouped=True):
     sampler = build_with_config(cfg, SAMPLER_REG)
     if distributed:
         sampler = DistributedSamplerWrapper(sampler)

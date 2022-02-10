@@ -1,8 +1,8 @@
 import torch
-from torchvision.ops.boxes import box_iou
+#from torchvision.ops.boxes import box_iou
+from mmdet.core.bbox.iou_calculators.iou2d_calculator import bbox_overlaps as box_iou
 from .match_result import MatchResult
 from .build import BOX_MATCHER_REG
-
 
 @BOX_MATCHER_REG.register(force=True)
 class MaxIoUBoxMatcher():
@@ -48,6 +48,7 @@ class MaxIoUBoxMatcher():
                 match_box_ind = self.NEGATIVE_MATCH
                 max_iou = torch.zeros_like(match_box_ind)
             return MatchResult(box_num, match_box_ind, max_iou, matched_labels )
+
         # set the negtive index, the box ind will be overwrite later by the weak match if it is allowed
         max_val_anchor, max_box_ind = iou_mat.max(dim=1)
         index_neg_anchor = torch.where(max_val_anchor<self.low_thresh)

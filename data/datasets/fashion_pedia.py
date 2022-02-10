@@ -29,6 +29,7 @@ class FashionPediaDataset(Dataset):
             self.convert_to_xyxy()
         if sub_category is not None:
             self.set_category_subset(sub_category, ignore_other_category=True)
+        self._set_aspect_ratio_flag()
         self.debug = debug
 
     def __len__(self):

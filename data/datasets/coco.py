@@ -26,6 +26,7 @@ class COCODataset(Dataset):
             self.convert_to_xyxy()
         if first_n_subset is not None:
             self.set_first_n_subset(first_n_subset)
+        self._set_aspect_ratio_flag()
 
     def __len__(self):
         return len(self._images)

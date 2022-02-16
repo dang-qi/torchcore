@@ -37,7 +37,7 @@ class AnchorGenerator(TorchAnchorGenerator):
         self.strides = [(s,s) for s in strides]
         self.round_anchor = round_anchor
 
-    def forward(self, inputs, feature_maps):
+    def forward(self, inputs, feature_maps, keep_multi_level=False):
         '''anchors:List(anchors_per_im:ANCHOR_NUMx4)'''
         grid_sizes = tuple([feature_map.shape[-2:] for feature_map in feature_maps])
         if 'data' not in inputs:
@@ -63,7 +63,8 @@ class AnchorGenerator(TorchAnchorGenerator):
             for anchors_per_feature_map in anchors_over_all_feature_maps:
                 anchors_in_image.append(anchors_per_feature_map)
             anchors.append(anchors_in_image)
-        anchors = [torch.cat(anchors_per_image) for anchors_per_image in anchors]
+        if not keep_multi_level:
+            anchors = [torch.cat(anchors_per_image) for anchors_per_image in anchors]
         return anchors
 
     #def set_cell_anchors(self):

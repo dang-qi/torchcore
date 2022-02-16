@@ -60,6 +60,7 @@ class MaxIoUBoxMatcher():
         if self.allow_low_quality_match:
             max_val, max_anchor_ind = iou_mat.max(dim=0)
             # when there is two gt boxes A,B has IoU with Anchor box C 0.8 and 0.9 respectively. A want to get assigned during this low quality match, detectron still assign C to B, which has bigger IoU, while mmdetection assign C to A. It has no significant impact according to https://github.com/facebookresearch/detectron2/blob/7cad0a7d95cc8b0c7974cc19e50bded742183555/detectron2/modeling/matcher.py#L124
+            # TODO: what happens when two gt box have max iou with the same anchor box? In mmdetection it is assigned to the gt box with larger index. In current implementation, it is kinda random 
             if self.assign_all_gt_max:
                 inds_anchor, ind_box = torch.where(iou_mat==max_val.expand_as(iou_mat))
                 if self.keep_max_iou_in_low_quality:
@@ -70,7 +71,7 @@ class MaxIoUBoxMatcher():
                 if self.keep_max_iou_in_low_quality:
                     match_box_ind[max_anchor_ind] = max_box_ind[max_anchor_ind] # detectron
                 else:
-                    match_box_ind[max_anchor_ind] = torch.arange(box_num) # mmdetection
+                    match_box_ind[max_anchor_ind] = torch.arange(box_num, device=max_anchor_ind.device) # mmdetection
         if gt_labels is not None:
             pos_ind = match_box_ind >= 0
             matched_labels[pos_ind] = gt_labels[match_box_ind[pos_ind]]

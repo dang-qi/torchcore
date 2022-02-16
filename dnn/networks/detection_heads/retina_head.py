@@ -13,6 +13,10 @@ from ..tools.anchor.build import build_anchor_generator
 from .build import DETECTION_HEAD_REG
 from ..tools.box_matcher.build import build_box_matcher
 
+# for debug
+from ....tools.memory_tools import print_mem
+import torch.distributed as dist
+
 @DETECTION_HEAD_REG.register(force=True)
 class RetinaNetHead(nn.Module):
     def __init__(self, 
@@ -38,6 +42,8 @@ class RetinaNetHead(nn.Module):
                  box_loss=dict(type='L1Loss',reduction='sum'),
                  box_coder=dict(type='AnchorBoxesCoder',box_code_clip=math.log(1000./16)),
                  post_clip=True,
+                 before_nms_top_n_train=1000,
+                 before_nms_top_n_test=1000,
                  post_nms_top_n_train=1000,
                  post_nms_top_n_test=100):
         super(RetinaNetHead, self).__init__()
@@ -58,6 +64,9 @@ class RetinaNetHead(nn.Module):
         self.post_clip = post_clip
         self.post_nms_top_n_train = post_nms_top_n_train
         self.post_nms_top_n_test = post_nms_top_n_test
+
+        self.before_nms_top_n_train = before_nms_top_n_train
+        self.before_nms_top_n_test = before_nms_top_n_test
 
     def forward_old(self, inputs, features, targets=None):
         # convert features to list
@@ -118,12 +127,17 @@ class RetinaNetHead(nn.Module):
         elif torch.is_tensor(features):
             features = [features]
 
+        #rank = dist.get_rank()
+        #print('rank:', rank,inputs['data'].shape)
+
+        #print_mem(msg='before head')
         pred_out = self.head(features)
-        anchors = self.anchor_generater(inputs, features)
+        #print_mem(msg='after head')
+        #print_mem(msg='after anchor')
         
-        num_images = len(anchors)
-        num_anchors_per_level = [pred[1][0].numel()//4 for pred in pred_out]
-        pred_class, pred_bbox_deltas = self.combine_and_permute_predictions(pred_out)
+        #num_images = len(anchors)
+        #num_anchors_per_level = [pred[1][0].numel()//4 for pred in pred_out]
+        #print_mem(msg='after permute')
         #return features,pred_class, pred_bbox_deltas
 
         # apply pred_bbox_deltas to anchors to obtain the decoded proposals
@@ -132,17 +146,34 @@ class RetinaNetHead(nn.Module):
         #boxes, scores = self.filter_proposals(proposals, pred_class.detach(), inputs['image_sizes'], num_anchors_per_level)
 
         if not self.training:
-            proposals = self.box_coder.decode(pred_bbox_deltas.detach(), anchors)
-            proposals = proposals.view(num_images, -1, 4)
+            #proposals = self.box_coder.decode(pred_bbox_deltas.detach(), anchors)
+            #proposals = proposals.view(num_images, -1, 4)
 
+            anchors = self.anchor_generater(inputs, features, keep_multi_level=True)
             image_shapes = inputs['image_sizes']
-            results = self.post_detection(pred_class, proposals, image_shapes, num_anchors_per_level)
+            pred_class, pred_bbox_deltas = self.combine_and_permute_predictions(pred_out, keep_multi_level=True)
+            results = self.post_detection(pred_class, pred_bbox_deltas, anchors, image_shapes )
             return results
         else:
             # list(MatchResult)
+            anchors = self.anchor_generater(inputs, features)
             matches = self.assign_targets_to_anchors(anchors, targets)
+            #print_mem(msg='after match')
+
+            #anchor_by_gt = [len(a)*len(t['boxes']) for a, t in zip(anchors, targets)]
+            #max_match = [(m.matched_ind>=-1).sum() for m in matches]
+            #anchor_by_gt = max(anchor_by_gt)
+            #max_match = sum(max_match)
+            #if anchor_by_gt> self.max_anchor_by_gt_num:
+            #    print('max anchor by gt change from to', self.max_anchor_by_gt_num, anchor_by_gt)
+            #    self.max_anchor_by_gt_num = anchor_by_gt
+            #if max_match > self.max_match:
+            #    print('max match change from to',self.max_match, max_match)
+            #    self.max_match = max_match
+            pred_class, pred_bbox_deltas = self.combine_and_permute_predictions(pred_out, keep_multi_level=False)
 
             loss_objectness, loss_rpn_box_reg = self.compute_loss( targets, pred_class, pred_bbox_deltas, matches, anchors)
+            #print_mem(msg='after loss')
             #print('loss')
             losses = {
                 "loss_objectness": loss_objectness,
@@ -262,7 +293,90 @@ class RetinaNetHead(nn.Module):
         #) / (ind_pos_anchor.numel())
         return loss_class, loss_box
 
-    def post_detection(self, pred_class, pred_bbox, image_shapes, num_anchors_per_level):
+    def post_detection(self, pred_class, pred_bbox, anchors, image_shapes):
+        '''
+            pred_class:[level_1(shape:NxAxC), level2, ...]
+            N is batch size, A is anchor size, C is category number
+            pred_bbox:[level_1(shape:NxAx4), level2, ...]
+            anchors: [image1[level1, level2,...], image2,...]
+            anchors:[anchors_per_image([anchors_per_level])]'''
+        pred_class = [torch.sigmoid_(p) for p in pred_class]
+        
+        batch_size = pred_class[0].shape[0]
+
+        boxes_all = []
+        labels_all = []
+        scores_all = []
+        # do post_detection for each image:
+        for i in range(batch_size):
+            pred_class_image = [p[i] for p in pred_class]
+            pred_bbox_image = [p[i] for p in pred_bbox]
+            anchor = anchors[i]
+            image_shape= image_shapes[i]
+
+            boxes, scores, labels = self.post_detection_single_image(pred_class_image, pred_bbox_image, anchor, image_shape)
+
+            boxes_all.append(boxes)
+            scores_all.append(scores)
+            labels_all.append(labels+1) # labels start from 1
+
+        results = dict()
+        results['boxes'] = boxes_all
+        results['scores'] = scores_all
+        results['labels'] = labels_all
+        return results
+
+
+    def post_detection_single_image(self, pred_class_image, pred_bbox_image, anchor, image_shape):
+
+        scores_all = []
+        labels_all = []
+        boxes_all = []
+        # do it per level
+        for pred_class_per_level, pred_bbox_per_level, anchor_per_level in zip(pred_class_image, pred_bbox_image, anchor):
+            keep = pred_class_per_level > self.score_thresh
+            scores_per_level = pred_class_per_level[keep]
+            keep_inds = torch.nonzero(keep)
+
+            keep_num = min(len(scores_per_level), self.get_before_nms_top_n())
+            scores_per_level, scores_ind = scores_per_level.sort(descending=True)
+            scores_per_level = scores_per_level[:keep_num]
+            keep_inds = keep_inds[scores_ind[:keep_num]]
+            keep_inds, labels_per_level = keep_inds.unbind(dim=1)
+
+            pred_bbox_per_level = pred_bbox_per_level[keep_inds]
+            anchor_per_level = anchor_per_level[keep_inds]
+            boxes_per_level = self.box_coder.decode_once(pred_bbox_per_level, anchor_per_level)
+
+            # crop the box inside the image
+            if self.post_clip:
+                boxes_per_level = self.crop_boxes(boxes_per_level, image_shape)
+
+            ## remove super small boxes
+            #keep = self.remove_small_boxes(boxes_per_level, min_size=1e-2)
+            #boxes_per_level = boxes_per_level[keep]
+            #scores_per_level = scores_per_level[keep]
+            #labels_per_level = labels_per_level[keep]
+
+            scores_all.append(scores_per_level)
+            labels_all.append(labels_per_level)
+            boxes_all.append(boxes_per_level)
+            
+        # do it with multi level merged
+        boxes = torch.cat(boxes_all)
+        labels = torch.cat(labels_all)
+        scores = torch.cat(scores_all)
+        keep = batched_nms(boxes, scores,labels, self.nms_thresh)
+        keep = keep[:self.get_post_nms_top_n()]
+
+        boxes = boxes[keep]
+        scores = scores[keep]
+        labels = labels[keep]
+        return boxes, scores, labels
+
+
+
+    def post_detection_old(self, pred_class, pred_bbox, image_shapes, num_anchors_per_level):
         # pre nms for each feature layers in each image
         # crop the boxes so they are inside the image
         # delete very small boxes
@@ -333,81 +447,13 @@ class RetinaNetHead(nn.Module):
         results['labels'] = labels_all
         return results
 
-    def post_detection_old(self, pred_class, pred_bbox, image_shapes, num_anchors_per_level):
-        # pre nms for each feature layers in each image
-        # crop the boxes so they are inside the image
-        # delete very small boxes
-        # post nms for all the proposals for each image
-        # proposal shape: N * Num_anchor_all * 4
-        # pred_class shape: N * Num_anchor_all * C
-
-
-        pred_class = torch.sigmoid_(pred_class)
-
-        batch_size, num_anchors_all, C = pred_class.shape
-
-        boxes_all = []
-        scores_all = []
-        labels_all = []
-        for i in range(batch_size):
-            pred_class_image = pred_class[i]
-            pred_bbox_image = pred_bbox[i]
-            image_shape = image_shapes[i]
-
-            boxes_image = []
-            scores_image = []
-            labels_image = []
-            off_set_image = 0
-            for num_anchor in num_anchors_per_level:
-                pred_class_image_level = pred_class_image[off_set_image:off_set_image+num_anchor]
-                pred_bbox_image_level = pred_bbox_image[off_set_image:off_set_image+num_anchor]
-                # remove detection with low score
-                #print('pred_class level ', pred_class_image_level)
-                keep = pred_class_image_level > self.score_thresh
-                score_keep = pred_class_image_level[keep]
-                inds, inds_class = torch.where(keep)
-
-                # get topk score boxes for the level
-                num_topk = min(self.get_pre_nms_top_n(), len(inds))
-                scores_topk, ind_topk = score_keep.topk(num_topk)
-                inds = inds[ind_topk]
-                inds_class = inds_class[ind_topk]
-                boxes_topk = pred_bbox_image_level[inds]
-
-                self.crop_boxes(boxes_topk, image_shape)
-
-                boxes_image.append(boxes_topk)
-                scores_image.append(scores_topk)
-                labels_image.append(inds_class)
-
-                off_set_image += num_anchor
-            
-            boxes_image = torch.cat(boxes_image,dim=0)
-            scores_image = torch.cat(scores_image,dim=0)
-            labels_image = torch.cat(labels_image,dim=0)
-
-            # do nms for the image
-            keep = batched_nms(boxes_image, scores_image, labels_image, self.nms_thresh) 
-            # only keep the top k candidate
-            keep = keep[:self.get_post_nms_top_n()]
-            boxes_image = boxes_image[keep]
-            scores_image = scores_image[keep]
-            labels_image = labels_image[keep]
-            #print('scores shape', scores.shape)
-            
-            boxes_all.append(boxes_image)
-            scores_all.append(scores_image)
-            labels_all.append(labels_image+1)
-
-        results = dict()
-        results['boxes'] = boxes_all
-        results['scores'] = scores_all
-        results['labels'] = labels_all
-        return results
 
     def remove_small_boxes(self, boxes, min_size):
-        area = box_area(boxes)
-        keep = area >= min_size
+        #area = box_area(boxes)
+        w = boxes[:,2]-boxes[:,0]
+        h = boxes[:,3]-boxes[:,1]
+        keep = torch.minimum(w,h) >= min_size
+        #keep = area >= min_size
         return keep
 
     def crop_boxes(self, boxes, image_size):
@@ -431,6 +477,12 @@ class RetinaNetHead(nn.Module):
             return self.post_nms_top_n_train
         else:
             return self.post_nms_top_n_test
+
+    def get_before_nms_top_n(self):
+        if self.training:
+            return self.before_nms_top_n_train
+        else:
+            return self.before_nms_top_n_test
 
     @torch.no_grad()
     def assign_targets_to_anchors(self, anchors, targets):
@@ -536,10 +588,10 @@ class RetinaNetHead(nn.Module):
         #print('index pos anchor:', index_pos_anchor)
         return index_pos_anchor, index_pos_boxes, index_neg_anchor
 
-    def combine_and_permute_predictions(self, predictions):
+    def combine_and_permute_predictions(self, predictions, keep_multi_level=False):
         pred_class_all = []
         pred_bbox_deltas_all = []
-        # for each feature map, potentially have multiple batch, do the process
+        # for each feature map, potentially have multiple level output (Such as FPN output), do the process
         for pred_class, pred_bbox_deltas in predictions:
             # the shape of original pred_class: N * Ax2 * H * W
             # the shape of original pred_bbox_deltas: N * Ax4 * H * W
@@ -555,9 +607,12 @@ class RetinaNetHead(nn.Module):
 
             pred_class_all.append(pred_class)
             pred_bbox_deltas_all.append(pred_bbox_deltas)
-        pred_class = torch.cat(pred_class_all, dim=1)
-        pred_bbox_deltas = torch.cat(pred_bbox_deltas_all, dim=1)
-        return pred_class, pred_bbox_deltas
+        if keep_multi_level:
+            return pred_class_all, pred_bbox_deltas_all
+        else:
+            pred_class = torch.cat(pred_class_all, dim=1)
+            pred_bbox_deltas = torch.cat(pred_bbox_deltas_all, dim=1)
+            return pred_class, pred_bbox_deltas
 
 
 

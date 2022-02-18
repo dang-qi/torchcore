@@ -245,7 +245,7 @@ class BaseTrainer :
             print('Loss log path is: {}'.format(train_path))
         
     def print_log(self, log_dict):
-            log_str = ''
+            log_str = 'iter: {}, epoch: {}, lr: {},'.format(self._step, self._epoch, self._scheduler.get_last_lr()[0])
             #average_losses = self.loss_logger.get_last_average()
             for k,v in log_dict.items():
                 log_str += (' {}: {}, '.format(k, v))

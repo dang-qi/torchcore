@@ -205,7 +205,7 @@ class GroupPadding(object):
 
 @TRANSFORM_REG.register()
 class GeneralRCNNTransform(object):
-    def __init__(self, min_size, max_size, image_mean=None, image_std=None):
+    def __init__(self, min_size, max_size, image_mean=None, image_std=None, resized=False):
         self.min_size = min_size
         self.max_size = max_size
         self.image_mean = image_mean
@@ -213,6 +213,7 @@ class GeneralRCNNTransform(object):
         self.resize_min_max = ResizeMinMax(min_size, max_size)
         self.normalize = Normalize(mean=image_mean, std=image_std)
         self.to_tensor = ToTensor()
+        self.resized = resized
         #self.device = device
         #self.transforms = Compose(self.resize_min_max, self.to_tensor)
 
@@ -231,7 +232,8 @@ class GeneralRCNNTransform(object):
 
         for i, (ainput, target) in enumerate(zip(inputs, targets)):
             # this is operated in
-            ainput, target = self.resize_min_max(ainput, target)
+            if not self.resized:
+                ainput, target = self.resize_min_max(ainput, target)
 
             # normalize after resize, which might be slower 
             ainput, target = self.to_tensor(ainput, target)
@@ -327,6 +329,7 @@ class GeneralRCNNTransformTV(object):
         if len(dataset_label) > 0:
             inputs['dataset_label'] = torch.tensor(dataset_label)
         return inputs, targets
+
 
 @TRANSFORM_REG.register()
 class RandomMirror(object):

@@ -3,15 +3,16 @@ import torch
 import pickle
 from .dataset_new import Dataset
 from PIL import Image
+import cv2
 import os
 from torchvision.transforms.functional import to_tensor
 
 from .build import DATASET_REG
 
-@DATASET_REG.register()
+@DATASET_REG.register(force=True)
 class COCODataset(Dataset):
     '''COCO dataset'''
-    def __init__( self, root, anno, part, transforms=None, debug=False, xyxy=True, torchvision_format=False, add_mask=False, first_n_subset=None):
+    def __init__( self, root, anno, part, transforms=None, debug=False, xyxy=True, torchvision_format=False, add_mask=False, first_n_subset=None, backend='pillow'):
         super().__init__( root=root, anno=anno, part=part, transforms=transforms )
         ## load annotations
         #with open(anno, 'rb') as f:
@@ -22,6 +23,8 @@ class COCODataset(Dataset):
         self.xyxy = xyxy
         self.torchvision_format = torchvision_format
         self.add_mask = add_mask
+        self.backend = backend
+        assert backend in ['pillow', 'opencv']
         if xyxy:
             self.convert_to_xyxy()
         if first_n_subset is not None:
@@ -37,7 +40,12 @@ class COCODataset(Dataset):
         # Load image
         img_path = os.path.join(self._root, self._part, image['file_name'] )
         image_id=image['id']
-        img = Image.open(img_path).convert('RGB')
+        if self.backend == 'pillow':
+            img = Image.open(img_path).convert('RGB')
+        elif self.backend == 'opencv':
+            img = cv2.imread(img_path)
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            img = Image.fromarray(img)
         if self.debug:
             ori_image = img.copy()
 
@@ -66,6 +74,7 @@ class COCODataset(Dataset):
         #targets (list[Dict[Tensor]]): ground-truth boxes present in the image (optional)
         inputs = {}
         inputs['data'] = img
+        inputs['im_path'] = img_path
 
         targets = {}
         targets["boxes"] = boxes

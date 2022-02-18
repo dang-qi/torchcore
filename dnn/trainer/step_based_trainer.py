@@ -187,4 +187,4 @@ class StepBasedTrainer(BaseTrainer):
         if 'scheduler' in checkpoint:
             self._scheduler.load_state_dict(checkpoint['scheduler'])
         if to_print:
-            print('Chekpoint has been loaded from {}'.format(path))
+            print('Chekpoint has been loaded from {} at epoch{} and step{}'.format(path, self._epoch, self._start_step))

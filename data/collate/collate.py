@@ -1,6 +1,5 @@
 from ..transforms.transforms import ResizeAndPadding, ToTensor, Compose
 from ..transforms.transforms import GeneralRCNNTransform, GeneralRCNNTransformTV, GroupPaddingWithBBox
-from ..transforms.transforms import GeneralRCNNTransformMMdet
 import torch
 from torch.utils.data._utils.collate import default_collate
 import numpy as np

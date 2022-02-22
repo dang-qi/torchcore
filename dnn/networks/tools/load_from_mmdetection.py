@@ -4,14 +4,15 @@ from mmcv import Config
 from mmdet.apis import init_detector, inference_detector
 
 def load_mm_retinanet(checkpoint_file, mm_config, model, return_mm_model=False):
-    #mmcfg = Config.fromfile(mm_config)
-    mm_model = init_detector(mm_config, checkpoint_file, device=next(model.parameters()).device)
-
-    #mm_model = build_detector(
-    #        mmcfg.model,
-    #        train_cfg=mmcfg.get('train_cfg'),
-    #        test_cfg=mmcfg.get('test_cfg'))
-    #mm_model.init_weights()
+    if checkpoint_file is None:
+        mmcfg = Config.fromfile(mm_config)
+        mm_model = build_detector(
+                mmcfg.model,
+                train_cfg=mmcfg.get('train_cfg'),
+                test_cfg=mmcfg.get('test_cfg'))
+        mm_model.init_weights()
+    else:
+        mm_model = init_detector(mm_config, checkpoint_file, device=next(model.parameters()).device)
     # backbone
     model.backbone.load_state_dict(mm_model.backbone.state_dict(),strict=True)
 

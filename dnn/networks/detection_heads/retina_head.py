@@ -184,6 +184,60 @@ class RetinaNetHead(nn.Module):
     def compute_loss(self, targets, pred_class, pred_bbox_deltas, matches, anchors):
         loss_class_all = []
         loss_box_all = []
+        pred_class_all = []
+        gt_class_all = []
+        pred_box_all = []
+        gt_box_all = []
+        pos_num_all = 0
+        # computer for per image and merge in the end
+        for target_per_im,  pred_class_per_im, pred_bbox_delta_per_im, match_per_im, anchors_per_im in zip(targets, pred_class, pred_bbox_deltas, matches, anchors):
+            matched_ind = match_per_im.matched_ind
+            matched_labels = match_per_im.labels
+            valid_ind = matched_ind >= match_per_im.NEGATIVE_MATCH
+            pos_ind = matched_ind >= 0
+            pos_num = pos_ind.sum()
+            valid_num = valid_ind.sum()
+            #neg_ind = matched_ind == match_per_im.NEGATIVE_MATCH
+            pred_class_valid = pred_class_per_im[valid_ind]
+
+            # to use mm detection focal loss the label of negative sample should be class_num+1, class_label should start from ZERO
+            class_num = pred_class_per_im.shape[-1]
+            gt_label_per_im = matched_labels.new_full((valid_num,), class_num)
+            gt_label_per_im[pos_ind[valid_ind]] = matched_labels[pos_ind]-1
+            pred_class_all.append(pred_class_valid)
+            gt_class_all.append(gt_label_per_im)
+            pos_num_all += pos_num
+            #loss_class_all.append(self.loss_class(pred_class_valid, gt_label_per_im, avg_factor=pos_num))
+
+            pred_boxes_pos = pred_bbox_delta_per_im[pos_ind]
+            pos_anchor = anchors_per_im[pos_ind]
+            pos_boxes = target_per_im['boxes'][matched_ind[pos_ind]]
+            with torch.no_grad():
+                regression_targets  = self.box_coder.encode_once(pos_anchor, pos_boxes )
+
+            pred_box_all.append(pred_boxes_pos)
+            gt_box_all.append(regression_targets)
+            loss_box_all.append(self.loss_bbox(
+                pred_boxes_pos,
+                regression_targets,
+            ) / max(1, pred_boxes_pos.shape[0]))
+        pred_class_all = torch.cat(pred_class_all)
+        gt_class_all = torch.cat(gt_class_all)
+        pred_box_all = torch.cat(pred_box_all)
+        gt_box_all = torch.cat(gt_box_all)
+        
+        loss_class = self.loss_class(pred_class_all, gt_class_all, avg_factor=pos_num_all)
+        loss_box = self.loss_bbox(pred_box_all, gt_box_all,)/ max(1, pred_box_all.shape[0])
+
+            
+        #loss_class = sum(loss_class_all) / len(loss_class_all)
+        #loss_box = sum(loss_box_all)/len(loss_box_all)
+
+        return loss_class, loss_box
+
+    def compute_loss_old1(self, targets, pred_class, pred_bbox_deltas, matches, anchors):
+        loss_class_all = []
+        loss_box_all = []
         # computer for per image and merge in the end
         for target_per_im,  pred_class_per_im, pred_bbox_delta_per_im, match_per_im, anchors_per_im in zip(targets, pred_class, pred_bbox_deltas, matches, anchors):
             matched_ind = match_per_im.matched_ind

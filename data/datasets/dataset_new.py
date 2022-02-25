@@ -4,6 +4,8 @@ import pickle
 from pycocotools.coco import COCO
 from ..transforms import Compose
 import numpy as np
+import cv2
+from PIL import Image 
 
 class Dataset:
     '''Basic Dataset'''
@@ -143,3 +145,16 @@ class Dataset:
         else:
             names = [fpGt.cats[i]['name'] for i in fpGt.cats.keys()]
         return names
+
+    def _load_image(self, img_path, backend='pillow', RGB=True):
+        if backend == 'pillow':
+            if RGB:
+                img = Image.open(img_path).convert('RGB')
+            else:
+                img = Image.open(img_path).convert('BGR')
+        elif backend == 'opencv':
+            img = cv2.imread(img_path)
+            if RGB:
+                img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            img = Image.fromarray(img)
+        return img

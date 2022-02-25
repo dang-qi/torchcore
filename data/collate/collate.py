@@ -1,5 +1,5 @@
 from ..transforms.transforms import ResizeAndPadding, ToTensor, Compose
-from ..transforms.transforms import GeneralRCNNTransform, GeneralRCNNTransformTV, GroupPaddingWithBBox
+from ..transforms.transforms import GeneralRCNNTransformMMdet, GeneralRCNNTransformTV, GroupPaddingWithBBox, GeneralRCNNTransform
 import torch
 from torch.utils.data._utils.collate import default_collate
 import numpy as np
@@ -143,14 +143,30 @@ class mix_dataset_collate(object):
 
         return data_list
 
-@COLLATE_REG.register()
+@COLLATE_REG.register(force=True)
 class CollateFnRCNN(object):
     '''apply general rcnn transform to batchs'''
-    def __init__(self, min_size, max_size, image_mean=None, image_std=None, resized=False, mm_format=False):
+    def __init__(self, min_size, max_size, image_mean=None, image_std=None, resized=False, mm_format=False, caffe_format=False, norm_on_tensor=True):
         if mm_format:
+            #transform = GeneralRCNNTransformMMdet
             transform = GeneralRCNNTransform
         else:
             transform = GeneralRCNNTransformTV
+        if caffe_format and norm_on_tensor:
+            if image_mean is None:
+                #image_mean = [122.7717/255, 115.9465/255, 102.9801/255]
+                # image mean for BGR
+                #image_mean = [102.9801/255, 115.9465/255, 122.7717/255]
+                image_mean = [103.530/255, 116.280/255, 123.675/255]
+            if image_std is None:
+                image_std = [1./255, 1./255, 1./255]
+        if caffe_format and not norm_on_tensor:
+            if image_mean is None:
+                # image mean for BGR
+                #image_mean = [102.9801, 115.9465, 122.7717]
+                image_mean = [103.530, 116.280, 123.675]
+            if image_std is None:
+                image_std = [1., 1., 1.]
         if isinstance(min_size, (list, tuple)):
             #self.transforms = [GeneralRCNNTransform(min_size_i, max_size, image_mean=image_mean, image_std=image_std) for min_size_i in min_size]
             self.transforms = [transform(min_size_i, max_size, image_mean=image_mean, image_std=image_std, resized=resized) for min_size_i in min_size]

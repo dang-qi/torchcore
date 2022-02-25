@@ -57,12 +57,14 @@ def resize(img, size, interpolation=Image.BILINEAR, smaller_edge=None):
             if w < h:
                 ow = size
                 oh = max(1, int(size * h / w+0.5)) # follow mmdet
-                scale = size / w
+                #scale = size / w
+                scale = (ow/w, oh/h)
                 return img.resize((ow, oh), interpolation), scale
             else:
                 oh = size
                 ow = max(1,int(size * w / h+0.5)) # follow mmdet
-                scale = size / h
+                #scale = size / h
+                scale = (ow/w, oh/h)
                 return img.resize((ow, oh), interpolation), scale
         else:
             if (w >= h and w == size) or (h >= w and h == size):
@@ -70,12 +72,14 @@ def resize(img, size, interpolation=Image.BILINEAR, smaller_edge=None):
             if w > h:
                 ow = size
                 oh = max(1, int(size * h / w))
-                scale = size / w
+                #scale = size / w
+                scale = (ow/w, oh/h)
                 return img.resize((ow, oh), interpolation), scale
             else:
                 oh = size
                 ow = max(1, int(size * w / h))
-                scale = size / h
+                #scale = size / h
+                scale = (ow/w, oh/h)
                 return img.resize((ow, oh), interpolation), scale
 
     else:
@@ -331,6 +335,30 @@ def normalize(tensor, mean, std, inplace=False): # from pytorch
     std = torch.as_tensor(std, dtype=dtype, device=tensor.device)
     tensor.sub_(mean[:, None, None]).div_(std[:, None, None])
     return tensor
+
+def normalize_image(image, mean, std, inplace=False):
+    '''normalize a PIL image or numpy array'''
+    if not inplace:
+        image = image.copy()
+    pil_img = False
+    if isinstance(image, Image.Image):
+        image = np.array(image, dtype=np.float64)
+        #image = np.array(image)
+        pil_img = True
+    elif isinstance(image, np.ndarray):
+        image=image.astype(np.float64)
+    else:
+        raise ValueError('Not support data type {}'.format(type(image)))
+    mean = np.array(mean, dtype=np.float64) #.reshape(1,-1)
+    std = np.array(std, dtype=np.float64) #.reshape(1,-1)
+    #stdinv = 1/std
+    #image = (image - mean[:, None, None]) / std[:, None, None]
+    image = (image - mean) / std
+    #cv2.subtract(image, mean, image)  # inplace
+    #cv2.multiply(image, stdinv, image)  # inplace
+    #if pil_img:
+    #    image = Image.fromarray(image.astype(np.uint8))
+    return image
 
 def mirror(image):
     '''morror an image horizontally'''

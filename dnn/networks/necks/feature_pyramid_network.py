@@ -33,7 +33,7 @@ from .build import NECK_REG
 #        names: List[str],
 #    ) -> Tuple[List[Tensor], List[str]]:
 #        pass
-@NECK_REG.register()
+@NECK_REG.register(force=True)
 class FPN(nn.Module):
     """
     Module that adds a FPN from on top of a set of feature maps. This is based on
@@ -155,13 +155,21 @@ class FPN(nn.Module):
                 They are ordered from highest resolution first.
         """
         # unpack OrderedDict into two lists for easier handling
-        names = list(x.keys())
-        x = list(x.values())
+        if isinstance(x, dict):
+            names = list(x.keys())
+            x = list(x.values())
+            return_dict = True
+        elif isinstance(x,(tuple,list)):
+            return_dict = False
+        else:
+            raise ValueError('wrong input type')
+
 
         last_inner = self.get_result_from_inner_blocks(x[-1], -1)
         results = []
         results.append(self.get_result_from_layer_blocks(last_inner, -1))
-        used_names = [names[-1]]
+        if return_dict:
+            used_names = [names[-1]]
 
         #for idx_layer, idx in zip(range(self.layer_num - 2, self.layer_num-len(x)-1, -1),range(len(x)-2,-1,-1)):
         for idx_layer, idx in zip(range(self.layer_num - 2, -1, -1),range(len(x)-2,-1,-1)):
@@ -170,13 +178,19 @@ class FPN(nn.Module):
             inner_top_down = F.interpolate(last_inner, size=feat_shape, mode="nearest")
             last_inner = inner_lateral + inner_top_down
             results.insert(0, self.get_result_from_layer_blocks(last_inner, idx_layer))
-            used_names.insert(0, names[idx])
+            if return_dict:
+                used_names.insert(0, names[idx])
 
         if self.extra_blocks is not None:
+            if not return_dict:
+                used_names = [None]
             results, used_names = self.extra_blocks(results, x, used_names)
 
         # make it back an OrderedDict
-        out = OrderedDict([(k, v) for k, v in zip(used_names, results)])
+        if return_dict:
+            out = OrderedDict([(k, v) for k, v in zip(used_names, results)])
+        else:
+            out = results
 
         return out
 

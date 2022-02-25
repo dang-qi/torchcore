@@ -14,7 +14,6 @@ class OneStageDetector(BaseDetector):
     '''
     Two stage detector
 
-    The typical model is Faster RCNN
     Arguments:
         backbone (config dict): backbone network
         rpn (config dict): Region proposal network

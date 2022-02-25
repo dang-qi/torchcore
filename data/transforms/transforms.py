@@ -166,6 +166,21 @@ class Normalize(object):
         return inputs, targets
 
 @TRANSFORM_REG.register()
+class NormalizeImage(object):
+    def __init__(self, mean=None, std=None):
+        if mean is None:
+            mean=[123.675, 116.28, 103.53]
+        if std is None:
+            std=[58.395, 57.12, 57.375]
+        self.mean = mean
+        self.std = std
+    
+    def __call__(self, inputs, targets=None):
+        inputs['data'] = F.normalize_image(inputs['data'], self.mean, self.std)
+
+        return inputs, targets
+
+@TRANSFORM_REG.register()
 class BatchStack(object):
     def __init__(self):
         pass
@@ -203,6 +218,71 @@ class GroupPadding(object):
         images  = F.group_padding(images, self.width, self.height)
         return images
 
+@TRANSFORM_REG.register(force=True)
+class GeneralRCNNTransformMMdet(object):
+    '''adapt to mm detection version'''
+    def __init__(self, min_size, max_size, image_mean=None, image_std=None, resized=False):
+        self.min_size = min_size
+        self.max_size = max_size
+        self.image_mean = image_mean
+        self.image_std = image_std
+        self.resize_min_max = ResizeMinMax(min_size, max_size)
+        self.normalize = NormalizeImage(mean=image_mean, std=image_std)
+        self.to_tensor = ToTensor()
+        self.resized = resized
+        #self.device = device
+        #self.transforms = Compose(self.resize_min_max, self.to_tensor)
+
+    def __call__(self, inputs, targets=None):
+        '''
+        Arguments:
+            inputs(list[dict{'data':PIL.Image,...}])
+            targets(list[dict{'boxes':x1y1x2y2, 'cat_labels':}])
+        '''
+        images = []
+        image_path = []
+        dataset_label = []
+        #scales = np.zeros(len(inputs))
+        scales = []
+        if targets is None:
+            targets=[None]*len(inputs)
+
+        for i, (ainput, target) in enumerate(zip(inputs, targets)):
+            # this is operated in
+            if not self.resized:
+                ainput, target = self.resize_min_max(ainput, target)
+
+            # normalize after resize, which might be slower 
+            # set the tensor to device before normalize
+            #ainput['data'].to(self.device)
+            #scales[i] = ainput['scale']
+            scales.append(ainput['scale'])
+            ainput, target = self.normalize(ainput, target)
+            ainput, target = self.to_tensor(ainput, target)
+            images.append(ainput['data'])
+
+            if 'path' in ainput:
+                image_path.append(ainput['path'])
+            if 'dataset_label' in ainput:
+                dataset_label.append(ainput['dataset_label'])
+
+        max_size = tuple(max(s) for s in zip(*[img.shape for img in images]))
+        _, height, width = max_size
+
+        image_sizes = [img.shape[-2:] for img in images]
+        self.group_padding = GroupPadding(width, height, size_devidable=32)
+        im_tensor = self.group_padding(images)
+
+        inputs = {}
+        inputs['data'] = im_tensor
+        inputs['scale'] = scales
+        inputs['image_sizes'] = image_sizes
+        if len(image_path) > 0:
+            inputs['path'] = image_path
+        if len(dataset_label) > 0:
+            inputs['dataset_label'] = torch.tensor(dataset_label)
+        return inputs, targets
+
 @TRANSFORM_REG.register()
 class GeneralRCNNTransform(object):
     def __init__(self, min_size, max_size, image_mean=None, image_std=None, resized=False):
@@ -226,7 +306,8 @@ class GeneralRCNNTransform(object):
         images = []
         image_path = []
         dataset_label = []
-        scales = np.zeros(len(inputs))
+        #scales = np.zeros(len(inputs))
+        scales = []
         if targets is None:
             targets=[None]*len(inputs)
 
@@ -239,7 +320,8 @@ class GeneralRCNNTransform(object):
             ainput, target = self.to_tensor(ainput, target)
             # set the tensor to device before normalize
             #ainput['data'].to(self.device)
-            scales[i] = ainput['scale']
+            #scales[i] = ainput['scale']
+            scales.append(ainput['scale'])
             ainput, target = self.normalize(ainput, target)
             images.append(ainput['data'])
 

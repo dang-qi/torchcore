@@ -11,6 +11,7 @@ from torchvision.ops.boxes import batched_nms, box_area, box_iou, nms
 from ..losses import FocalLossSigmoid,FocalLoss,SigmoidFocalLoss
 from ..heads.build import build_head
 from ..losses.build import build_loss
+from ..base import Scale
 from .build import DETECTION_HEAD_REG
 
 INF=1000000
@@ -32,7 +33,7 @@ def reduce_mean(tensor):
     dist.all_reduce(tensor.div_(dist.get_world_size()), op=dist.ReduceOp.SUM)
     return tensor
 
-@DETECTION_HEAD_REG.register()
+@DETECTION_HEAD_REG.register(force=True)
 class FCOSHead(nn.Module):
     def __init__(self, 
                  head,
@@ -43,6 +44,7 @@ class FCOSHead(nn.Module):
                  center_sampling=False,
                  center_sample_radius=1.5,
                  norm_on_bbox=False,
+                 enable_scale=False,
                  loss_cls=dict(
                      type='SigmoidFocalLoss',
                      gamma=2.0,
@@ -78,6 +80,12 @@ class FCOSHead(nn.Module):
         self.loss_centerness = build_loss(loss_centerness)
         self.test_cfg = test_cfg
         self.norm_on_bbox = norm_on_bbox
+        self.enable_scale = enable_scale
+        if enable_scale:
+            self.init_scale_layers()
+    
+    def init_scale_layers(self):
+        self.scales = nn.ModuleList([Scale() for _ in self.strides])
 
     def forward(self, inputs, features, targets=None):
         # convert features to list
@@ -90,6 +98,11 @@ class FCOSHead(nn.Module):
         pred_out = self.head(features)
         if isinstance(pred_out, dict):
             pred_out = list(pred_out.values())
+
+        # apply scale on pred box
+        if self.enable_scale:
+            for i in range(len(pred_out)):
+                pred_out[i] = (pred_out[i][0], self.scales[i](pred_out[i][1]), pred_out[i][2])
         
         dtype = pred_out[0][0].dtype
         device = pred_out[0][0].device
@@ -334,15 +347,101 @@ class FCOSHead(nn.Module):
         # crop the boxes so they are inside the image
         # delete very small boxes
         # post nms for all the proposals for each image
-        # pred_class shape: N * Num_anchor_all * C
+        # pred_class shape: [N * Num_anchor_level * C, ...]
+        cfg = self.test_cfg
+
+
+        boxes_out = []
+        scores_out = []
+        labels_out = []
+
+        batch_size = pred_class[0].size(0)
+        for image_ind in range(batch_size):
+            pred_class_im = [p[image_ind] for p in pred_class]
+            pred_bbox_im = [p[image_ind] for p in pred_bbox]
+            pred_centerness_im = [p[image_ind] for p in pred_centerness]
+
+            # post process for each level
+            boxes_all_level = []
+            scoers_all_level = []
+            labels_all_level = []
+            center_all_level = []
+            for p_class, p_bbox, p_centerness, mesh, in zip(pred_class_im, pred_bbox_im, pred_centerness_im, feature_mesh ):
+                p_class = torch.sigmoid_(p_class)
+                p_centerness = torch.sigmoid_(p_centerness)
+
+                p_class = p_class.permute(1,2,0).reshape(-1, self.num_class)
+                p_bbox = p_bbox.permute(1,2,0).reshape( -1, 4)
+                p_centerness = p_centerness.permute(1,2,0).reshape( -1)
+
+                #mesh = mesh.expand(batch_size,-1,2)
+
+                nms_pre = min(cfg['nms_pre'],p_class.size(0))
+
+                # eliminate the one has small score
+                keep = p_class>cfg['score_thr']
+                p_class = p_class[keep]
+                ind = torch.nonzero(keep)
+
+                if nms_pre>0:
+                    scores, rank_ind = torch.sort(p_class, descending=True)
+                    scores = scores[:nms_pre]
+                    ind = ind[rank_ind[:nms_pre]]
+                keep, labels = torch.unbind(ind, dim=1)
+
+                p_bbox = p_bbox[keep]
+                p_centerness = p_centerness[keep]
+                mesh = mesh[keep]
+
+                p_bbox = distance2bbox(p_bbox, mesh, image_shapes[image_ind])
+
+                boxes_all_level.append(p_bbox)
+                scoers_all_level.append(scores)
+                labels_all_level.append(labels)
+                center_all_level.append(p_centerness)
+
+            
+            boxes= torch.cat(boxes_all_level, dim=0)
+            scores= torch.cat(scoers_all_level, dim=0)
+            labels= torch.cat(labels_all_level, dim=0)
+            center= torch.cat(center_all_level, dim=0)
+                
+            scores = scores*center
+
+            # nms
+            iou_thresh = cfg['iou_threshold']
+            keep = batched_nms(boxes, scores, labels, iou_threshold=iou_thresh)
+            keep = keep[:cfg['max_per_img']]
+            boxes= boxes[keep]
+            scores= scores[keep]
+            labels= labels[keep]
+
+            boxes_out.append(boxes)
+            scores_out.append(torch.sqrt(scores))
+            labels_out.append(labels+1)
+
+        results = dict()
+        results['boxes'] = boxes_out
+        results['scores'] = scores_out
+        results['labels'] = labels_out
+        return results
+
+    def post_detection_old(self, pred_class, pred_bbox, pred_centerness, feature_mesh, image_shapes ):
+        # pre nms for each feature layers in each image
+        # crop the boxes so they are inside the image
+        # delete very small boxes
+        # post nms for all the proposals for each image
+        # pred_class shape: [N * Num_anchor_level * C, ...]
         cfg = self.test_cfg
 
         boxes_all_level = []
         scoers_all_level = []
         labels_all_level = []
         p_class_all_level = []
+        center_all_level = []
 
         batch_size = pred_class[0].size(0)
+        # post process for each level
         for p_class, p_bbox, p_centerness, mesh, in zip(pred_class, pred_bbox, pred_centerness, feature_mesh ):
             p_class = torch.sigmoid_(p_class)
             p_centerness = torch.sigmoid_(p_centerness)
@@ -356,8 +455,10 @@ class FCOSHead(nn.Module):
             nms_pre = min(cfg['nms_pre'],p_class.size(1))
 
             if nms_pre>0:
-                max_score, labels = (p_class*p_centerness[...,None]).max(-1)
+                max_score, labels = p_class.max(-1)
+                #max_score, labels = (p_class*p_centerness[...,None]).max(-1)
                 max_score_topk, topk_inds = max_score.topk(nms_pre)
+
                 #print('max score shape',max_score.shape)
                 #print('lables shape',labels.shape)
                 #print('topk inds shape',topk_inds.shape)
@@ -381,6 +482,7 @@ class FCOSHead(nn.Module):
                 #p_class = p_class[batch_inds_class, labels]
                 p_class = p_class[x.flatten(), y.flatten(), labels.flatten()].reshape(batch_size, -1)
                 p_class = p_class[batch_inds, topk_inds]
+                p_centerness = p_centerness[batch_inds, topk_inds]
 
                 #score = p_class[labels[...,None]][batch_inds, topk_inds]
                 #score = torch.gather(p_class, 2, labels.unsqueeze(2))
@@ -396,10 +498,12 @@ class FCOSHead(nn.Module):
             scoers_all_level.append(score)
             labels_all_level.append(labels)
             p_class_all_level.append(p_class)
+            center_all_level.append(p_centerness)
         boxes_all = torch.cat(boxes_all_level, dim=1)
         scores_all = torch.cat(scoers_all_level, dim=1)
         labels_all = torch.cat(labels_all_level, dim=1)
         p_class_all = torch.cat(p_class_all_level, dim=1)
+        center_all = torch.cat(center_all_level, dim=1)
 
         boxes_out = []
         labels_out = []
@@ -410,12 +514,14 @@ class FCOSHead(nn.Module):
             scores_im = scores_all[i]
             labels_im = labels_all[i]
             p_class_im = p_class_all[i]
+            center_im = center_all[i]
 
             # only keep the prediction with higher score
             keep = p_class_im > cfg['score_thr']
             boxes_im = boxes_im[keep]
             scores_im = scores_im[keep]
             labels_im = labels_im[keep]
+            center_im = center_im[keep]
 
             # clip the boxes inside the image, already done when get p_bbox
 
@@ -424,6 +530,9 @@ class FCOSHead(nn.Module):
             boxes_im = boxes_im[keep]
             scores_im = scores_im[keep]
             labels_im = labels_im[keep]
+            center_im = center_im[keep]
+
+            scores_im = scores_im*center_im
 
             # nms
             iou_thresh = cfg['iou_threshold']
@@ -536,6 +645,11 @@ def distance2bbox(box_distance, mesh, max_shape=None):
     boxes[...,3] = mesh[...,1] + box_distance[...,3]
 
     if max_shape is not None:
+        if boxes.ndim == 2:
+            boxes[:,0::2].clamp_(0, max_shape[1])
+            boxes[:,1::3].clamp_(0, max_shape[0])
+            return boxes
+
         if not isinstance(max_shape, torch.Tensor):
             max_shape = boxes.new_tensor(max_shape)
         max_shape = max_shape[..., :2].type_as(boxes)

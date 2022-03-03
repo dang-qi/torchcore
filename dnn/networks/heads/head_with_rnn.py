@@ -8,10 +8,11 @@ from ..rnn import build_rnn
 from .build import build_head
 from .build import HEAD_REG
 
-@HEAD_REG.register()
+@HEAD_REG.register(force=True)
 class HeadWithGrammarRNN(Module):
-    def __init__(self, head_cfg, rnn_cfg, ref_scale_ind, grammar):
+    def __init__(self, head_cfg, rnn_cfg, ref_scale_ind, grammar, anchor_num=1):
         '''
+            ref_scale_ind: the index of reference feature map in FPN setting, all the class prediction feature maps will be resized to the size of the reference feature map before send to grammar rcnn
             grammar(list((int, int, ...), (int, int, ..))): the grammar index, should start from 0
         '''
         super().__init__()
@@ -23,6 +24,7 @@ class HeadWithGrammarRNN(Module):
         self.grammar = grammar
         self.build_rnn_by_grammar()
         self.grammar_map = self._gen_grammar_map()
+        self.anchor_num = anchor_num
 
     def forward(self, feature):
         # the output of head is per fpn layer output [(class, bbox, ceterness(optional)),...]
@@ -40,15 +42,21 @@ class HeadWithGrammarRNN(Module):
 
         feature_shapes = [f.shape for f in feature_class]
         out_shape = feature_shapes[self.ref_scale_ind]
+        N,AxC,H,W = out_shape
+        C = AxC // self.anchor_num
+        L = len(feature_class) # FPN layer number
         feature_class = [interpolate(f, size=out_shape[-2:], mode='bilinear',align_corners=True) for f in feature_class]
         feature_class = [f.unsqueeze(1) for f in feature_class]
         #for i,f in enumerate(feature_class):
         #    print(i,f.shape)
 
-        # Nx5xCxHxW
+        # Nx5xCxHxW or Nx5xACxHxW
         feature_class = torch.cat(feature_class, dim=1)
-        # CxNx5xHxW
-        feature_class = feature_class.permute(2,0,1,3,4)
+
+        feature_class = feature_class.reshape((N,L,self.anchor_num,C,H,W))
+        # CxNx5xHxW or ACxNx5xHxW
+        # CxNxALxHxW
+        feature_class = feature_class.permute(3,0,1,2,4,5).reshape((C,N,self.anchor_num*L,H,W))
 
         # select features for each grammar
         rnn_features = [torch.stack([feature_class[t] for t in g]) for g in self.grammar]
@@ -61,9 +69,10 @@ class HeadWithGrammarRNN(Module):
         
         # merge the features from each grammar by max pooling
         feature_class_out = self.merge_features_from_grammar(rnn_out, feature_class)
-
-        # CxNx5xHxW to 5xNxCxHxW
-        feature_class_out = feature_class_out.permute(2,1,0,3,4)
+        # CxNxALxHxW to CxNxAxLxHxW
+        feature_class_out = feature_class_out.reshape(C,N,self.anchor_num,L,H,W)
+        # CxNxAxLxHxW to LxNxACxHxW
+        feature_class_out = feature_class_out.permute(3,1,2,0,4,5).reshape(L,N,self.anchor_num*C,H,W)
 
         # scale back
         feature_class_out = [interpolate(f, size=s[-2:],mode='bilinear',align_corners=True) for f,s in zip(feature_class_out, feature_shapes)]

@@ -1,13 +1,13 @@
 import torch
 from torch import nn
 import collections
-from ..common import init_focal_loss_head, init_head_gaussian
+from ..common import init_focal_loss_head, init_head_gaussian,init_focal_loss_partical_head
 
 from .build import HEAD_REG
 
 @HEAD_REG.register()
 class RetinaHead(nn.Module):
-    def __init__(self, in_channels, num_anchors, num_classes):
+    def __init__(self, in_channels, num_anchors, num_classes, focal_loss_init_parts=None):
         #super(RPNHead, self).__init__()
         super().__init__()
         cls_layers = []
@@ -24,8 +24,11 @@ class RetinaHead(nn.Module):
         bbox_layers.append(nn.Conv2d(in_channels, num_anchors * 4, kernel_size=3, stride=1, padding=1))
         self.bbox_head = nn.Sequential(*bbox_layers)
 
-        init_focal_loss_head(self.cls_head, pi=0.01)
         init_head_gaussian(self.bbox_head, std=0.01 )
+        if focal_loss_init_parts is None:
+            init_focal_loss_head(self.cls_head, pi=0.01)
+        else:
+            init_focal_loss_partical_head(self.cls_head, focal_loss_init_parts, pi=0.01)
 
         self.num_anchors = num_anchors
         self.num_classes = num_classes

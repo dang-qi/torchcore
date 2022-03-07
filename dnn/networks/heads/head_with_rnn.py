@@ -56,7 +56,8 @@ class HeadWithGrammarRNN(Module):
         feature_class = feature_class.reshape((N,L,self.anchor_num,C,H,W))
         # CxNx5xHxW or ACxNx5xHxW
         # CxNxALxHxW
-        feature_class = feature_class.permute(3,0,1,2,4,5).reshape((C,N,self.anchor_num*L,H,W))
+        feature_class = feature_class.permute(3,0,2,1,4,5)
+        feature_class = feature_class.reshape((C,N,self.anchor_num*L,H,W))
 
         # select features for each grammar
         rnn_features = [torch.stack([feature_class[t] for t in g]) for g in self.grammar]
@@ -72,7 +73,8 @@ class HeadWithGrammarRNN(Module):
         # CxNxALxHxW to CxNxAxLxHxW
         feature_class_out = feature_class_out.reshape(C,N,self.anchor_num,L,H,W)
         # CxNxAxLxHxW to LxNxACxHxW
-        feature_class_out = feature_class_out.permute(3,1,2,0,4,5).reshape(L,N,self.anchor_num*C,H,W)
+        feature_class_out = feature_class_out.permute(3,1,2,0,4,5)
+        feature_class_out=feature_class_out.reshape(L,N,self.anchor_num*C,H,W)
 
         # scale back
         feature_class_out = [interpolate(f, size=s[-2:],mode='bilinear',align_corners=True) for f,s in zip(feature_class_out, feature_shapes)]

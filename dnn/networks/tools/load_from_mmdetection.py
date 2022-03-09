@@ -100,3 +100,12 @@ def load_mm_fcos(checkpoint_file, mm_config, model, return_mm_model=False, chang
         return mm_model
     else:
         del mm_model
+
+def load_mm_darknet(backbone, mm_backbone):
+    with torch.no_grad():
+        for m,n in zip(backbone.modules(), mm_backbone.modules()):
+            if hasattr(m, 'weight'):
+                m.weight.copy_(n.weight)
+            if hasattr(m, 'bias'):
+                if m.bias is not None:
+                    m.bias.copy_(n.bias)

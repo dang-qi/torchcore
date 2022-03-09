@@ -84,6 +84,29 @@ def init_head_xavier(head, scale=1.0):
             if m.bias is not None:
                 nn.init.constant_(m.bias, 0)
 
+def init_kaiming(module,
+                 a=0,
+                 mode='fan_out',
+                 nonlinearity='relu', 
+                 bias=0,
+                 distribution='normal'):
+    assert distribution in ['uniform', 'normal']
+    if hasattr(module, 'weight') and module.weight is not None:
+        if distribution == 'uniform':
+            nn.init.kaiming_uniform_(
+                module.weight, a=a, mode=mode, nonlinearity=nonlinearity)
+        else:
+            nn.init.kaiming_normal_(
+                module.weight, a=a, mode=mode, nonlinearity=nonlinearity)
+    if hasattr(module, 'bias') and module.bias is not None:
+        nn.init.constant_(module.bias, bias)
+
+def init_constant(module, value, bias=0):
+    if hasattr(module, 'weight') and module.weight is not None:
+        nn.init.constant_(module.weight, value)
+    if hasattr(module, 'bias') and module.bias is not None:
+        nn.init.constant_(module.bias, bias)
+
 def fill_up_weights(up):
     w = up.weight.data
     f = math.ceil(w.size(2) / 2)

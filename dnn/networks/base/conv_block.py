@@ -31,7 +31,7 @@ class ConvBlock(nn.Module):
             groups=groups,
             bias=bias)
         self.with_norm = norm_cfg is not None
-        self.with_activation = act_cfg is None
+        self.with_activation = act_cfg is not None
 
         self.act_cfg = act_cfg
 

@@ -115,6 +115,7 @@ class SPPBottleneck(BaseModule):
         x = self.conv2(x)
         return x
 
+@BACKBONE_REG.register()
 class CSPDarknet(BaseModule):
     # From left to right:
     # in_channels, out_channels, num_blocks, add_identity, use_spp

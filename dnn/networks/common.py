@@ -50,6 +50,11 @@ def init_focal_loss_head(head, pi=0.01, std=0.01):
     else:
         print('no last conv')
 
+def init_focal_loss(conv_module, pi=0.01, std=0.01):
+    b_value = -1 * math.log((1-pi)/pi)
+    nn.init.normal_(conv_module.weight, std=std)
+    nn.init.constant_(conv_module.bias, b_value)
+
 def init_focal_loss_partical_head(head, parts, pi=0.01,):
     b_value = -1 * math.log((1-pi)/pi)
     last_conv = None

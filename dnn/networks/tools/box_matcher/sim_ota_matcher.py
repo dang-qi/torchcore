@@ -31,6 +31,8 @@ class SimOTABoxMatcher():
             pred_bbox: Nx4
             gt_boxes: Mx4
             gt_labels: M
+
+            warning: here gt labels start with 1!!!
         '''
         INF=100000000
         gt_nums = gt_boxes.size(0)
@@ -57,7 +59,7 @@ class SimOTABoxMatcher():
 
         # calculate cls cost
         pred_scores_valid = pred_scores[center_ind].unsqueeze(1).repeat(1,gt_nums,1) # Vx1xC
-        gt_labels_one_hot = F.one_hot(gt_labels,num_classes=num_classes) # MxC
+        gt_labels_one_hot = F.one_hot(gt_labels-1,num_classes=num_classes) # MxC
         gt_labels_one_hot = gt_labels_one_hot.float().unsqueeze(0).repeat(valid_num,1,1)
         cls_cost = F.binary_cross_entropy(pred_scores_valid.sqrt_(), gt_labels_one_hot, reduction='none').sum(-1)
 

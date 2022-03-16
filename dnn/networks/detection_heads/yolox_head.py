@@ -7,6 +7,7 @@ from ..base import BaseModule
 from ..heads.build import build_head
 from ..tools.anchor import build_anchor_generator
 from ..tools.box_matcher import build_box_matcher
+from ..losses.build import build_loss
 from mmdet.core.bbox.assigners import SimOTAAssigner
 import torch.nn.functional as F
 
@@ -24,6 +25,21 @@ class YOLOXHead(BaseModule):
                         candidate_topk=10,
                         iou_weight=3.,
                         class_weight=1.),
+                 class_loss=dict(
+                     type='BCEWithLogitsLoss',
+                     reduction='sum',
+                     ),
+                 box_loss=dict(
+                     type='IoULoss',
+                     mode='square',
+                     eps=1e-16,
+                     reduction='sum',
+                     loss_weight=5.0),
+                 obj_loss=dict(
+                     type='BCEWithLogitsLoss',
+                     reduction='sum',
+                     ),
+                 l1_loss=dict(type='L1Loss', reduction='sum',),
                  init_cfg=None):
         super().__init__(init_cfg)
         self.strides = strides
@@ -33,6 +49,11 @@ class YOLOXHead(BaseModule):
         self.num_classes = num_classes
         self.box_matcher = build_box_matcher(box_matcher)
         self.use_l1 = False
+
+        self.class_loss = build_loss(class_loss)
+        self.box_loss = build_loss(box_loss)
+        self.obj_loss = build_loss(obj_loss)
+        self.l1_loss = build_loss(l1_loss)
 
 
     def init_weights(self):
@@ -46,15 +67,12 @@ class YOLOXHead(BaseModule):
         self.use_l1=True
 
         if self.training:
-            return self.get_pred_targets(pred_out, targets)
+            losses = self.compute_loss(pred_out,targets)
+            return losses
 
-    def get_pred_targets(self, pred_multi_level, targets):    
-        feature_sizes = [p[0].shape[-2:] for p in pred_multi_level]
-        dtype = pred_multi_level[0][0].dtype
-        device = pred_multi_level[0][0].device
-        priors_with_strides = self.prior_generator.multi_level_grid(feature_sizes,dtype=dtype,device=device, with_strides=True)
+
+    def cat_multi_level_pred(self, pred_multi_level, priors_with_strides):
         N, C, _, _= pred_multi_level[0][0].shape
-
         cat_pred_box = []
         cat_pred_cls = []
         cat_pred_obj = []
@@ -73,20 +91,83 @@ class YOLOXHead(BaseModule):
 
             decode_boxes = self.decode_boxes(pred_box,prior_with_strides,stride)
             cat_decode_boxes.append(decode_boxes)
-        cat_pred_box = torch.cat(cat_pred_box,dim=1)
+        cat_pred_box = torch.cat(cat_pred_box,dim=1) # Nxanchor_allx4
         cat_pred_obj = torch.cat(cat_pred_obj,dim=1)
         cat_pred_cls = torch.cat(cat_pred_cls,dim=1)
         cat_decode_boxes = torch.cat(cat_decode_boxes, dim=1)
-        cat_priors_with_strides = torch.cat(priors_with_strides, dim=0)
 
+        return cat_pred_cls, cat_pred_box, cat_pred_obj, cat_decode_boxes
+
+    def get_priors_with_strides(self, pred_multi_level):
+        feature_sizes = [p[0].shape[-2:] for p in pred_multi_level]
+        dtype = pred_multi_level[0][0].dtype
+        device = pred_multi_level[0][0].device
+        priors_with_strides = self.prior_generator.multi_level_grid(feature_sizes,dtype=dtype,device=device, with_strides=True)
+        return priors_with_strides
+
+    def get_test_input(self, cat_pred_cls, cat_pred_box, cat_pred_obj, cat_decode_boxes, priors_with_strides, targets):    
+        pos_ind_all = []
+        cls_targets_all = []
+        obj_targets_all = []
+        box_targets_all = []
+        l1_targets_all = []
+        cat_priors_with_strides = torch.cat(priors_with_strides, dim=0)
+        batch_size = cat_pred_cls.size(0)
         # get target for each image seperately
-        for i in range(N):
+        for i in range(batch_size):
             gt_boxes = targets[i]['boxes']
             gt_labels = targets[i]['labels']
-            x =self.get_single_target(cat_pred_cls[i].detach(),cat_pred_obj[i].detach(),cat_pred_box[i].detach(),cat_decode_boxes[i].detach(), cat_priors_with_strides, gt_boxes, gt_labels)
-            return x
-            #pos_ind, cls_targets, obj_targets,box_targets, l1_targets =self.get_single_target(cat_pred_cls[i].detach(),cat_pred_obj[i].detach(),cat_pred_box[i].detach(),cat_decode_boxes[i].detach(), cat_priors_with_strides, gt_boxes, gt_labels)
-            #return pos_ind, cls_targets, obj_targets,box_targets, l1_targets 
+            if i==1:
+                return cat_pred_cls[i].detach(),cat_pred_obj[i].detach(),cat_pred_box[i].detach(),cat_decode_boxes[i].detach(), cat_priors_with_strides, gt_boxes, gt_labels
+        return pos_ind_all, cls_targets_all, box_targets_all, obj_targets_all, l1_targets_all
+
+    def get_pred_targets(self, cat_pred_cls, cat_pred_box, cat_pred_obj, cat_decode_boxes, priors_with_strides, targets):    
+        pos_ind_all = []
+        cls_targets_all = []
+        obj_targets_all = []
+        box_targets_all = []
+        l1_targets_all = []
+        cat_priors_with_strides = torch.cat(priors_with_strides, dim=0)
+        batch_size = cat_pred_cls.size(0)
+        # get target for each image seperately
+        for i in range(batch_size):
+            gt_boxes = targets[i]['boxes']
+            gt_labels = targets[i]['labels']
+            pos_ind, cls_targets, obj_targets,box_targets, l1_targets =self.get_single_target(cat_pred_cls[i].detach(),cat_pred_obj[i].detach(),cat_pred_box[i].detach(),cat_decode_boxes[i].detach(), cat_priors_with_strides, gt_boxes, gt_labels)
+            pos_ind_all.append(pos_ind)
+            cls_targets_all.append(cls_targets)
+            obj_targets_all.append(obj_targets)
+            box_targets_all.append(box_targets)
+            l1_targets_all.append(l1_targets)
+        pos_ind_all = torch.cat(pos_ind_all, 0)
+        cls_targets_all = torch.cat(cls_targets_all, 0)
+        obj_targets_all = torch.cat(obj_targets_all, 0)
+        box_targets_all = torch.cat(box_targets_all, 0)
+        l1_targets_all = torch.cat(l1_targets_all, 0)
+        return pos_ind_all, cls_targets_all, box_targets_all, obj_targets_all, l1_targets_all
+        
+    def compute_loss(self, pred_out, targets):
+        priors_with_strides = self.get_priors_with_strides(pred_out)
+
+        # output shape: Nxall_anchor_numxC
+        pred_cls, pred_box, pred_obj, decode_boxes = self.cat_multi_level_pred(pred_out, priors_with_strides)
+        #return priors_with_strides, decode_boxes
+
+        pos_ind_all, cls_targets_all, box_targets_all, obj_targets_all, l1_targets_all = self.get_pred_targets(pred_cls, pred_box, pred_obj, decode_boxes, priors_with_strides, targets)
+
+        pos_num = pos_ind_all.sum()
+
+        # TODO it is good to use reduced_mean pos_num
+
+        losses = {}
+        # we need to use focal loss init 
+        losses['class_loss'] = self.class_loss(pred_cls.view(-1,self.num_classes)[pos_ind_all], cls_targets_all) / pos_num
+        losses['box_loss'] = self.box_loss(decode_boxes.view(-1,4)[pos_ind_all], box_targets_all) / pos_num
+        # we need to use focal loss init 
+        losses['obj_loss'] = self.obj_loss(pred_obj.view(-1,1), obj_targets_all) / pos_num
+        if self.use_l1:
+            losses['l1_loss'] = self.l1_loss(pred_box.view(-1,4)[pos_ind_all], l1_targets_all) / pos_num
+        return losses
 
     @torch.no_grad()
     def get_single_target(self, pred_cls, pred_obj, pred_box, decode_boxes, prior_with_strides, gt_boxes, gt_labels):
@@ -112,7 +193,7 @@ class YOLOXHead(BaseModule):
 
         pos_ious = match.max_iou[pos_ind]
         # class targets are IoU awear 
-        cls_targets = F.one_hot(gt_labels[match.matched_ind[pos_ind]],num_classes=self.num_classes) * pos_ious.unsqueeze(-1)
+        cls_targets = F.one_hot(gt_labels[match.matched_ind[pos_ind]]-1,num_classes=self.num_classes) * pos_ious.unsqueeze(-1)
         obj_targets = pred_obj.new_zeros((num_prior,1))
         obj_targets[pos_ind] = 1
         box_targets = gt_boxes[match.matched_ind[pos_ind]]

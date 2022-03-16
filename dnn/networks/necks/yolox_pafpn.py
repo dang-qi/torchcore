@@ -5,7 +5,9 @@ import math
 from ..base import BaseModule, ConvBlock
 from torch import nn
 from ..base.csp_layer import CSPLayer
+from .build import NECK_REG
 
+@NECK_REG.register()
 class YOLOXPAFPN(BaseModule):
     def __init__(self, 
                  in_channels,

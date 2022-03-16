@@ -10,5 +10,6 @@ from .mask_rcnn_head import MaskRCNNHead
 from .retina_head import RetinaHead
 from .fcos_head import FCOSFeatureHead
 from .head_with_rnn import HeadWithGrammarRNN
+from .yolox_head import YOLOXFeatureHead
 
 from .build import build_head

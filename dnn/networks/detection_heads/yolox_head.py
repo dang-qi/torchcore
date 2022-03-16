@@ -8,9 +8,11 @@ from ..heads.build import build_head
 from ..tools.anchor import build_anchor_generator
 from ..tools.box_matcher import build_box_matcher
 from ..losses.build import build_loss
-from mmdet.core.bbox.assigners import SimOTAAssigner
 import torch.nn.functional as F
+from torchvision.ops.boxes import batched_nms
+from .build import DETECTION_HEAD_REG
 
+@DETECTION_HEAD_REG.register()
 class YOLOXHead(BaseModule):
     def __init__(self,
                  num_classes=80,
@@ -40,6 +42,8 @@ class YOLOXHead(BaseModule):
                      reduction='sum',
                      ),
                  l1_loss=dict(type='L1Loss', reduction='sum',),
+                 test_cfg=dict(score_thresh=0.01,
+                 nms_thresh=0.65,),
                  init_cfg=None):
         super().__init__(init_cfg)
         self.strides = strides
@@ -55,21 +59,70 @@ class YOLOXHead(BaseModule):
         self.obj_loss = build_loss(obj_loss)
         self.l1_loss = build_loss(l1_loss)
 
+        self.test_cfg= test_cfg
+
 
     def init_weights(self):
         super().init_weights()
         if hasattr(self.head, 'init_weights'):
             self.head.init_weights()
 
-    def forward(self,inputs,x,targets=None):
+    def forward(self,inputs,features,targets=None):
         # list((pred_class, pred_bbox, pred_obj),...)
-        pred_out = self.head(x)
+        pred_out = self.head(features)
         self.use_l1=True
 
         if self.training:
             losses = self.compute_loss(pred_out,targets)
             return losses
+        else:
+            result = self.get_results(inputs, pred_out)
+            return result
 
+    def get_results(self, inputs, pred_out):
+        priors_with_strides = self.get_priors_with_strides(pred_out)
+
+        # output shape: Nxall_anchor_numxC
+        pred_cls, pred_box, pred_obj, decode_boxes = self.cat_multi_level_pred(pred_out, priors_with_strides)
+        result = self.post_detection(pred_cls,pred_obj,decode_boxes)
+        return result
+
+    def post_detection(self, pred_cls, pred_obj, decode_boxes):
+        batch_size = pred_cls.size(0)
+        boxes_all = []
+        labels_all = []
+        scores_all = []
+        for i in range(batch_size):
+            boxes, labels, scores = self.post_detection_single(pred_cls[i].sigmoid(),pred_obj[i].sigmoid(),decode_boxes[i])
+
+            boxes_all.append(boxes)
+            scores_all.append(scores)
+            labels_all.append(labels+1) # labels start from 1
+
+        results = {}
+        results['boxes'] = boxes_all
+        results['scores'] = scores_all
+        results['labels'] = labels_all
+        return results
+
+    def post_detection_single(self, pred_cls, pred_obj, decode_boxes):
+        max_scores, labels = torch.max(pred_cls, 1)
+        keep = max_scores*pred_obj >= self.test_cfg['score_thresh']
+
+        boxes = decode_boxes[keep]
+        labels = labels[keep]
+        scores = max_scores[keep]*pred_obj[keep]
+
+        if labels.numel()==0:
+            return boxes, labels, scores
+        else:
+            keep = batched_nms(boxes, scores,labels, self.test_cfg['nms_thresh'])
+
+            boxes = decode_boxes[keep]
+            labels = labels[keep]
+            scores = scores[keep]
+            return boxes, labels, scores
+    
 
     def cat_multi_level_pred(self, pred_multi_level, priors_with_strides):
         N, C, _, _= pred_multi_level[0][0].shape

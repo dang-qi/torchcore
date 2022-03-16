@@ -10,11 +10,10 @@ from .build import DETECTOR_REG
 
 @DETECTOR_REG.register(force=True)
 class RetinaNet(OneStageDetector):
-    def __init__(self, backbone, neck=None, det_head=None, training=True, just_rpn=False):
+    def __init__(self, backbone, neck=None, det_head=None, training=True):
         super(RetinaNet, self).__init__(backbone, neck=neck, det_head=det_head, training=training)
         #self.feature_names = feature_names
         self.strides = None
-        self.just_rpn=just_rpn
         
 
     #def forward(self, inputs, targets=None):

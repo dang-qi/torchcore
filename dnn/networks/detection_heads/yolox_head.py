@@ -12,7 +12,7 @@ import torch.nn.functional as F
 from torchvision.ops.boxes import batched_nms
 from .build import DETECTION_HEAD_REG
 
-@DETECTION_HEAD_REG.register()
+@DETECTION_HEAD_REG.register(force=True)
 class YOLOXHead(BaseModule):
     def __init__(self,
                  num_classes=80,
@@ -118,7 +118,7 @@ class YOLOXHead(BaseModule):
         else:
             keep = batched_nms(boxes, scores,labels, self.test_cfg['nms_thresh'])
 
-            boxes = decode_boxes[keep]
+            boxes = boxes[keep]
             labels = labels[keep]
             scores = scores[keep]
             return boxes, labels, scores

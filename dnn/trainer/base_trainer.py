@@ -24,7 +24,7 @@ from ...data.datasets.build import build_dataloader
 
 
 class BaseTrainer :
-    def __init__( self, model, trainset, tag='', rank=0, world_size=1, log_print_iter=1000, log_save_iter=50, testset=None, optimizer=None, scheduler=None, clip_gradient=None, evaluator=None, accumulation_step=1, path_config=None, log_with_tensorboard=False, log_api_token=None, empty_cache_iter=None, log_memory=False ):
+    def __init__( self, model, trainset, tag='', rank=0, world_size=1, log_print_iter=1000, log_save_iter=50, testset=None, optimizer=None, scheduler=None, clip_gradient=None, evaluator=None, accumulation_step=1, path_config=None, log_with_tensorboard=False, log_api_token=None, empty_cache_iter=None, log_memory=False, use_amp=False ):
         device = torch.device( rank )
         self._device = device
         self._model=model
@@ -45,6 +45,7 @@ class BaseTrainer :
         self._path_config=path_config
         self._empty_cache_iter= empty_cache_iter
         self._log_memory=log_memory
+        self.use_amp = use_amp
 
         if isinstance(self._model, DDP):
             self.distributed = True
@@ -75,7 +76,42 @@ class BaseTrainer :
 
         if self.is_main_process():
             self.init_logger()
+
+    def before_train(self):
+        pass
+
+    def after_train(self):
+        pass
+
+    def before_train_epoch(self):
+        pass
+
+    def after_train_epoch(self):
+        pass
         
+    def before_train_iter(self):
+        pass
+
+    def after_train_iter(self):
+        pass
+
+    def before_eval(self):
+        pass
+
+    def after_eval(self):
+        pass
+
+    def before_eval_epoch(self):
+        pass
+
+    def after_eval_epoch(self):
+        pass
+        
+    def before_eval_iter(self):
+        pass
+
+    def after_eval_iter(self):
+        pass
 
     def init_log_api(self):
         self._ml_log = MLBlogAPI(self._log_api_token)

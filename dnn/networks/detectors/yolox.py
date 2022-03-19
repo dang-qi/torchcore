@@ -10,8 +10,8 @@ from .build import DETECTOR_REG
 
 @DETECTOR_REG.register(force=True)
 class YOLOX(OneStageDetector):
-    def __init__(self, backbone, neck=None, det_head=None, training=True, ):
-        super(YOLOX, self).__init__(backbone, neck=neck, det_head=det_head, training=training)
+    def __init__(self, backbone, neck=None, det_head=None, training=True, init_cfg=None):
+        super(YOLOX, self).__init__(backbone, neck=neck, det_head=det_head, training=training, init_cfg=init_cfg)
 
     def post_process(self, results, inputs):
         for i, (boxes, scores, labels) in enumerate(zip(results['boxes'], results['scores'], results['labels'])):

@@ -1,8 +1,9 @@
+from ..base.base_module import BaseModule
 from torch import nn
 
-class BaseDetector(nn.Module):
-    def __init__(self,):
-        super(BaseDetector, self).__init__()
+class BaseDetector(BaseModule):
+    def __init__(self,init_cfg=None):
+        super(BaseDetector, self).__init__(init_cfg=init_cfg)
 
     def forward(self):
         raise NotImplementedError

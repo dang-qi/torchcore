@@ -23,6 +23,7 @@ class SimOTABoxMatcher():
               pred_bbox, 
               gt_boxes, 
               gt_labels,
+              pred_obj=None,
               eps=1e-7):
         '''
             Suppose we have M gt_boxes and N pred_bboxes, C is class_num
@@ -57,11 +58,19 @@ class SimOTABoxMatcher():
         iou_cost = -torch.log(iou_mat+eps) # VxM
         #return gt_boxes, pred_bbox_valid
 
-        # calculate cls cost
-        pred_scores_valid = pred_scores[center_ind].unsqueeze(1).repeat(1,gt_nums,1) # Vx1xC
-        gt_labels_one_hot = F.one_hot(gt_labels-1,num_classes=num_classes) # MxC
+        gt_labels_one_hot = F.one_hot((gt_labels-1).to(torch.int64),num_classes=num_classes) # MxC
         gt_labels_one_hot = gt_labels_one_hot.float().unsqueeze(0).repeat(valid_num,1,1)
-        cls_cost = F.binary_cross_entropy(pred_scores_valid.sqrt_(), gt_labels_one_hot, reduction='none').sum(-1)
+
+        # calculate cls cost
+        with torch.cuda.amp.autocast(enabled=False):
+            if pred_obj is not None:
+                pred_obj = pred_obj[center_ind].float().sigmoid().unsqueeze(-1)
+                pred_scores_valid = pred_scores[center_ind].float().sigmoid()*pred_obj
+            else:
+                pred_scores_valid = pred_scores[center_ind].float().sigmoid()
+            pred_scores_valid = pred_scores_valid.unsqueeze(1).repeat(1,gt_nums,1) # Vx1xC
+
+            cls_cost = F.binary_cross_entropy(pred_scores_valid.sqrt_(), gt_labels_one_hot, reduction='none').sum(-1)
 
         # generate cost matrix
         # VxM

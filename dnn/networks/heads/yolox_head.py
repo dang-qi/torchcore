@@ -18,7 +18,7 @@ class YOLOXFeatureHead(BaseModule):
                  norm_cfg=dict(type='BN', momentum=0.03, eps=0.001),
                  act_cfg=dict(type='swish'),
                  init_cfg=dict(
-                     type='Kaiming',
+                     type='kaiming',
                      layer='Conv2d',
                      a=math.sqrt(5),
                      distribution='uniform',
@@ -94,6 +94,7 @@ class YOLOXFeatureHead(BaseModule):
         super().init_weights()
         # init head for focal loss
         for cls_head, obj_head in zip(self.multi_level_cls, self.multi_level_obj):
-            init_focal_loss(cls_head, obj_head)
+            init_focal_loss(cls_head)
+            init_focal_loss(obj_head)
 
         

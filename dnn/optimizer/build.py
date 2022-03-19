@@ -6,6 +6,7 @@ from ...util.build import build_with_config
 
 OPTIMIZER_REG = Registry('OPTIMIZER')
 SCHEDULER_REG = Registry('SCHEDULER')
+OPTIMIZER_COSTRUCTOR_REG = Registry('SCHEDULER')
 
 # from https://github.com/open-mmlab/mmcv/blob/f22c9eb4a409470b7e645f17fa1997fe85e27909/mmcv/runner/optimizer/builder.py
 def register_torch_optimizers():
@@ -39,8 +40,13 @@ def build_optimizer(model, cfg ):
     if hasattr(model, 'module'):
             model = model.module
     cfg = cfg.copy()
-    cfg.params = model.parameters()
-    optimizer = build_with_config(cfg, OPTIMIZER_REG)
+    param_cfg = cfg.pop('param_cfg', None)
+
+    param_wrapper_type = cfg.pop('param_wrapper','OptimizerWarpper')
+    param_wrapper_cfg = dict(type=param_wrapper_type,optimizer_cfg=cfg,param_cfg=param_cfg)
+    param_wrapper = build_with_config(param_wrapper_cfg, OPTIMIZER_COSTRUCTOR_REG)
+    optimizer = param_wrapper(model)
+
     return optimizer
 
 def build_lr_scheduler(optimizer, cfg):

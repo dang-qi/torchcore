@@ -70,7 +70,6 @@ class YOLOXHead(BaseModule):
     def forward(self,inputs,features,targets=None):
         # list((pred_class, pred_bbox, pred_obj),...)
         pred_out = self.head(features)
-        self.use_l1=True
 
         if self.training:
             losses = self.compute_loss(pred_out,targets)
@@ -240,7 +239,8 @@ class YOLOXHead(BaseModule):
 
         offset_priors_with_strides = torch.cat([prior_with_strides[:,:2]+0.5*prior_with_strides[:,2:], prior_with_strides[:,2:]], dim=-1)
 
-        match = self.box_matcher.match(pred_cls.sigmoid()*pred_obj.sigmoid().unsqueeze(-1), offset_priors_with_strides, decode_boxes, gt_boxes, gt_labels )
+        match = self.box_matcher.match(pred_cls, offset_priors_with_strides, decode_boxes, gt_boxes, gt_labels,pred_obj=pred_obj )
+        #match = self.box_matcher.match(pred_cls.sigmoid()*pred_obj.sigmoid().unsqueeze(-1), offset_priors_with_strides, decode_boxes, gt_boxes, gt_labels,pred_obj=pred_obj )
         pos_ind = match.matched_ind>=0
         pos_num = pos_ind.sum()
 

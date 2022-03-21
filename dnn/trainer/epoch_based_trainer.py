@@ -42,7 +42,7 @@ class EpochBasedTrainer(BaseTrainer):
                 self._scheduler.update_iter_per_epoch(dataset_len)
 
     def before_train_epoch(self):
-        self.reset_trainset()
+        self.reset_trainset() # self._epoch += 1
         if self.is_main_process():
             print("Epoch %d/%d" % (self._epoch,self._max_epoch))
         # TODO fix it with nicer way
@@ -60,7 +60,6 @@ class EpochBasedTrainer(BaseTrainer):
                 self.validate()
             if self.distributed:
                 dist.barrier()
-        self._epoch += 1 
         if self.is_main_process():
             self.save_training(self._path_config.checkpoint_path_tmp.format('epoch_'+str(self._epoch)))
 

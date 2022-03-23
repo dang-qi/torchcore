@@ -52,7 +52,7 @@ class EpochBasedTrainer(BaseTrainer):
     def after_train_epoch(self):
         if hasattr(self, '_scheduler'):
             self._scheduler.step_epoch(cur_iter=self._step, cur_epoch=self._epoch)
-        if self._testset is not None and self._epoch%1 == 0 :
+        if self._testset is not None and self._epoch%self.eval_epoch_inteval == 0 :
             if self.distributed:
                 dist.barrier()
             #if not self.distributed or self.rank==0:

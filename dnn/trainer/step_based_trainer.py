@@ -115,6 +115,7 @@ class StepBasedTrainer(BaseTrainer):
             print('wrong targets:',targets)
             print("Loss is {}, skip this batch".format(loss_sum_num))
             print(loss_dict)
+            raise ValueError('wrong loss')
             return
             sys._exit(1)
         self.loss_logger.update(loss_log)

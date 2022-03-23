@@ -59,7 +59,7 @@ class EpochBasedTrainer(BaseTrainer):
 
         all_reduce_norm(self._model)
         
-        if self._testset is not None and self._epoch%1 == 0 :
+        if self._testset is not None and self._epoch%self.eval_epoch_inteval == 0 :
             if self.distributed:
                 dist.barrier()
             #if not self.distributed or self.rank==0:

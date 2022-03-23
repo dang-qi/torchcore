@@ -496,3 +496,24 @@ def extend_boxes(boxes, scale, im_width, im_height):
     boxes[...,3] = y2
 
     return boxes
+
+def _hsv_color_jittering(img_hsv, h_range, s_range, v_range ):
+    hsv_augs = np.random.uniform(-1, 1, 3) * [h_range, s_range, v_range]  # random gains
+    hsv_augs *= np.random.randint(0, 2, 3)  # random selection of h, s, v
+    hsv_augs = hsv_augs.astype(np.int16)
+
+    img_hsv[..., 0] = (img_hsv[..., 0] + hsv_augs[0]) % 180
+    img_hsv[..., 1] = np.clip(img_hsv[..., 1] + hsv_augs[1], 0, 255)
+    img_hsv[..., 2] = np.clip(img_hsv[..., 2] + hsv_augs[2], 0, 255)
+
+def hsv_color_jittering(im, h_range, s_range, v_range):
+    if _is_pil_image(im):
+        mode = im.mode
+        im = im.convert('HSV')
+        im_array = np.array(im)
+        _hsv_color_jittering(im_array, h_range, s_range, v_range)
+        im = Image.fromarray(im_array.astype('uint8'),mode='HSV').convert(mode)
+        return im
+    else:
+        raise NotImplementedError('have not implement other image type')
+

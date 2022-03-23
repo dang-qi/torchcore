@@ -14,7 +14,7 @@ Sequence = collections.abc.Sequence
 
 __all__ = ['Compose', 'Resize','ResizeAndPadding', 'ResizeMinMax',
             'ResizeMinMaxTV', 'ToTensor', 'Normalize', 'GroupPadding',
-            'GeneralRCNNTransform', 'GeneralRCNNTransformTV', 'RandomMirror', 'RandomCrop', 'RandomScale', 'RandomAbsoluteScale', 'PadNumpyArray', 'AddSurrandingBox','AddPersonBox', 'GroupPaddingWithBBox']
+            'GeneralRCNNTransform', 'GeneralRCNNTransformTV', 'RandomMirror', 'RandomCrop', 'RandomScale', 'RandomAbsoluteScale', 'PadNumpyArray', 'AddSurrandingBox','AddPersonBox', 'GroupPaddingWithBBox', 'HSVColorJittering']
 
 @TRANSFORM_REG.register()
 class Compose(object):
@@ -41,6 +41,18 @@ class Compose(object):
             format_string += '    {0}'.format(t)
         format_string += '\n)'
         return format_string
+
+@TRANSFORM_REG.register()
+class HSVColorJittering():
+    def __init__(self,h_range=5, s_range=30, v_range=30):
+        self.h_range = h_range
+        self.s_range = s_range
+        self.v_range = v_range
+
+    def __call__(self, inputs, targets=None):
+        inputs['data'] = F.hsv_color_jittering(inputs['data'], self.h_range, self.s_range, self.v_range)
+
+        return inputs, targets
 
 @TRANSFORM_REG.register()
 class Resize(object):

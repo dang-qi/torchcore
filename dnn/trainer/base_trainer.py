@@ -209,16 +209,18 @@ class BaseTrainer :
         state_dict = torch.load(model_path)['state_dict']
         self._model.load_state_dict(state_dict)
 
-    def save_last_training(self, path, to_print=True):
-        if isinstance(self._model, DDP):
-            if self.is_main_process():
-                state_dict = self._model.state_dict()
-            else:
-                return
-        elif isinstance(self._model, torch.nn.DataParallel):
-            state_dict = self._model.module.state_dict()
+    def state_dict_for_save(self):
+        if self.use_ema:
+            return self.ema.ema.state_dict()
+        if isinstance(self._model, (DDP, torch.nn.DataParallel)):
+            return self._model.module.state_dict()
         else:
-            state_dict =self._model.state_dict()
+            return self._model.state_dict()
+
+    def save_last_training(self, path, to_print=True):
+        if not self.is_main_process():
+            return
+        state_dict = self.state_dict_for_save()
         folder = os.path.dirname(path)
         if self._path_config is not None:
             last_path = self._path_config.checkpoint_path_tmp.format('last')
@@ -236,15 +238,9 @@ class BaseTrainer :
             print('The checkpoint has been saved to {}'.format(path))
 
     def save_training(self, path, to_print=True):
-        if isinstance(self._model, DDP):
-            if self.is_main_process():
-                state_dict = self._model.state_dict()
-            else:
-                return
-        elif isinstance(self._model, torch.nn.DataParallel):
-            state_dict = self._model.module.state_dict()
-        else:
-            state_dict =self._model.state_dict()
+        if not self.is_main_process():
+            return
+        state_dict = self.state_dict_for_save()
 
         torch.save({
             'epoch': self._epoch,

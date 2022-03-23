@@ -1,4 +1,3 @@
-from this import d
 import torch
 import copy
 import math
@@ -9,7 +8,7 @@ def is_parallal_model(model):
 class ModelEMA():
     '''Exponetial Moving Average model'''
     def __init__(self, model, decay=0.9999, num_updates=None):
-        self.ema = copy.deepcopy(model.module if is_parallal_model(model) else model)
+        self.ema = copy.deepcopy(model.module if is_parallal_model(model) else model).eval()
         self.decay = lambda x: decay * (1 - math.exp(-x / 2000))
         if num_updates is None:
             self.num_updates=0
@@ -26,7 +25,7 @@ class ModelEMA():
 
             model_state_dict = model.module.state_dict() if is_parallal_model(model) else model.state_dict()
 
-            for k,v in self.ema.state_dict():
+            for k,v in self.ema.state_dict().items():
                 # the non-floating point type is bn.num_batches_tracked
                 if v.dtype.is_floating_point: 
                     v *=d

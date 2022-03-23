@@ -14,9 +14,9 @@ from ...dist.all_reduce_norm import all_reduce_norm
 
 @TRAINER_REG.register()
 class EpochBasedTrainer(BaseTrainer):
-    def __init__(self, model, trainset, max_epoch, tag='', rank=0,world_size=1, log_print_iter=1000, log_save_iter=50, testset=None, optimizer=None, scheduler=None, clip_gradient=None, evaluator=None, accumulation_step=1, path_config=None, log_with_tensorboard=False, log_api_token=None, log_memory=True,use_amp=False, use_ema=False, eval_epoch_interval=1, save_epoch_interval=1):
+    def __init__(self, model, trainset, max_epoch, tag='', rank=0,world_size=1, log_print_iter=1000, log_save_iter=50, testset=None, optimizer=None, scheduler=None, clip_gradient=None, evaluator=None, accumulation_step=1, path_config=None, log_with_tensorboard=False, log_api_token=None, log_memory=True,use_amp=False, ema_cfg=None, eval_epoch_interval=1, save_epoch_interval=1):
         super().__init__(model, trainset, tag=tag, rank=rank, world_size=world_size, log_print_iter=log_print_iter, log_save_iter=log_save_iter, testset=testset, optimizer=optimizer, scheduler=scheduler, clip_gradient=clip_gradient, evaluator=evaluator, accumulation_step=accumulation_step, path_config=path_config, log_with_tensorboard=log_with_tensorboard, log_api_token=log_api_token,
-        log_memory=log_memory, use_amp=use_amp, use_ema=use_ema)
+        log_memory=log_memory, use_amp=use_amp, ema_cfg=ema_cfg)
         self._max_epoch = max_epoch
         self._max_step = max_epoch*len(trainset)
         self._start_step=0

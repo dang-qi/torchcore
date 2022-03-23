@@ -17,7 +17,7 @@ class ConvBlock(nn.Module):
                  dilation=1,
                  groups=1,
                  bias=False,
-                 conv_cfg='Conv2d', 
+                 conv_cfg=None, 
                  norm_cfg=dict(type='BN'), 
                  act_cfg=dict(type='relu')):
         super().__init__()

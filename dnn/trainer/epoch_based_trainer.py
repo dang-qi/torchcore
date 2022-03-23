@@ -6,15 +6,17 @@ import tqdm
 import math
 import torch.distributed as dist
 import numpy as np
+import time
 
 from .base_trainer import BaseTrainer
 from .build import TRAINER_REG
+from ...dist.all_reduce_norm import all_reduce_norm
 
 @TRAINER_REG.register()
 class EpochBasedTrainer(BaseTrainer):
-    def __init__(self, model, trainset, max_epoch, tag='', rank=0,world_size=1, log_print_iter=1000, log_save_iter=50, testset=None, optimizer=None, scheduler=None, clip_gradient=None, evaluator=None, accumulation_step=1, path_config=None, log_with_tensorboard=False, log_api_token=None, log_memory=True,use_amp=False, eval_epoch_interval=1, save_epoch_interval=1):
+    def __init__(self, model, trainset, max_epoch, tag='', rank=0,world_size=1, log_print_iter=1000, log_save_iter=50, testset=None, optimizer=None, scheduler=None, clip_gradient=None, evaluator=None, accumulation_step=1, path_config=None, log_with_tensorboard=False, log_api_token=None, log_memory=True,use_amp=False, use_ema=False, eval_epoch_interval=1, save_epoch_interval=1):
         super().__init__(model, trainset, tag=tag, rank=rank, world_size=world_size, log_print_iter=log_print_iter, log_save_iter=log_save_iter, testset=testset, optimizer=optimizer, scheduler=scheduler, clip_gradient=clip_gradient, evaluator=evaluator, accumulation_step=accumulation_step, path_config=path_config, log_with_tensorboard=log_with_tensorboard, log_api_token=log_api_token,
-        log_memory=log_memory, use_amp=use_amp)
+        log_memory=log_memory, use_amp=use_amp, use_ema=use_ema)
         self._max_epoch = max_epoch
         self._max_step = max_epoch*len(trainset)
         self._start_step=0
@@ -52,6 +54,11 @@ class EpochBasedTrainer(BaseTrainer):
     def after_train_epoch(self):
         if hasattr(self, '_scheduler'):
             self._scheduler.step_epoch(cur_iter=self._step, cur_epoch=self._epoch)
+        if self.is_main_process():
+            self.save_last_training(self._path_config.checkpoint_path_tmp.format('epoch_'+str(self._epoch)))
+
+        all_reduce_norm(self._model)
+        
         if self._testset is not None and self._epoch%1 == 0 :
             if self.distributed:
                 dist.barrier()
@@ -77,11 +84,15 @@ class EpochBasedTrainer(BaseTrainer):
             self._model.train()
 
         self._optimizer.zero_grad()
-        for idx, (inputs, targets) in enumerate(tqdm.tqdm(self._trainset, desc='Training',dynamic_ncols=True)):
+        data_iter = iter(self._trainset)
+        for idx in tqdm.tqdm(range(len(self._trainset)), desc='Training',dynamic_ncols=True):
+            iter_start_time = time.time()
+            inputs, targets = next(data_iter)
             self._step += 1
 
             inputs = self._set_device( inputs )
             targets = self._set_device( targets )
+            data_end_time = time.time()
             #print('input device:', inputs[0].device)
             self.before_train_iter()
 
@@ -89,12 +100,6 @@ class EpochBasedTrainer(BaseTrainer):
                 loss_dict = self._model(inputs, targets)
 
             loss_sum, loss_log = self._parse_loss_dict(loss_dict)
-            # add the losses for each part
-            #loss_sum = sum(loss for loss in loss_dict.values())
-            #loss_sum=0
-            #for single_loss in loss_dict:
-            #    loss_sum = loss_sum + (loss_dict[single_loss]/self._accumulation_step)
-            #    #if self.rank==0 or not self.distributed:
 
             loss_sum_num = loss_sum.item()
             if not math.isfinite(loss_sum):
@@ -123,15 +128,24 @@ class EpochBasedTrainer(BaseTrainer):
                 self.scaler.update()
                 self._optimizer.zero_grad()
             #loss_values.append( loss_sum.cpu().detach().numpy() )
+            iter_end_time = time.time()
 
             #if idx%self._log_print_iter == 0:
                 #if self.rank == 0 or not self.distributed:
             if self._step % self._log_save_iter == 1:
                 average_losses = self.loss_logger.get_last_average()
                 self.loss_logger.clear()
+                self.data_time = data_end_time-iter_start_time
+                self.iter_time = iter_end_time-data_end_time
+                self.update_log('data_time', self.data_time)
+                self.update_log('iter_time', self.iter_time)
                 self.save_log(average_losses)
                 if self._step % self._log_print_iter == 1:
                     self.print_log(average_losses)
+
+            if self.use_ema:
+                self.ema.update(self._model)
+
 
             if hasattr(self, '_scheduler'):
                 #print('step: {}, epoch: {}'.format(self._step, self._epoch))
@@ -139,42 +153,7 @@ class EpochBasedTrainer(BaseTrainer):
             #if idx > 20:
             #    break
             
-        #print('Average loss : ', np.mean(loss_values))
 
-    #def save_training(self, path, to_print=True):
-    #    if isinstance(self._model, DDP):
-    #        if self.is_main_process():
-    #            state_dict = self._model.state_dict()
-    #        else:
-    #            return
-    #    elif isinstance(self._model, torch.nn.DataParallel):
-    #        state_dict = self._model.module.state_dict()
-    #    else:
-    #        state_dict =self._model.state_dict()
-
-    #    torch.save({
-    #        'epoch': self._epoch,
-    #        'step': self._step,
-    #        'model_state_dict': state_dict,
-    #        'optimizer_state_dict': self._optimizer.state_dict(),
-    #        'scheduler':self._scheduler.state_dict(),
-    #    }, path)
-
-    #    folder = os.path.dirname(path)
-    #    if self._path_config is not None:
-    #        last_name = self._path_config.checkpoint_path_tmp.format('last')
-    #    else:
-    #        last_name = '{}_last.pth'.format(self._tag)
-    #    torch.save({
-    #        'epoch': self._epoch,
-    #        'step': self._step,
-    #        'model_state_dict': state_dict,
-    #        'optimizer_state_dict': self._optimizer.state_dict(),
-    #        'scheduler':self._scheduler.state_dict(),
-    #    }, os.path.join(folder, last_name))
-
-    #    if to_print:
-    #        print('The checkpoint has been saved to {}'.format(path))
 
     def resume_training(self, path, device, to_print=True):
         if isinstance(self._model, DDP):

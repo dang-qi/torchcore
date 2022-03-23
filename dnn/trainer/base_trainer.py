@@ -22,9 +22,11 @@ from ...evaluation.build import build_evaluator
 
 from ...data.datasets.build import build_dataloader
 
+from ..utils.ema import ModelEMA
+
 
 class BaseTrainer :
-    def __init__( self, model, trainset, tag='', rank=0, world_size=1, log_print_iter=1000, log_save_iter=50, testset=None, optimizer=None, scheduler=None, clip_gradient=None, evaluator=None, accumulation_step=1, path_config=None, log_with_tensorboard=False, log_api_token=None, empty_cache_iter=None, log_memory=False, use_amp=False ):
+    def __init__( self, model, trainset, tag='', rank=0, world_size=1, log_print_iter=1000, log_save_iter=50, testset=None, optimizer=None, scheduler=None, clip_gradient=None, evaluator=None, accumulation_step=1, path_config=None, log_with_tensorboard=False, log_api_token=None, empty_cache_iter=None, log_memory=False, use_amp=False, ema_cfg=None ):
         device = torch.device( rank )
         self._device = device
         self._model=model
@@ -46,6 +48,9 @@ class BaseTrainer :
         self._empty_cache_iter= empty_cache_iter
         self._log_memory=log_memory
         self.use_amp = use_amp
+        self.use_ema = ema_cfg is not None
+        if self.use_ema:
+            self.ema = ModelEMA(model, **ema_cfg)
 
         if isinstance(self._model, DDP):
             self.distributed = True
@@ -157,10 +162,14 @@ class BaseTrainer :
         self._validate()
 
     def _validate( self ):
-        if isinstance(self._model, DDP):
-            test_model = self._model.module
+        if self.use_ema:
+            print('Use ema model to test!')
+            test_model = self.ema.ema
         else:
-            test_model = self._model
+            if isinstance(self._model, DDP):
+                test_model = self._model.module
+            else:
+                test_model = self._model
         print('start to validate')
         self._model.eval()
 
@@ -199,6 +208,32 @@ class BaseTrainer :
     def load_trained_model(self, model_path):
         state_dict = torch.load(model_path)['state_dict']
         self._model.load_state_dict(state_dict)
+
+    def save_last_training(self, path, to_print=True):
+        if isinstance(self._model, DDP):
+            if self.is_main_process():
+                state_dict = self._model.state_dict()
+            else:
+                return
+        elif isinstance(self._model, torch.nn.DataParallel):
+            state_dict = self._model.module.state_dict()
+        else:
+            state_dict =self._model.state_dict()
+        folder = os.path.dirname(path)
+        if self._path_config is not None:
+            last_path = self._path_config.checkpoint_path_tmp.format('last')
+        else:
+            last_path = os.path.join(folder,'{}_last.pth'.format(self._tag))
+        torch.save({
+            'epoch': self._epoch,
+            'step': self._step,
+            'model_state_dict': state_dict,
+            'optimizer_state_dict': self._optimizer.state_dict(),
+            'scheduler':self._scheduler.state_dict(),
+        }, last_path)
+
+        if to_print:
+            print('The checkpoint has been saved to {}'.format(path))
 
     def save_training(self, path, to_print=True):
         if isinstance(self._model, DDP):
@@ -281,13 +316,19 @@ class BaseTrainer :
             print('Loss log path is: {}'.format(train_path))
         
     def print_log(self, log_dict):
-            log_str = 'iter: {}, epoch: {}, lr: {},'.format(self._step, self._epoch, self._scheduler.get_last_lr()[0])
-            #average_losses = self.loss_logger.get_last_average()
+            log_str = []
+            log_str.append('iter: {}'.format(self._step))
+            log_str.append('epoch: {}'.format(self._epoch))
+            log_str.append('lr: {}'.format(self._scheduler.get_last_lr()[0]))
+            if hasattr(self, 'data_time'):
+                log_str.append('data_time: {}'.format(self.data_time))
+            if hasattr(self, 'iter_time'):
+                log_str.append('iter_time: {}'.format(self.iter_time))
             for k,v in log_dict.items():
-                log_str += (' {}: {}, '.format(k, v))
+                log_str.append('{}: {}'.format(k, v))
             log_str = self.log_memory(log_str)
             if self.is_main_process():
-                print(log_str[:-2])
+                print(', '.join(log_str))
                 #print(torch.cuda.memory_stats(self._device))
                 #print(torch.cuda.memory_summary(self._device))
                 #print('max:',torch.cuda.max_memory_allocated(self._device))
@@ -296,7 +337,7 @@ class BaseTrainer :
     def log_memory(self, log_str ):
         if self._log_memory:
             mem_mb=self.get_max_mem()
-            log_str = log_str + 'memory:{}MB, '.format(mem_mb)
+            log_str.append('memory:{}MB'.format(mem_mb))
         return log_str
 
     def get_max_mem(self):
@@ -307,6 +348,14 @@ class BaseTrainer :
         #if self._world_size > 1:
         #    dist.reduce(mem_mb, 0, op=dist.ReduceOp.MAX)
         return mem_mb.item()
+
+    def update_log(self, scalar_name, scalar):
+        if self.is_main_process():
+            if not self._log_with_tensorboard:
+                self._logger.info('step:{}, {}: {}'.format(self._step, scalar_name,scalar))
+                self._logger.info('\n')
+            else:
+                self._writer.add_scalar(scalar_name, scalar, global_step=self._step)
 
     def save_log(self, average_losses):
         #average_losses = self.loss_logger.get_last_average()

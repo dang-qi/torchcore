@@ -1,4 +1,3 @@
-
 import torch
 import numpy as np
 import os
@@ -6,6 +5,8 @@ import datetime
 import copy
 import json
 import tqdm
+
+from datetime import datetime
 
 from collections import OrderedDict
 import torch.distributed as dist
@@ -321,7 +322,7 @@ class BaseTrainer :
                 log_str.append('{}: {}'.format(k, v))
             log_str = self.log_memory(log_str)
             if self.is_main_process():
-                print(', '.join(log_str))
+                print(datetime.now(),'   ',', '.join(log_str))
                 #print(torch.cuda.memory_stats(self._device))
                 #print(torch.cuda.memory_summary(self._device))
                 #print('max:',torch.cuda.max_memory_allocated(self._device))

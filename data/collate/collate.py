@@ -193,6 +193,7 @@ class CollateFnRCNN(object):
             inputs['ori_image'] = ori_image
         return inputs, targets
 
+@COLLATE_REG.register()
 class CollateFnPadding(object):
     '''apply general rcnn transform to batchs'''
     def __init__(self, image_mean=None, image_std=None):

@@ -842,7 +842,7 @@ class GroupPaddingWithBBox(object):
         images = []
         image_path = []
         dataset_label = []
-        scales = np.zeros(len(inputs))
+        scales = np.ones(len(inputs))
         if targets is None:
             targets=[None]*len(inputs)
 
@@ -851,7 +851,8 @@ class GroupPaddingWithBBox(object):
             ainput, target = self.to_tensor(ainput, target)
             # set the tensor to device before normalize
             #ainput['data'].to(self.device)
-            scales[i] = ainput['scale']
+            if 'scale' in ainput:
+                scales[i] = ainput['scale']
             ainput, target = self.normalize(ainput, target)
             images.append(ainput['data'])
 

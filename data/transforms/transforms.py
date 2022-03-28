@@ -15,7 +15,7 @@ Sequence = collections.abc.Sequence
 
 __all__ = ['Compose', 'Resize','ResizeAndPadding', 'ResizeMinMax',
             'ResizeMinMaxTV', 'ToTensor', 'Normalize', 'GroupPadding',
-            'GeneralRCNNTransform', 'GeneralRCNNTransformTV', 'RandomMirror', 'RandomCrop', 'RandomScale', 'RandomAbsoluteScale', 'PadNumpyArray', 'AddSurrandingBox','AddPersonBox', 'GroupPaddingWithBBox', 'HSVColorJittering','Mosaic','RandomAffine']
+            'GeneralRCNNTransform', 'GeneralRCNNTransformTV', 'RandomMirror', 'RandomCrop', 'RandomScale', 'RandomAbsoluteScale', 'PadNumpyArray', 'AddSurrandingBox','AddPersonBox', 'GroupPaddingWithBBox', 'HSVColorJittering','Mosaic','RandomAffine','MixUp']
 
 #def find_inside_bboxes(boxes, h, w):
 #        return (boxes[:,0]<w) & (boxes[:,2]>0) &\
@@ -243,18 +243,28 @@ class BatchStack(object):
         '''here inputs is a list of inputs and targets are lists of targets'''
         pass
 
-#class Padding(object):
-#    ''' Pad the image to the given size,
-#        The width and height of the original image shouldn't
-#        be larger than the width and height
-#    '''
-#    def __init__(self, width, height, mode='right_down'):
-#        self.width = width
-#        self.height = height
-#        self.mode = mode
-#
-#    def __call__(inputs, targets=None):
-#        inputs, padding = F.pad
+@TRANSFORM_REG.register()
+class Padding(object):
+    ''' Pad the image to the given size,
+        The width and height of the original image shouldn't
+        be larger than the width and height
+        mode: ['constant', 'edge', 'reflect', 'symmetric']
+    '''
+    def __init__(self, size=None, padding=None, pad_value=0, mode='constant', use_pillow_img=True):
+        self.size = size  # (h, w)
+        self.padding = padding
+        self.pad_value=pad_value
+        self.mode = mode
+        self.use_pillow_img=use_pillow_img
+
+    def __call__(self, inputs, targets=None):
+        inputs['data']= F.pad(inputs['data'],
+                              shape=self.size,
+                              padding=self.padding,
+                              pad_val=self.pad_value,
+                              padding_mode='constant',
+                              use_pillow_img=self.use_pillow_img)
+        return inputs, targets
 
 @TRANSFORM_REG.register()
 class GroupPadding(object):
@@ -1036,6 +1046,95 @@ class Mosaic():
 
     def get_index(self,dataset):
         return np.random.randint(0, len(dataset), 3)
+
+@TRANSFORM_REG.register()
+class MixUp:
+    '''default transforms should be:
+        mix_up_transforms = [dict(type='ResizeMax',
+                          max_size=(min_size,min_size), #(h,w)
+                          ),
+                    dict(type='RandomMirror',
+                        probability=0.5, 
+                        targets_box_keys=['boxes'], 
+                        mask_key=None),
+                    dict(type='RandomAbsoluteScale',
+                        low=max_size/2,
+                        high=max_size*2,
+                        targets_box_keys=['boxes'], 
+                        mask_key=None),
+                    dict(type='RandomCrop',
+                        size=max_size,
+                        box_inside=True, 
+                        mask_key=None)
+                    ]
+    '''
+    def __init__(self, 
+                 transforms=None,
+                 min_bbox_size=5,
+                 min_area_ratio=0.2,
+                 max_aspect_ratio=20, 
+                 backend='pillow'):
+        if transforms is None:
+            self._transforms= []
+        else:
+            self._transforms = [build_transform(t) for t in transforms]
+
+        self.min_bbox_size = min_bbox_size
+        self.min_area_ratio = min_area_ratio
+        self.max_aspect_ratio = max_aspect_ratio
+        self.backend = backend
+
+    def __call__(self, inputs, targets):
+        assert 'extra_images' in inputs
+        assert len(inputs['extra_images']) == 1 
+        if isinstance(inputs['data'], Image.Image):
+            im = np.array(inputs['data'])
+        else:
+            im = inputs['data']
+        inputs_temp, targets_temp = inputs['extra_images'][0]
+        for t in self._transforms:
+            inputs_temp, targets_temp = t(inputs_temp, targets_temp)
+        assert inputs['data'].size == inputs_temp['data'].size, \
+        "the correct transform should be selected to make the output size same with original image" 
+
+        # mix up
+        if self.backend == 'opencv':
+            im = inputs['data']*0.5 + inputs_temp['data']*0.5
+        else:
+            im = Image.blend(inputs['data'], inputs_temp['data'], alpha=0.5)
+
+        mix_up_boxes = np.concatenate((targets['boxes'], targets_temp['boxes']), axis=0)
+        mix_up_labels = np.concatenate((targets['labels'], targets_temp['labels']), axis=0)
+
+        #TODO remove outside boxes, not sure if it is necessary
+
+        #TODO The difference without padding is that the defualt value is 0 instead of 114
+
+        inputs['data'] = im
+        targets['boxes'] = mix_up_boxes
+        targets['labels'] = mix_up_labels
+        return inputs, targets
+        
+
+
+
+    def _filter_box_candidates(self, bbox1, bbox2):
+        """Compute candidate boxes which include following 5 things:
+
+        bbox1 before augment, bbox2 after augment, min_bbox_size (pixels),
+        min_area_ratio, max_aspect_ratio.
+        """
+
+        w1, h1 = bbox1[2] - bbox1[0], bbox1[3] - bbox1[1]
+        w2, h2 = bbox2[2] - bbox2[0], bbox2[3] - bbox2[1]
+        ar = np.maximum(w2 / (h2 + 1e-16), h2 / (w2 + 1e-16))
+        return ((w2 > self.min_bbox_size)
+                & (h2 > self.min_bbox_size)
+                & (w2 * h2 / (w1 * h1 + 1e-16) > self.min_area_ratio)
+                & (ar < self.max_aspect_ratio))
+
+    def get_index(self,dataset):
+        return np.random.randint(0, len(dataset), 1)
 
 #copy and revise from mmdetection
 @TRANSFORM_REG.register()

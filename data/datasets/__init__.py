@@ -33,6 +33,7 @@ from .coco_torchvision import COCOTorchVisionDataset
 from .deepfashion2 import DeepFashion2Dataset
 from .multi_mix_dataset import MultiMixDataset
 from .toy_dataset import ToyDataset
+from .multi_image_dataset import MultiImageDataset
 from .build import build_dataloader, build_dataset
 
 selector = {}

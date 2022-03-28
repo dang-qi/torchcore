@@ -87,6 +87,25 @@ def resize(img, size, interpolation=Image.BILINEAR, smaller_edge=None):
         scale_h = size[0] / h
         return img.resize(size[::-1], interpolation), (scale_w, scale_h)
 
+def resize_max(img, max_size, interpolation=Image.BILINEAR):
+    '''Resize the image to the longest side reaching max_size while keep the aspect ratio. 
+    max_size: int or (h,w)
+    '''
+    if not _is_pil_image(img):
+        raise TypeError('img should be PIL Image. Got {}'.format(type(img)))
+
+    if isinstance(max_size, int):
+        max_size = (max_size, max_size)
+
+    w, h = img.size
+    if max(w,h) == max_size:
+        return img, (1.0, 1.0)
+    scale = min(max_size[1]/w, max_size[0]/h)
+    ow = max(1, int(w * scale))
+    oh = max(1, int(h * scale))
+    scale = (ow/w, oh/h)
+    return img.resize((ow, oh), interpolation), scale
+
 def resize_tensor_min_max(image, min_size, max_size):
     h, w = image.shape[-2:]
     min_side=float(min(w,h))

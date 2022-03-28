@@ -5,6 +5,7 @@ import math
 import random
 import numpy as np
 import pickle
+import cv2
 from . import transform_func as F
 
 from .build import TRANSFORM_REG, build_transform
@@ -14,9 +15,27 @@ Sequence = collections.abc.Sequence
 
 __all__ = ['Compose', 'Resize','ResizeAndPadding', 'ResizeMinMax',
             'ResizeMinMaxTV', 'ToTensor', 'Normalize', 'GroupPadding',
-            'GeneralRCNNTransform', 'GeneralRCNNTransformTV', 'RandomMirror', 'RandomCrop', 'RandomScale', 'RandomAbsoluteScale', 'PadNumpyArray', 'AddSurrandingBox','AddPersonBox', 'GroupPaddingWithBBox', 'HSVColorJittering']
+            'GeneralRCNNTransform', 'GeneralRCNNTransformTV', 'RandomMirror', 'RandomCrop', 'RandomScale', 'RandomAbsoluteScale', 'PadNumpyArray', 'AddSurrandingBox','AddPersonBox', 'GroupPaddingWithBBox', 'HSVColorJittering','Mosaic','RandomAffine']
 
-@TRANSFORM_REG.register()
+#def find_inside_bboxes(boxes, h, w):
+#        return (boxes[:,0]<w) & (boxes[:,2]>0) &\
+#            (boxes[:,1]<h) & (boxes[:,3]>0)
+def find_inside_bboxes(bboxes, img_h, img_w):
+    """Find bboxes as long as a part of bboxes is inside the image.
+
+    Args:
+        bboxes (Tensor): Shape (N, 4).
+        img_h (int): Image height.
+        img_w (int): Image width.
+
+    Returns:
+        Tensor: Index of the remaining bboxes.
+    """
+    inside_inds = (bboxes[:, 0] < img_w) & (bboxes[:, 2] > 0) \
+        & (bboxes[:, 1] < img_h) & (bboxes[:, 3] > 0)
+    return inside_inds
+
+@TRANSFORM_REG.register(force=True)
 class Compose(object):
     def __init__(self, transforms):
         assert isinstance(transforms, collections.abc.Sequence)
@@ -65,6 +84,29 @@ class Resize(object):
     def __call__(self, inputs, targets=None):
         #if 'data' in inputs:
         inputs['data'], self.scale = F.resize(inputs['data'], self.size, self.interplotation, smaller_edge=self.smaller_edge)
+
+        if targets is None:
+            return inputs, targets
+
+        if 'boxes' in targets:
+            targets['boxes'] = F.resize_boxes(targets['boxes'], self.scale)
+
+        return inputs, targets
+        # TODO add mask, keypoints and other things
+
+@TRANSFORM_REG.register()
+class ResizeMax(object):
+    '''Resize the image to fit into max_size,
+       max_size can be int or (h, w)
+    '''
+    def __init__(self, max_size, interplotation=Image.BILINEAR):
+        assert isinstance(max_size, int) or (isinstance(max_size, Iterable) and len(max_size)==2)
+        self.max_size = max_size
+        self.interplotation = interplotation
+
+    def __call__(self, inputs, targets=None):
+        #if 'data' in inputs:
+        inputs['data'], self.scale = F.resize_max(inputs['data'], self.max_size, self.interplotation)
 
         if targets is None:
             return inputs, targets
@@ -824,3 +866,397 @@ class GroupPaddingWithBBox(object):
         if len(dataset_label) > 0:
             inputs['dataset_label'] = torch.tensor(dataset_label)
         return inputs, targets
+
+@TRANSFORM_REG.register(force=True)
+class Mosaic():
+    '''This class apply Mosaic transfrom on images
+        First, select one image as the top-left image,
+        Second, random select there other images from the dataset 
+        Third, resize each image to the img_size and add it to mosaic_image
+    '''
+    def __init__(self,
+                 img_size=(640, 640), # (h,w)
+                 center_ratio_range=(0.5, 1.5),
+                 min_bbox_size=0,
+                 bbox_clip_border=True,
+                 skip_filter=True,
+                 pad_val=114,
+                 prob=1.0,
+                 return_pillow_img=True,
+                 ):
+        self.img_size = img_size
+        self.out_img_size = tuple(int(s*2) for s in img_size)
+        self.center_ratio_range = center_ratio_range
+        self.resize_max = ResizeMax(img_size,)
+
+        #(h_low, w_low, h_high, w_high)
+        self.y_low = int(center_ratio_range[0]*img_size[0]),
+        self.x_low = int(center_ratio_range[0]*img_size[1]),
+        self.y_high = int(center_ratio_range[1]*img_size[0]),
+        self.x_high = int(center_ratio_range[1]*img_size[1])
+
+        self.min_bbox_size = min_bbox_size
+        self.bbox_clip_border = bbox_clip_border
+        self.skip_filter=skip_filter
+        self.pad_val = pad_val
+        self.prob = prob
+        self.locs = ['top_left','top_right','bottom_left','bottom_right']
+        self.return_pillow_img = return_pillow_img
+
+    def __call__(self, inputs, targets=None):
+        assert 'extra_images' in inputs
+        if isinstance(inputs['data'], Image.Image):
+            im = np.array(inputs['data'])
+        else:
+            im = inputs['data']
+
+        mosaic_im = np.full((*self.out_img_size, 3), self.pad_val, dtype=im.dtype)
+
+        # get the center point
+        c_y = np.random.randint(self.y_low, self.y_high)
+        c_x = np.random.randint(self.x_low, self.x_high)
+        
+        mosaic_boxes = []
+        mosaic_labels = []
+        for i, loc in enumerate(self.locs):
+            if loc == 'top_left':
+                inputs_temp, targets_temp = inputs, targets
+            else:
+                inputs_temp, targets_temp = inputs['extra_images'][i-1]
+            inputs_temp, targets_temp = self.resize_max(inputs_temp, targets_temp)
+            im = inputs_temp['data']
+            im_w,im_h = im.size
+            im_cord, crop_cord = self._cal_shift_and_crop((im_w,im_h), loc, c_x, c_y)
+            x1, y1, x2, y2 = im_cord
+            crop_x1, crop_y1, crop_x2, crop_y2 = crop_cord
+            #print('loc',loc)
+            #print('im shape',im_w, im_h)
+            #print('cx, cy', c_x, c_y)
+            #print('im cord:',im_cord)
+            #print('crop cord', crop_cord)
+
+            #print(im.size)
+            mosaic_im[y1:y2,x1:x2] = np.array(im)[crop_y1:crop_y2, crop_x1:crop_x2]
+
+            gt_boxes = targets_temp['boxes']
+            gt_labels = targets_temp['labels']
+
+            if gt_boxes.shape[0]>0:
+                pad_w = x1 - crop_x1
+                pad_h = y1 - crop_y1
+                gt_boxes[:, 0::2] += pad_w
+                gt_boxes[:, 1::2] += pad_h
+
+            mosaic_boxes.append(gt_boxes)
+            mosaic_labels.append(gt_labels)
+        
+        if len(mosaic_labels) >0:
+            mosaic_boxes = np.concatenate(mosaic_boxes, axis=0)
+            mosaic_labels = np.concatenate(mosaic_labels, axis=0)
+
+            if self.bbox_clip_border:
+                # clip the boxes and remove the boxes outside the image
+                mosaic_boxes[:,0::2] = np.clip(mosaic_boxes[:,0::2], 0, self.out_img_size[1])
+                mosaic_boxes[:,1::2] = np.clip(mosaic_boxes[:,1::2], 0, self.out_img_size[0])
+
+            if not self.skip_filter:
+                mosaic_boxes, mosaic_labels = self._get_valid_size_box(mosaic_boxes, mosaic_labels)
+
+            # if not clip box, the boxes in the boarder can be removed
+            keep = self.inside_boxes(mosaic_boxes)
+            mosaic_boxes = mosaic_boxes[keep]
+            mosaic_labels = mosaic_labels[keep]
+
+        if self.return_pillow_img:
+            mosaic_im = Image.fromarray(mosaic_im)
+        inputs['data'] = mosaic_im
+        targets['boxes'] = mosaic_boxes
+        targets['labels'] = mosaic_labels
+
+        return inputs, targets
+        
+
+    def inside_boxes(self, boxes):
+        return (boxes[:,0]<self.out_img_size[1]) & (boxes[:,2]>0) &\
+            (boxes[:,1]<self.out_img_size[0]) & (boxes[:,3]>0)
+
+    def _get_valid_size_box(self, boxes, labels):
+        w = boxes[:,2] - boxes[:,0]
+        h = boxes[:,3] - boxes[:,1]
+
+        valid = (w>self.min_bbox_size) & (h>self.min_bbox_size)
+        return boxes[valid], labels[valid]
+
+
+    def _cal_shift_and_crop(self, im_size_wh, loc, center_x, center_y):
+        '''im_size: (h, w)'''
+        if loc == 'top_left':
+            x1 = max(0, center_x - im_size_wh[0])
+            y1 = max(0, center_y - im_size_wh[1])
+            x2 = center_x
+            y2 = center_y
+
+            crop_x1 = im_size_wh[0]-(x2-x1)
+            crop_y1 = im_size_wh[1]-(y2-y1)
+            crop_x2 = im_size_wh[0]
+            crop_y2 = im_size_wh[1]
+        elif loc == 'top_right':
+            x1 = center_x
+            y1 = max(0, center_y - im_size_wh[1])
+            x2 = min(self.out_img_size[1], center_x + im_size_wh[0])
+            y2 = center_y
+
+            crop_x1 = 0
+            crop_y1 = im_size_wh[1]-(y2-y1)
+            crop_x2 = x2-x1
+            crop_y2 = im_size_wh[1]
+        elif loc == 'bottom_left':
+            x1 = max(0, center_x - im_size_wh[0])
+            y1 = center_y
+            x2 = center_x
+            y2 = min(self.out_img_size[0], center_y + im_size_wh[1])
+
+            crop_x1 = im_size_wh[0]-(x2-x1)
+            crop_y1 = 0
+            crop_x2 = im_size_wh[0]
+            crop_y2 = y2-y1
+        elif loc == 'bottom_right':
+            x1 = center_x
+            y1 = center_y
+            x2 = min(self.out_img_size[1], center_x + im_size_wh[0])
+            y2 = min(self.out_img_size[0], center_y + im_size_wh[1])
+
+            crop_x1 = 0
+            crop_y1 = 0
+            crop_x2 = x2-x1
+            crop_y2 = y2-y1
+
+        return (int(x1),int(y1),int(x2),int(y2)), (int(crop_x1), int(crop_y1), int(crop_x2), int(crop_y2))
+
+
+    def get_index(self,dataset):
+        return np.random.randint(0, len(dataset), 3)
+
+#copy and revise from mmdetection
+@TRANSFORM_REG.register()
+class RandomAffine:
+    """Random affine transform data augmentation.
+
+    This operation randomly generates affine transform matrix which including
+    rotation, translation, shear and scaling transforms.
+
+    Args:
+        max_rotate_degree (float): Maximum degrees of rotation transform.
+            Default: 10.
+        max_translate_ratio (float): Maximum ratio of translation.
+            Default: 0.1.
+        scaling_ratio_range (tuple[float]): Min and max ratio of
+            scaling transform. Default: (0.5, 1.5).
+        max_shear_degree (float): Maximum degrees of shear
+            transform. Default: 2.
+        border (tuple[int]): Distance from height and width sides of input
+            image to adjust output shape. Only used in mosaic dataset.
+            Default: (0, 0).
+        border_val (tuple[int]): Border padding values of 3 channels.
+            Default: (114, 114, 114).
+        min_bbox_size (float): Width and height threshold to filter bboxes.
+            If the height or width of a box is smaller than this value, it
+            will be removed. Default: 2.
+        min_area_ratio (float): Threshold of area ratio between
+            original bboxes and wrapped bboxes. If smaller than this value,
+            the box will be removed. Default: 0.2.
+        max_aspect_ratio (float): Aspect ratio of width and height
+            threshold to filter bboxes. If max(h/w, w/h) larger than this
+            value, the box will be removed.
+        bbox_clip_border (bool, optional): Whether to clip the objects outside
+            the border of the image. In some dataset like MOT17, the gt bboxes
+            are allowed to cross the border of images. Therefore, we don't
+            need to clip the gt bboxes in these cases. Defaults to True.
+        skip_filter (bool): Whether to skip filtering rules. If it
+            is True, the filter rule will not be applied, and the
+            `min_bbox_size` and `min_area_ratio` and `max_aspect_ratio`
+            is invalid. Default to True.
+    """
+
+    def __init__(self,
+                 max_rotate_degree=10.0,
+                 max_translate_ratio=0.1,
+                 scaling_ratio_range=(0.5, 1.5),
+                 max_shear_degree=2.0,
+                 border=(0, 0),
+                 border_val=(114, 114, 114),
+                 min_bbox_size=2,
+                 min_area_ratio=0.2,
+                 max_aspect_ratio=20,
+                 bbox_clip_border=True,
+                 skip_filter=True,
+                 return_pillow_image=True,
+                 bbox_keys=['boxes']):
+        assert 0 <= max_translate_ratio <= 1
+        assert scaling_ratio_range[0] <= scaling_ratio_range[1]
+        assert scaling_ratio_range[0] > 0
+        self.max_rotate_degree = max_rotate_degree
+        self.max_translate_ratio = max_translate_ratio
+        self.scaling_ratio_range = scaling_ratio_range
+        self.max_shear_degree = max_shear_degree
+        self.border = border
+        self.border_val = border_val
+        self.min_bbox_size = min_bbox_size
+        self.min_area_ratio = min_area_ratio
+        self.max_aspect_ratio = max_aspect_ratio
+        self.bbox_clip_border = bbox_clip_border
+        self.skip_filter = skip_filter
+        self.return_pillow_image=return_pillow_image
+        self.bbox_keys = bbox_keys
+
+    def __call__(self, inputs, targets):
+        img = np.array(inputs['data'])
+        height = img.shape[0] + self.border[0] * 2
+        width = img.shape[1] + self.border[1] * 2
+
+        # Rotation
+        rotation_degree = random.uniform(-self.max_rotate_degree,
+                                         self.max_rotate_degree)
+        rotation_matrix = self._get_rotation_matrix(rotation_degree)
+
+        # Scaling
+        scaling_ratio = random.uniform(self.scaling_ratio_range[0],
+                                       self.scaling_ratio_range[1])
+        scaling_matrix = self._get_scaling_matrix(scaling_ratio)
+
+        # Shear
+        x_degree = random.uniform(-self.max_shear_degree,
+                                  self.max_shear_degree)
+        y_degree = random.uniform(-self.max_shear_degree,
+                                  self.max_shear_degree)
+        shear_matrix = self._get_shear_matrix(x_degree, y_degree)
+
+        # Translation
+        trans_x = random.uniform(-self.max_translate_ratio,
+                                 self.max_translate_ratio) * width
+        trans_y = random.uniform(-self.max_translate_ratio,
+                                 self.max_translate_ratio) * height
+        translate_matrix = self._get_translation_matrix(trans_x, trans_y)
+
+        warp_matrix = (
+            translate_matrix @ shear_matrix @ rotation_matrix @ scaling_matrix)
+
+        img = cv2.warpPerspective(
+            img,
+            warp_matrix,
+            dsize=(width, height),
+            borderValue=self.border_val)
+        if self.return_pillow_image:
+            img = Image.fromarray(img)
+        inputs['data'] = img
+        #results['img_shape'] = img.shape
+
+        for key in self.bbox_keys:
+            bboxes = targets[key]
+            num_bboxes = len(bboxes)
+            if num_bboxes:
+                # homogeneous coordinates
+                xs = bboxes[:, [0, 0, 2, 2]].reshape(num_bboxes * 4)
+                ys = bboxes[:, [1, 3, 3, 1]].reshape(num_bboxes * 4)
+                ones = np.ones_like(xs)
+                points = np.vstack([xs, ys, ones])
+
+                warp_points = warp_matrix @ points
+                warp_points = warp_points[:2] / warp_points[2]
+                xs = warp_points[0].reshape(num_bboxes, 4)
+                ys = warp_points[1].reshape(num_bboxes, 4)
+
+                warp_bboxes = np.vstack(
+                    (xs.min(1), ys.min(1), xs.max(1), ys.max(1))).T
+
+                if self.bbox_clip_border:
+                    warp_bboxes[:, [0, 2]] = \
+                        warp_bboxes[:, [0, 2]].clip(0, width)
+                    warp_bboxes[:, [1, 3]] = \
+                        warp_bboxes[:, [1, 3]].clip(0, height)
+
+                # remove outside bbox
+                valid_index = find_inside_bboxes(warp_bboxes, height, width)
+                if not self.skip_filter:
+                    # filter bboxes
+                    filter_index = self.filter_gt_bboxes(
+                        bboxes * scaling_ratio, warp_bboxes)
+                    valid_index = valid_index & filter_index
+
+                targets[key] = warp_bboxes[valid_index]
+                if key in ['boxes']:
+                    if 'labels' in targets:
+                        targets['labels'] = targets['labels'][
+                            valid_index]
+
+                if 'masks' in targets:
+                    raise NotImplementedError(
+                        'RandomAffine only supports bbox.')
+        return inputs, targets
+
+    def filter_gt_bboxes(self, origin_bboxes, wrapped_bboxes):
+        origin_w = origin_bboxes[:, 2] - origin_bboxes[:, 0]
+        origin_h = origin_bboxes[:, 3] - origin_bboxes[:, 1]
+        wrapped_w = wrapped_bboxes[:, 2] - wrapped_bboxes[:, 0]
+        wrapped_h = wrapped_bboxes[:, 3] - wrapped_bboxes[:, 1]
+        aspect_ratio = np.maximum(wrapped_w / (wrapped_h + 1e-16),
+                                  wrapped_h / (wrapped_w + 1e-16))
+
+        wh_valid_idx = (wrapped_w > self.min_bbox_size) & \
+                       (wrapped_h > self.min_bbox_size)
+        area_valid_idx = wrapped_w * wrapped_h / (origin_w * origin_h +
+                                                  1e-16) > self.min_area_ratio
+        aspect_ratio_valid_idx = aspect_ratio < self.max_aspect_ratio
+        return wh_valid_idx & area_valid_idx & aspect_ratio_valid_idx
+
+    def __repr__(self):
+        repr_str = self.__class__.__name__
+        repr_str += f'(max_rotate_degree={self.max_rotate_degree}, '
+        repr_str += f'max_translate_ratio={self.max_translate_ratio}, '
+        repr_str += f'scaling_ratio={self.scaling_ratio_range}, '
+        repr_str += f'max_shear_degree={self.max_shear_degree}, '
+        repr_str += f'border={self.border}, '
+        repr_str += f'border_val={self.border_val}, '
+        repr_str += f'min_bbox_size={self.min_bbox_size}, '
+        repr_str += f'min_area_ratio={self.min_area_ratio}, '
+        repr_str += f'max_aspect_ratio={self.max_aspect_ratio}, '
+        repr_str += f'skip_filter={self.skip_filter})'
+        return repr_str
+
+    @staticmethod
+    def _get_rotation_matrix(rotate_degrees):
+        radian = math.radians(rotate_degrees)
+        rotation_matrix = np.array(
+            [[np.cos(radian), -np.sin(radian), 0.],
+             [np.sin(radian), np.cos(radian), 0.], [0., 0., 1.]],
+            dtype=np.float32)
+        return rotation_matrix
+
+    @staticmethod
+    def _get_scaling_matrix(scale_ratio):
+        scaling_matrix = np.array(
+            [[scale_ratio, 0., 0.], [0., scale_ratio, 0.], [0., 0., 1.]],
+            dtype=np.float32)
+        return scaling_matrix
+
+    @staticmethod
+    def _get_share_matrix(scale_ratio):
+        scaling_matrix = np.array(
+            [[scale_ratio, 0., 0.], [0., scale_ratio, 0.], [0., 0., 1.]],
+            dtype=np.float32)
+        return scaling_matrix
+
+    @staticmethod
+    def _get_shear_matrix(x_shear_degrees, y_shear_degrees):
+        x_radian = math.radians(x_shear_degrees)
+        y_radian = math.radians(y_shear_degrees)
+        shear_matrix = np.array([[1, np.tan(x_radian), 0.],
+                                 [np.tan(y_radian), 1, 0.], [0., 0., 1.]],
+                                dtype=np.float32)
+        return shear_matrix
+
+    @staticmethod
+    def _get_translation_matrix(x, y):
+        translation_matrix = np.array([[1, 0., x], [0., 1, y], [0., 0., 1.]],
+                                      dtype=np.float32)
+        return translation_matrix

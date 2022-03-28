@@ -217,7 +217,7 @@ class BaseTrainer :
         else:
             return self._model.state_dict()
 
-    def save_last_training(self, path, to_print=True):
+    def save_last_training(self, path):
         if not self.is_main_process():
             return
         state_dict = self.state_dict_for_save()
@@ -233,9 +233,6 @@ class BaseTrainer :
             'optimizer_state_dict': self._optimizer.state_dict(),
             'scheduler':self._scheduler.state_dict(),
         }, last_path)
-
-        if to_print:
-            print('The checkpoint has been saved to {}'.format(path))
 
     def save_training(self, path, to_print=True):
         if not self.is_main_process():

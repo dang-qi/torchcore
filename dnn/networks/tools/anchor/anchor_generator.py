@@ -32,10 +32,10 @@ class AnchorGenerator(TorchAnchorGenerator):
 
         self.sizes = sizes
         self.aspect_ratios = aspect_ratios
-        self.cell_anchors = None
-        self._cache = {}
-        self.strides = [(s,s) for s in strides]
         self.round_anchor = round_anchor
+        self.cell_anchors = [self.generate_anchors(size, aspect_ratio)
+                             for size, aspect_ratio in zip(sizes, aspect_ratios)]
+        self.strides = [(s,s) for s in strides]
 
     def forward(self, inputs, feature_maps, keep_multi_level=False):
         '''anchors:List(anchors_per_im:ANCHOR_NUMx4)'''
@@ -50,13 +50,13 @@ class AnchorGenerator(TorchAnchorGenerator):
             strides = tuple((input_size[0] // g[0], input_size[1] // g[1]) for g in grid_sizes)
         else:
             strides = self.strides
-        try:
-            # for earlier version torchvision
-            self.set_cell_anchors(feature_maps[0].device)
-        except TypeError:
-            self.set_cell_anchors(feature_maps[0].dtype,feature_maps[0].device)
+        #try:
+        #    # for earlier version torchvision
+        #    self.set_cell_anchors(feature_maps[0].device)
+        #except TypeError:
+        self.set_cell_anchors(feature_maps[0].dtype,feature_maps[0].device)
 
-        anchors_over_all_feature_maps = self.cached_grid_anchors(grid_sizes, strides)
+        anchors_over_all_feature_maps = self.grid_anchors(grid_sizes, strides)
         anchors = []
         for _ in range(batch_size):
             anchors_in_image = []

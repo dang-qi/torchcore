@@ -1,11 +1,9 @@
 import torch
 import numpy as np
 import os
-import datetime
 import copy
 import json
 import tqdm
-
 from datetime import datetime
 
 from collections import OrderedDict
@@ -305,7 +303,7 @@ class BaseTrainer :
             self._writer = SummaryWriter(log_dir=self._path_config.log_dir, comment=self._tag)
         else:
             train_path = self._path_config.log_path
-            console_formatter = '{} {{}}'.format(datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+            console_formatter = '{} {{}}'.format(datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
             self._logger = Logger(level='info', file=train_path, console=False, console_formatter=console_formatter)
             print('Loss log path is: {}'.format(train_path))
         

@@ -97,6 +97,32 @@ class WarmupLRScheduler(torch.optim.lr_scheduler._LRScheduler):
         if self.by_epoch:
             self.step(cur_iter=cur_iter, cur_epoch=cur_epoch)
 
+@SCHEDULER_REG.register()
+class MultiStepScheduler(WarmupLRScheduler):
+    def __init__(self, 
+                 optimizer,
+                 milestones, 
+                 gamma=0.1,
+                 update_method='epoch', 
+                 warmup=False, 
+                 warmup_iter=0, 
+                 warmup_factor=1 / 3, 
+                 warmup_method='linear', 
+                 warmup_by_epoch=False, 
+                 last_epoch=-1):
+        self.milestones=milestones
+        self.gamma = gamma
+        super().__init__(optimizer, update_method, warmup, warmup_iter, warmup_factor, warmup_method, warmup_by_epoch, last_epoch)
+
+    def get_regular_lr(self,):
+        if self.by_epoch:
+            i = self.cur_epoch
+        else:
+            i = self.by_iter
+
+        return [lr * self.gamma**bisect_right(self.milestones,i)
+                for lr in self.base_lrs]
+
 @SCHEDULER_REG.register(force=True)
 class CosineAnnealingScheduler(WarmupLRScheduler):
     def __init__(self, 

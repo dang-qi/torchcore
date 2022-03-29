@@ -14,11 +14,10 @@ from .build import TRAINER_REG
 from ...dist.all_reduce_norm import all_reduce_norm
 
 @TRAINER_REG.register()
-class EpochBasedTrainer(BaseTrainer):
-    def __init__(self, model, trainset, max_epoch, tag='', rank=0,world_size=1, log_print_iter=1000, log_save_iter=50, testset=None, optimizer=None, scheduler=None, clip_gradient=None, evaluator=None, accumulation_step=1, path_config=None, log_with_tensorboard=False, log_api_token=None, log_memory=True,use_amp=False, ema_cfg=None, eval_epoch_interval=1, save_epoch_interval=1 ):
+class YOLOXEpochBasedTrainer(BaseTrainer):
+    def __init__(self, model, trainset, max_epoch, tag='', rank=0,world_size=1, log_print_iter=1000, log_save_iter=50, testset=None, optimizer=None, scheduler=None, clip_gradient=None, evaluator=None, accumulation_step=1, path_config=None, log_with_tensorboard=False, log_api_token=None, log_memory=True,use_amp=False, ema_cfg=None, eval_epoch_interval=1, save_epoch_interval=1, num_last_epoch=15):
         super().__init__(model, trainset, tag=tag, rank=rank, world_size=world_size, log_print_iter=log_print_iter, log_save_iter=log_save_iter, testset=testset, optimizer=optimizer, scheduler=scheduler, clip_gradient=clip_gradient, evaluator=evaluator, accumulation_step=accumulation_step, path_config=path_config, log_with_tensorboard=log_with_tensorboard, log_api_token=log_api_token,
         log_memory=log_memory, use_amp=use_amp, ema_cfg=ema_cfg)
-
         self._max_epoch = max_epoch
         self._max_step = max_epoch*len(trainset)
         self._start_step=0
@@ -26,6 +25,7 @@ class EpochBasedTrainer(BaseTrainer):
         self._end_epoch = max_epoch
         self.eval_epoch_inteval = eval_epoch_interval
         self.save_epoch_interval = save_epoch_interval
+        self._num_last_epoch = num_last_epoch
     
         if log_api_token is not None:
             self.init_log_api()
@@ -51,6 +51,23 @@ class EpochBasedTrainer(BaseTrainer):
         if self.is_main_process():
             print("{} Epoch {}/{}".format(datetime.now(),self._epoch,self._max_epoch))
         # TODO fix it with nicer way
+        if self._epoch==self._max_epoch-self._num_last_epoch:
+            self._model.use_l1 = True
+            if hasattr(self._trainset.dataset,'update_ignore_transform_keys'):
+                self._trainset.dataset.update_ignore_transform_keys(['Mosaic', 'RandomAffine', 'MixUp'])
+                print('data aug is disabled')
+            if hasattr(self._trainset, 'persistent_workers'
+                       ) and self._trainset.persistent_workers is True:
+                self._trainset._DataLoader__initialized = False
+                self._trainset._iterator = None
+                self._restart_dataloader = True
+                print('stop resistent worker')
+            self.eval_epoch_inteval = 100
+        else:
+            if self._restart_dataloader:
+                self._trainset._DataLoader__initialized = True
+                self._restart_dataloader = False
+                print('resume resistent worker')
 
     def after_train_epoch(self):
         if hasattr(self, '_scheduler'):

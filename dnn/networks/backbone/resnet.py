@@ -3,7 +3,8 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 from collections import OrderedDict
-from torchvision.models.utils import load_state_dict_from_url
+#from torchvision.models.utils import load_state_dict_from_url
+from torch.utils.model_zoo import load_url as load_state_dict_from_url
 from torchvision.models import ResNet as TorchResNet
 from torchvision.ops import RoIAlign
 from typing import Type, Any, Callable, Union, List, Optional

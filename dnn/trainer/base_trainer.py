@@ -47,6 +47,7 @@ class BaseTrainer :
         self._empty_cache_iter= empty_cache_iter
         self._log_memory=log_memory
         self.use_amp = use_amp
+        self._scaler = torch.cuda.amp.GradScaler(enabled=self.use_amp)
         self.use_ema = ema_cfg is not None
         if self.use_ema:
             self.ema = ModelEMA(model, **ema_cfg)
@@ -124,7 +125,7 @@ class BaseTrainer :
     def _set_optimizer( self ):
         if isinstance(self._optimizer, dict):
             optimizer_cfg = self._optimizer.copy()
-            self._optimizer = build_optimizer(optimizer_cfg)
+            self._optimizer = build_optimizer(self._model,optimizer_cfg,)
         elif not isinstance(self._optimizer, Optimizer):
             raise ValueError('optimizer must be dict or torch.optim.Optimizer')
 
@@ -231,6 +232,7 @@ class BaseTrainer :
             'model_state_dict': state_dict,
             'optimizer_state_dict': self._optimizer.state_dict(),
             'scheduler':self._scheduler.state_dict(),
+            'scaler':self._scaler.state_dict(),
         }, last_path)
 
     def save_training(self, path, to_print=True):
@@ -244,6 +246,7 @@ class BaseTrainer :
             'model_state_dict': state_dict,
             'optimizer_state_dict': self._optimizer.state_dict(),
             'scheduler':self._scheduler.state_dict(),
+            'scaler':self._scaler.state_dict(),
         }, path)
 
         folder = os.path.dirname(path)
@@ -257,6 +260,7 @@ class BaseTrainer :
             'model_state_dict': state_dict,
             'optimizer_state_dict': self._optimizer.state_dict(),
             'scheduler':self._scheduler.state_dict(),
+            'scaler':self._scaler.state_dict(),
         }, last_path)
 
         if to_print:

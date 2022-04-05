@@ -51,5 +51,5 @@ def build_optimizer(model, cfg ):
 
 def build_lr_scheduler(optimizer, cfg):
     cfg.optimizer=optimizer
-    scheduler = build_with_config(cfg, SCHEDULER_REG)
+    scheduler = build_with_config(cfg, SCHEDULER_REG, non_copy_key=['optimizer'])
     return scheduler

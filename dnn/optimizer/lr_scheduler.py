@@ -187,6 +187,7 @@ class YOLOXScheduler(WarmupLRScheduler):
             warmup_epoch=5,
             last_epoch=-1):
         '''set up iter_per_epoch to None and update in trainer'''
+        self.optimizer = optimizer
         if iter_per_epoch is None:
             # we need to update the iter per epoch in trainer
             self.saved_vars = locals()
@@ -231,7 +232,7 @@ class YOLOXScheduler(WarmupLRScheduler):
         self.min_lr_ratio = self.saved_vars.get('min_lr_ratio')
         self.cos_total_iter = (self.max_epoch-self.num_last_epochs-self.warmup_epoch)*iter_per_epoch
         
-        super().__init__(self.saved_vars.get('optimizer'), self.saved_vars.get('update_method'), self.saved_vars.get('warmup'), warmup_iter, self.saved_vars.get('warmup_factor'), self.saved_vars.get('warmup_method'), self.saved_vars.get('warmup_by_epoch'), self.saved_vars.get('last_epoch'))
+        super().__init__(self.optimizer, self.saved_vars.get('update_method'), self.saved_vars.get('warmup'), warmup_iter, self.saved_vars.get('warmup_factor'), self.saved_vars.get('warmup_method'), self.saved_vars.get('warmup_by_epoch'), self.saved_vars.get('last_epoch'))
         self.has_update_iter_per_epoch = True
         
 

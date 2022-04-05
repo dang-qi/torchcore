@@ -35,7 +35,6 @@ class EpochBasedTrainer(BaseTrainer):
 
     def before_train(self):
         self._model.train()
-        self.scaler = torch.cuda.amp.GradScaler(enabled=self.use_amp)
         if hasattr(self, '_scheduler'): 
             if hasattr(self._scheduler, 'update_milestone_from_epoch_to_iter'):
                 dataset_len = len(self._trainset)
@@ -50,7 +49,6 @@ class EpochBasedTrainer(BaseTrainer):
         self.reset_trainset() # self._epoch += 1
         if self.is_main_process():
             print("{} Epoch {}/{}".format(datetime.now(),self._epoch,self._max_epoch))
-        # TODO fix it with nicer way
 
     def after_train_epoch(self):
         if hasattr(self, '_scheduler'):
@@ -116,7 +114,7 @@ class EpochBasedTrainer(BaseTrainer):
             # Computing gradient and do SGD step
             # Scales the loss, and calls backward()
             # to create scaled gradients
-            self.scaler.scale(loss_sum).backward()
+            self._scaler.scale(loss_sum).backward()
 
             if self._clip_gradient is not None:
                 self.clip_gradient()
@@ -125,9 +123,10 @@ class EpochBasedTrainer(BaseTrainer):
             if idx % self._accumulation_step == 0:
                 # Unscales gradients and calls
                 # or skips optimizer.step()
-                self.scaler.step(self._optimizer)
+                #print('step: {}, epoch: {}, lr: {}'.format(self._step, self._epoch, self._scheduler.get_last_lr()))
+                self._scaler.step(self._optimizer)
                 # Updates the scale for next iteration
-                self.scaler.update()
+                self._scaler.update()
                 self._optimizer.zero_grad()
             #loss_values.append( loss_sum.cpu().detach().numpy() )
             iter_end_time = time.time()
@@ -150,23 +149,52 @@ class EpochBasedTrainer(BaseTrainer):
 
 
             if hasattr(self, '_scheduler'):
-                #print('step: {}, epoch: {}'.format(self._step, self._epoch))
                 self._scheduler.step_iter(cur_iter=self._step, cur_epoch=self._epoch)
             #if idx > 20:
             #    break
             
 
 
-    def resume_training(self, path, device, to_print=True):
+    def resume_training(self, path=None, new_lr=None, to_print=True):
+        if path is None:
+            path = self._path_config.checkpoint_path_tmp.format('last')
+        device = self._device
         if isinstance(self._model, DDP):
             dist.barrier()
         checkpoint = torch.load(path, map_location=device)
         self._epoch = checkpoint['epoch']
         self._step = checkpoint['step']
-        self._model.load_state_dict(checkpoint['model_state_dict'])
+        if isinstance(self._model, DDP):
+            self._model.module.load_state_dict(checkpoint['model_state_dict'])
+        else:
+            self._model.load_state_dict(checkpoint['model_state_dict'])
+        # use new_lr to update schduler state dict in case the linear lr is adapted
+        if new_lr is not None:
+            self.update_optimizer_base_lr_dict(checkpoint['optimizer_state_dict'], new_lr)
         self._optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         self.move_optimizer_to_device(self._optimizer, device)
+        #if new_lr is not None:
+        #    self.update_scheduler_base_lr_dict(checkpoint['scheduler'], new_lr)
+        #    #print('The base_lrs of scheduler is updated as {}'.format(checkpoint['scheduler']['base_lrs']))
         if 'scheduler' in checkpoint:
             self._scheduler.load_state_dict(checkpoint['scheduler'])
+            #print('new lr is {}'.format(self._scheduler.base_lrs))
+
+        if 'scaler' in checkpoint:
+            self._scaler.load_state_dict(checkpoint['scaler'])
         if to_print:
             print('Chekpoint has been loaded from {}'.format(path))
+
+    def update_optimizer_base_lr_dict(self, optimizer_state_dict, new_lr):
+        for g in optimizer_state_dict['param_groups']:
+            g['initial_lr'] = new_lr
+
+    def update_scheduler_base_lr_dict(self, state_dict, new_lr):
+        assert 'base_lrs' in state_dict
+        if isinstance(new_lr, float):
+            new_lr = [new_lr for _ in state_dict['base_lrs']]
+        #state_dict['base_lrs'] = new_lr
+        for g, lr in zip(state_dict['saved_vars']['optimizer'].param_groups,new_lr):
+            assert 'initial_lr' in g
+            g['initial_lr'] = lr
+        state_dict['saved_vars']['last_epoch'] = state_dict['last_epoch']

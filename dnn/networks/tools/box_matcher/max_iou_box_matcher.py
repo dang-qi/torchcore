@@ -6,10 +6,11 @@ from .build import BOX_MATCHER_REG
 
 @BOX_MATCHER_REG.register(force=True)
 class MaxIoUBoxMatcher():
-    def __init__(self, high_thresh:float, low_thresh:float, allow_low_quality_match=True, assign_all_gt_max=True, keep_max_iou_in_low_quality=True) -> None:
+    def __init__(self, high_thresh:float, low_thresh:float, min_gt_ious=0, allow_low_quality_match=True, assign_all_gt_max=True, keep_max_iou_in_low_quality=True) -> None:
         '''assign_all_gt_max: only works when allow_low_quality_match. If there are more than one anchor box is assigned to max value, should we assign all the matching to gt box or just match one to the gt box'''
         self.high_thresh = high_thresh
         self.low_thresh = low_thresh
+        self.min_gt_ious = min_gt_ious
         self.allow_low_quality_match = allow_low_quality_match
         self.assign_all_gt_max = assign_all_gt_max
         self.keep_max_iou_in_low_quality = keep_max_iou_in_low_quality
@@ -62,7 +63,7 @@ class MaxIoUBoxMatcher():
             # when there is two gt boxes A,B has IoU with Anchor box C 0.8 and 0.9 respectively. A want to get assigned during this low quality match, detectron still assign C to B, which has bigger IoU, while mmdetection assign C to A. It has no significant impact according to https://github.com/facebookresearch/detectron2/blob/7cad0a7d95cc8b0c7974cc19e50bded742183555/detectron2/modeling/matcher.py#L124
             # TODO: what happens when two gt box have max iou with the same anchor box? In mmdetection it is assigned to the gt box with larger index. In current implementation, it is kinda random 
             if self.assign_all_gt_max:
-                inds_anchor, ind_box = torch.where(iou_mat==max_val.expand_as(iou_mat))
+                inds_anchor, ind_box = torch.where((iou_mat==max_val.expand_as(iou_mat)) & (max_val.expand_as(iou_mat)>=self.min_gt_ious))
                 if self.keep_max_iou_in_low_quality:
                     match_box_ind[inds_anchor] = max_box_ind[inds_anchor] # torchvision/detectron implementation
                 else:

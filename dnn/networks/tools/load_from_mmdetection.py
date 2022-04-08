@@ -157,3 +157,64 @@ def load_mm_general_model(model, mm_config, checkpoint_file, return_mm_model=Fal
         return mm_model
     else:
         del mm_model
+
+def load_mm_frcnn(model, mm_config, checkpoint_file, return_mm_model=False):
+    if checkpoint_file is None:
+        mmcfg = Config.fromfile(mm_config)
+        mm_model = build_detector(
+                mmcfg.model,
+                train_cfg=mmcfg.get('train_cfg'),
+                test_cfg=mmcfg.get('test_cfg'))
+        mm_model.init_weights()
+    else:
+        mm_model = init_detector(mm_config, checkpoint_file, device=next(model.parameters()).device)
+    with torch.no_grad():
+        for (n,p),(mn,mp) in zip(model.backbone.named_parameters(),mm_model.backbone.named_parameters()):
+            p.copy_(mp)
+            if p.shape !=mp.shape:
+                print(n, mn)
+        for (n,p),(mn,mp) in zip(model.neck.named_parameters(),mm_model.neck.named_parameters()):
+            if p.shape != mp.shape:
+                print(n, mn)
+            p.copy_(mp)
+            if p.shape !=mp.shape:
+                print(n, mn)
+        for (n,p),(mn,mp) in zip(model.rpn.head.named_parameters(),mm_model.rpn_head.named_parameters()):
+            if p.shape != mp.shape:
+                print(n, mn)
+            p.copy_(mp)
+            if p.shape !=mp.shape:
+                print(n, mn)
+        for (n,p),(mn,mp) in zip(model.roi_head.faster_rcnn_head.named_parameters(),mm_model.roi_head.bbox_head.named_parameters()):
+            if p.shape != mp.shape:
+                print(n, mn, 'are not load correctly!!')
+                continue
+            p.copy_(mp)
+            if p.shape !=mp.shape:
+                print(n, mn)
+        for (n,p),(mn,mp) in zip(model.backbone.named_buffers(),mm_model.backbone.named_buffers()):
+            p.copy_(mp)
+            if p.shape !=mp.shape:
+                print(n, mn)
+        for (n,p),(mn,mp) in zip(model.neck.named_buffers(),mm_model.neck.named_buffers()):
+            if p.shape != mp.shape:
+                print(n, mn)
+            p.copy_(mp)
+            if p.shape !=mp.shape:
+                print(n, mn)
+        for (n,p),(mn,mp) in zip(model.rpn.head.named_buffers(),mm_model.rpn_head.named_buffers()):
+            if p.shape != mp.shape:
+                print(n, mn)
+            p.copy_(mp)
+            if p.shape !=mp.shape:
+                print(n, mn)
+        for (n,p),(mn,mp) in zip(model.roi_head.faster_rcnn_head.named_buffers(),mm_model.roi_head.bbox_head.named_buffers()):
+            if p.shape != mp.shape:
+                print(n, mn)
+            p.copy_(mp)
+            if p.shape !=mp.shape:
+                print(n, mn)
+    if return_mm_model:
+        return mm_model
+    else:
+        del mm_model

@@ -1,3 +1,4 @@
+import torch
 class MatchResult():
     NEGATIVE_MATCH = -1
     IGNORE_MATCH = -2
@@ -12,3 +13,9 @@ class MatchResult():
         self.matched_ind = matched_ind
         self.max_iou = max_iou
         self.labels = labels
+
+    def add_gt(self, gt_labels):
+        self.matched_ind = torch.cat([torch.arange(self.gt_nums,dtype=torch.long, device=self.matched_ind.device), self.matched_ind])
+        if self.labels is not None:
+            self.labels = torch.cat([gt_labels, self.labels])
+        self.max_iou = torch.cat([self.max_iou.new_ones(self.gt_nums)])

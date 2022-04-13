@@ -10,8 +10,8 @@ class RPNHead(nn.Module):
         #super(RPNHead, self).__init__()
         super().__init__()
         self.conv1 = nn.Conv2d(in_channels, out_channels=in_channels, kernel_size=3, stride=1, padding=1)
-        self.bbox_pred = nn.Conv2d(in_channels, num_anchors*4, kernel_size=1, stride=1)
         self.class_pred = nn.Conv2d(in_channels, num_anchors*1, kernel_size=1, stride=1)
+        self.bbox_pred = nn.Conv2d(in_channels, num_anchors*4, kernel_size=1, stride=1)
 
         for layer in self.children():
             nn.init.normal_(layer.weight, std=0.01)

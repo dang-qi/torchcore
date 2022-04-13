@@ -10,14 +10,14 @@ class FastRCNNHead(nn.Module):
         super().__init__()
         self.class_num = class_num
         feature_num = 1024
+        self.label_head = nn.Linear(feature_num, class_num+1)
+        self.bbox_head = nn.Linear(feature_num, 4*(class_num))
         self.feature_head = nn.Sequential( 
             nn.Linear(out_feature_num*pool_h*pool_w, feature_num),
             nn.ReLU(inplace=True),
             nn.Linear(feature_num, feature_num),
             nn.ReLU(inplace=True)
         )
-        self.label_head = nn.Linear(feature_num, class_num+1)
-        self.bbox_head = nn.Linear(feature_num, 4*(class_num+1))
 
         #for m in self.modules():
         #    if isinstance(m, nn.Linear):

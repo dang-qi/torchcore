@@ -315,11 +315,11 @@ class BaseTrainer :
             log_str = []
             log_str.append('iter: {}'.format(self._step))
             log_str.append('epoch: {}'.format(self._epoch))
-            log_str.append('lr: {}'.format(self._scheduler.get_last_lr()[0]))
+            log_str.append('lr: {:.4e}'.format(self._scheduler.get_last_lr()[0]))
             if hasattr(self, 'data_time'):
-                log_str.append('data_time: {}'.format(self.data_time))
+                log_str.append('data_time: {:.4f}'.format(self.data_time))
             if hasattr(self, 'iter_time'):
-                log_str.append('iter_time: {}'.format(self.iter_time))
+                log_str.append('iter_time: {:.4f}'.format(self.iter_time))
             for k,v in log_dict.items():
                 log_str.append('{}: {}'.format(k, v))
             log_str = self.log_memory(log_str)

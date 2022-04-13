@@ -23,7 +23,7 @@ class Dataset:
         if transforms is None:
             transforms = []
         self._transforms=Compose(transforms)
-        self._set_aspect_ratio_flag()
+        #self._set_aspect_ratio_flag()
 
     def __getitem__(self, idx):
         raise NotImplementedError
@@ -97,6 +97,18 @@ class Dataset:
         else:
             self._images = [self._original_images[i] for i in im_indexs]
         self._set_aspect_ratio_flag()
+
+    def map_category_id_to_continous(self,start_id=1):
+        id_set = set()
+        for image in self._images:
+            for obj in image['objects']:
+                id_set.add(obj['category_id'])
+        ids = sorted(list(id_set))
+        id_map = {aid:i+start_id for i, aid in enumerate(ids)}
+        #print(id_map)
+        for image in self._images:
+            for obj in image['objects']:
+                obj['category_id'] = id_map[obj['category_id']]
 
     def generate_cat_dict(self):
         if hasattr(self, 'category_index_dict'):

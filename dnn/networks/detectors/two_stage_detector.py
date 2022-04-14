@@ -20,7 +20,7 @@ class TwoStageDetector(BaseDetector):
         roi_heads (config dict): roi head
         neck (config dict): Can extract feature from different stage like FPN
     '''
-    def __init__(self, backbone, neck=None, rpn=None, roi_head=None, training=True ):
+    def __init__(self, backbone, neck=None, rpn=None, roi_head=None, mask_head=None, training=True ):
         super(TwoStageDetector, self).__init__()
         self.backbone = build_backbone(backbone)
         if neck is not None:

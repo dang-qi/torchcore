@@ -118,7 +118,7 @@ class MultiStepScheduler(WarmupLRScheduler):
         if self.by_epoch:
             i = self.cur_epoch
         else:
-            i = self.by_iter
+            i = self.cur_iter
 
         return [lr * self.gamma**bisect_right(self.milestones,i)
                 for lr in self.base_lrs]

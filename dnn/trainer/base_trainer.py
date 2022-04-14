@@ -196,6 +196,8 @@ class BaseTrainer :
                 #    break
                 #output = self._model['net']( inputs, just_embedding=True) # debug
                 #bench.update( targets, output )
+        if hasattr(self._testset.dataset, 'cast_result_id'):
+            self._testset.dataset.cast_result_id(results)
         result_path = '{}temp_result.json'.format(self._tag)
         with open(result_path,'w') as f:
             json.dump(results,f)

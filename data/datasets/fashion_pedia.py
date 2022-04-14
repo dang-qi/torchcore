@@ -13,7 +13,9 @@ from .coco import COCODataset
 @DATASET_REG.register()
 class FashionPediaDataset(COCODataset):
     '''FashionPedia dataset'''
-    pass
+    def __init__(self, root, anno, part, transforms=None, debug=False, xyxy=True, torchvision_format=False, add_mask=False, first_n_subset=None, subcategory=None, map_id_to_continuous=True, backend='pillow', RGB=True):
+        super().__init__(root, anno, part, transforms, debug, xyxy, torchvision_format, add_mask, first_n_subset, subcategory, map_id_to_continuous, backend, RGB)
+        self.zero_start_label_index = True
 #    def __init__( self, root, anno, part, transforms=None, xyxy=True, debug=False, torchvision_format=False, add_mask=False, sub_category=None, map_id_to_continuous=False ):
 #        super().__init__( root, anno=anno, part=part, transforms=transforms )
 #        self._part = part

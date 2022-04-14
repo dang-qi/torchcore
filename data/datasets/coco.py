@@ -11,14 +11,12 @@ from .build import DATASET_REG
 @DATASET_REG.register(force=True)
 class COCODataset(Dataset):
     '''COCO dataset'''
-    def __init__( self, root, anno, part, transforms=None, debug=False, xyxy=True, torchvision_format=False, add_mask=False, first_n_subset=None, sub_category=None, map_id_to_continuous=True, backend='pillow',RGB=True):
+    def __init__( self, root, anno, part, transforms=None, debug=False, xyxy=True, torchvision_format=False, add_mask=False, first_n_subset=None, subcategory=None, map_id_to_continuous=True, backend='pillow',RGB=True):
         super().__init__( root=root, anno=anno, part=part, transforms=transforms )
         ## load annotations
         #with open(anno, 'rb') as f:
         #    self._images = pickle.load(f)[part] 
         self.remove_wrong_labels()
-        if map_id_to_continuous:
-            self.map_category_id_to_continous()
         self.debug = debug
         self.xyxy = xyxy
         self.torchvision_format = torchvision_format
@@ -28,8 +26,10 @@ class COCODataset(Dataset):
         assert backend in ['pillow', 'opencv']
         if xyxy:
             self.convert_to_xyxy()
-        if sub_category is not None:
-            self.set_category_subset(sub_category, ignore_other_category=True)
+        if subcategory is not None:
+            self.set_category_subset(subcategory, ignore_other_category=True)
+        if map_id_to_continuous:
+            self.map_category_id_to_continous()
         if first_n_subset is not None:
             self.set_first_n_subset(first_n_subset)
         self._set_aspect_ratio_flag()

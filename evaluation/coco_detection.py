@@ -8,11 +8,17 @@ from .build import EVALUATOR_REG
 
 @EVALUATOR_REG.register()
 class COCOEvaluator():
-    def __init__(self, evaluate_type='bbox', dataset_name=None, gt_path=None) -> None:
+    def __init__(self, evaluate_type='bbox', dataset_name=None, gt_path=None, subcategory=None, per_class_result=False, category_ind_zero_start=False) -> None:
         assert dataset_name is not None
         self.dataset_name = dataset_name
         self.set_gt_path(dataset_name, gt_path)
+        self.cocoGt = COCO(self.gt_path)
         self.evaluate_type = evaluate_type
+        if subcategory is not None and category_ind_zero_start:
+            self.subcategory = [s-1 for s in subcategory]
+        else:
+            self.subcategory = subcategory
+        self.per_class_result = per_class_result
 
     def set_gt_path(self, dataset_name=None, gt_path=None):
         if gt_path is not None:
@@ -44,30 +50,31 @@ class COCOEvaluator():
     def evaluate_once(self, result_path, eval_type):
         # only support bbox mode for now
         dataset = self.dataset_name
-        # we need to map the category ids back
-        if dataset == 'coco':
-            print('revise coco dataset label to gt')
-            cat_ids = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 27, 28, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 67, 70, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 84, 85, 86, 87, 88, 89, 90]
-            with open(result_path) as f:
-                results = json.load(f)
-                for result in results:
-                    temp_id = result['category_id']
-                    result['category_id'] = cat_ids[temp_id-1]
-            result_path = 'coco_'+result_path
-            with open(result_path,'w') as f:
-                json.dump(results,f)
-        if dataset == 'fashionpedia':
-            print('revise fashionpedia dataset label to gt')
-            with open(result_path) as f:
-                results = json.load(f)
-                for result in results:
-                    temp_id = result['category_id']
-                    result['category_id'] = temp_id-1
-            result_path = 'fashionpedia_'+result_path
-            with open(result_path,'w') as f:
-                json.dump(results,f)
+        ## we need to map the category ids back
+        #if dataset == 'coco':
+        #    print('revise coco dataset label to gt')
+        #    cat_ids = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 27, 28, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 67, 70, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 84, 85, 86, 87, 88, 89, 90]
+        #    with open(result_path) as f:
+        #        results = json.load(f)
+        #        for result in results:
+        #            temp_id = result['category_id']
+        #            result['category_id'] = cat_ids[temp_id-1]
+        #    result_path = 'coco_'+result_path
+        #    with open(result_path,'w') as f:
+        #        json.dump(results,f)
+        #if dataset == 'fashionpedia':
+        #    print('revise fashionpedia dataset label to gt')
+        #    with open(result_path) as f:
+        #        results = json.load(f)
+        #        for result in results:
+        #            temp_id = result['category_id']
+        #            result['category_id'] = temp_id-1
+        #    result_path = 'fashionpedia_'+result_path
+        #    with open(result_path,'w') as f:
+        #        json.dump(results,f)
         annType = eval_type
-        cocoGt=COCO(self.gt_path)
+        #cocoGt=COCO(self.gt_path)
+        cocoGt = self.cocoGt
         cocoDt=cocoGt.loadRes(result_path)
 
         imgIds=sorted(cocoGt.getImgIds())
@@ -76,6 +83,8 @@ class COCOEvaluator():
         cocoEval = COCOeval(cocoGt,cocoDt,annType)
         if dataset == 'coco_person':
             cocoEval.params.catIds = [1]
+        if self.subcategory is not None:
+            cocoEval.params.catIds = self.subcategory
         cocoEval.params.imgIds = imgIds
         cocoEval.evaluate()
         cocoEval.accumulate()

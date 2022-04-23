@@ -39,6 +39,10 @@ class StepBasedTrainer(BaseTrainer):
                 dataset_len = len(self._trainset)
                 print('dataloader length is {}. The lr scheduler is updated.'.format(dataset_len))
                 self._scheduler.update_iter_per_epoch(dataset_len)
+            if hasattr(self._scheduler, 'update_milestone_from_split'):
+                if self._scheduler.splited_milestones:
+                    max_len = self._max_step if self._scheduler.by_iter else self._max_epoch
+                    self._scheduler.update_milestone_from_split(max_len)
         self._restart_dataloader = False
 
     def after_train_epoch(self):

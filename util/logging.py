@@ -67,6 +67,8 @@ class LossLogger():
                 self.loss[k] = []
 
         for k,v in loss_dict.items():
+            if k not in self.loss:
+                self.loss[k] = []
             self.loss[k].append(v)
         self.loss_count.append(count)
 

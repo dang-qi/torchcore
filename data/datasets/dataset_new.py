@@ -104,11 +104,29 @@ class Dataset:
             for obj in image['objects']:
                 id_set.add(obj['category_id'])
         ids = sorted(list(id_set))
-        id_map = {aid:i+start_id for i, aid in enumerate(ids)}
+        self.id_map = {aid:i+start_id for i, aid in enumerate(ids)}
+        self.cast_id_map = {i+start_id:aid for i, aid in enumerate(ids)}
         #print(id_map)
         for image in self._images:
             for obj in image['objects']:
-                obj['category_id'] = id_map[obj['category_id']]
+                obj['category_id'] = self.id_map[obj['category_id']]
+
+    def cast_result_id(self, results,):
+        if not hasattr(self, 'cast_id_map'):
+            return 
+        assert isinstance(results, list)
+        zero_start = False
+        if hasattr(self, 'zero_start_label_index'):
+            if self.zero_start_label_index:
+                zero_start = True
+        
+        for result in results:
+            temp_id = result['category_id']
+            if zero_start:
+                result['category_id'] = self.cast_id_map[temp_id]-1
+            else:
+                result['category_id'] = self.cast_id_map[temp_id]
+
 
     def generate_cat_dict(self):
         if hasattr(self, 'category_index_dict'):

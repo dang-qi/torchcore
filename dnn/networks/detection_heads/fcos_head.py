@@ -172,8 +172,22 @@ class FCOSHead(nn.Module):
             reduce_mean(centerness_targets.sum().detach()), 1e-6)
 
         loss_class = self.loss_cls(pred_class, class_targets_one_hot, average_factor=pos_num) 
-        loss_box = self.loss_bbox(pred_bbox_decode, bbox_targets_decode, weight=centerness_targets, avg_factor=centerness_denorm)
-        loss_centerness = self.loss_centerness(pred_centerness_pos, centerness_targets)
+        if bbox_targets_decode.size(0) == 0:
+            loss_box = bbox_targets_decode.new_zeros(1)
+        else:
+            loss_box = self.loss_bbox(pred_bbox_decode, bbox_targets_decode, weight=centerness_targets, avg_factor=centerness_denorm)
+        if centerness_targets.size(0) == 0:
+            loss_centerness = centerness_targets.new_zeros(1)
+        else:
+            loss_centerness = self.loss_centerness(pred_centerness_pos, centerness_targets)
+        if not (math.isfinite(loss_class.item()) and math.isfinite(loss_box.item()) and math.isfinite(loss_centerness.item())):
+            print('pred_class:', pred_class)
+            print('class_target:', class_targets_one_hot)
+            print('pred_bbox:', pred_bbox_decode)
+            print('bbox_targets:', bbox_targets_decode)
+            print('pred_centerness pos:', pred_centerness_pos)
+            print('centerness target:',centerness_targets)
+
         #print(loss_centerness)
         return loss_class, loss_box, loss_centerness
 

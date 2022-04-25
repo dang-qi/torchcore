@@ -196,6 +196,8 @@ class BaseTrainer :
                 #    break
                 #output = self._model['net']( inputs, just_embedding=True) # debug
                 #bench.update( targets, output )
+        if hasattr(self._testset.dataset, 'cast_result_id'):
+            self._testset.dataset.cast_result_id(results)
         result_path = '{}temp_result.json'.format(self._tag)
         with open(result_path,'w') as f:
             json.dump(results,f)
@@ -300,6 +302,8 @@ class BaseTrainer :
         self.train_set_iter = iter(self._trainset)
 
     def clip_gradient(self):
+        # Unscales the gradients of optimizer's assigned params in-place
+        self._scaler.unscale_(self._optimizer)
         torch.nn.utils.clip_grad_norm_(self._model.parameters(), self._clip_gradient)
 
     def init_logger(self):

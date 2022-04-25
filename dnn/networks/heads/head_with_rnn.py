@@ -10,7 +10,7 @@ from .build import HEAD_REG
 
 @HEAD_REG.register(force=True)
 class HeadWithGrammarRNN(Module):
-    def __init__(self, head_cfg, rnn_cfg, ref_scale_ind, grammar, anchor_num=1):
+    def __init__(self, head_cfg, rnn_cfg, ref_scale_ind, grammar, anchor_num=1, subcategory=None):
         '''
             ref_scale_ind: the index of reference feature map in FPN setting, all the class prediction feature maps will be resized to the size of the reference feature map before send to grammar rcnn
             grammar(list((int, int, ...), (int, int, ..))): the grammar index, should start from 0
@@ -21,10 +21,25 @@ class HeadWithGrammarRNN(Module):
         #self.strides = strides
         self.ref_scale_ind = ref_scale_ind
         #self.scales = [s/strides[ref_scale_ind] for s in strides]
-        self.grammar = grammar
+        self.subcategory = subcategory
+        if subcategory:
+            self.grammar = self.map_subcategory_grammar(subcategory,grammar)
+        else:
+            self.grammar = grammar
         self.build_rnn_by_grammar()
         self.grammar_map = self._gen_grammar_map()
         self.anchor_num = anchor_num
+
+    def map_subcategory_grammar(self, subcategory, grammar):
+        start_id = 0
+        subcategory = [s-1 for s in subcategory] # subcategory start from 1 but grammar should start from 0
+        grammar_set = set(sum(tuple(grammar),()))
+        subcategory_set = set(subcategory)
+        assert grammar_set.issubset(subcategory_set)
+        ids = sorted(list(subcategory_set))
+        id_map = {aid:i+start_id for i, aid in enumerate(ids)}
+        mapped_grammar = tuple((id_map[g1],id_map[g2]) for (g1,g2) in grammar)
+        return mapped_grammar
 
     def forward(self, feature):
         # the output of head is per fpn layer output [(class, bbox, ceterness(optional)),...]

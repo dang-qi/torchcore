@@ -102,6 +102,7 @@ class MultiStepScheduler(WarmupLRScheduler):
     def __init__(self, 
                  optimizer,
                  milestones, 
+                 splited_milestones=False,
                  gamma=0.1,
                  update_method='epoch', 
                  warmup=False, 
@@ -111,6 +112,10 @@ class MultiStepScheduler(WarmupLRScheduler):
                  warmup_by_epoch=False, 
                  last_epoch=-1):
         self.milestones=milestones
+        self.splited_milestones = splited_milestones
+        if splited_milestones:
+            for m in milestones:
+                assert m>=0 and m<= 1
         self.gamma = gamma
         super().__init__(optimizer, update_method, warmup, warmup_iter, warmup_factor, warmup_method, warmup_by_epoch, last_epoch)
 
@@ -118,10 +123,12 @@ class MultiStepScheduler(WarmupLRScheduler):
         if self.by_epoch:
             i = self.cur_epoch
         else:
-            i = self.by_iter
+            i = self.cur_iter
 
         return [lr * self.gamma**bisect_right(self.milestones,i)
                 for lr in self.base_lrs]
+    def update_milestone_from_split(self,total_len ):
+        self.milestones = [m*total_len for m in self.milestones]
 
 @SCHEDULER_REG.register(force=True)
 class CosineAnnealingScheduler(WarmupLRScheduler):

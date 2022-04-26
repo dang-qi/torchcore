@@ -14,7 +14,7 @@ Iterable = collections.abc.Iterable
 Sequence = collections.abc.Sequence
 
 __all__ = ['Compose', 'Resize','ResizeAndPadding', 'ResizeMinMax',
-            'ResizeMinMaxTV', 'ToTensor', 'Normalize', 'GroupPadding',
+            'ResizeMinMaxTV', 'ToTensor', 'ImageToTensor','Normalize', 'GroupPadding',
             'GeneralRCNNTransform', 'GeneralRCNNTransformTV', 'RandomMirror', 'RandomCrop', 'RandomScale', 'RandomAbsoluteScale', 'PadNumpyArray', 'AddSurrandingBox','AddPersonBox', 'GroupPaddingWithBBox', 'HSVColorJittering','Mosaic','RandomAffine','MixUp']
 
 #def find_inside_bboxes(boxes, h, w):
@@ -270,16 +270,17 @@ class Padding(object):
 class GroupPadding(object):
     ''' Padding for group of images tensors
     '''
-    def __init__(self, max_width, max_height, size_devidable=32):
+    def __init__(self, max_width, max_height, size_devidable=32, pad_value=0):
         self.width = int(math.ceil(float(max_width) / size_devidable)*size_devidable)
         self.height = int(math.ceil(float(max_height) / size_devidable)*size_devidable)
+        self.pad_value=pad_value
 
     def __call__(self, images):
         '''
         Parameters:
             images(list[tensors]): input images for group padding
         '''
-        images  = F.group_padding(images, self.width, self.height)
+        images  = F.group_padding(images, self.width, self.height,self.pad_value)
         return images
 
 @TRANSFORM_REG.register(force=True)
@@ -821,15 +822,35 @@ class AddPersonBox(object):
             
         targets[self.out_name] = roi_box
         return inputs, targets
+
+@TRANSFORM_REG.register()
+class ImageToTensor(object):
+    def __init__(self):
+        pass
+
+    def __call__(self, inputs, targets=None):
+        inputs['data'] = F.image_to_tensor(inputs['data'])
+
+        if targets is not None:
+            for k,v in targets.items():
+                if isinstance(v, np.ndarray):
+                    targets[k] = torch.from_numpy(targets[k])
+        return inputs, targets
     
 
 @TRANSFORM_REG.register()
 class GroupPaddingWithBBox(object):
-    def __init__(self, image_mean=None, image_std=None):
+    def __init__(self, image_mean=None, image_std=None, normalize=True, normalize_to_one=True, pad_value=0):
         self.image_mean = image_mean
         self.image_std = image_std
         self.normalize = Normalize(mean=image_mean, std=image_std)
-        self.to_tensor = ToTensor()
+        if normalize_to_one:
+            self.to_tensor = ToTensor()
+        else:
+            self.to_tensor = ImageToTensor()
+        self.normalize_tensor = normalize
+        self.normalize_image_to_one = normalize_to_one
+        self.pad_value=pad_value
         #self.device = device
         #self.transforms = Compose(self.resize_min_max, self.to_tensor)
 
@@ -853,7 +874,8 @@ class GroupPaddingWithBBox(object):
             #ainput['data'].to(self.device)
             if 'scale' in ainput:
                 scales[i] = ainput['scale']
-            ainput, target = self.normalize(ainput, target)
+            if self.normalize_tensor:
+                ainput, target = self.normalize(ainput, target)
             images.append(ainput['data'])
 
             if 'path' in ainput:
@@ -865,7 +887,7 @@ class GroupPaddingWithBBox(object):
         _, height, width = max_size
 
         image_sizes = [img.shape[-2:] for img in images]
-        self.group_padding = GroupPadding(width, height, size_devidable=32)
+        self.group_padding = GroupPadding(width, height, size_devidable=32,pad_value=self.pad_value)
         im_tensor = self.group_padding(images)
 
         inputs = {}

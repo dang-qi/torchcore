@@ -476,10 +476,11 @@ def mirror_boxes(boxes, im_width):
     #boxes[:,2] = im_width -boxes[:,2]
     return boxes
 
-def group_padding(images, width, height):
+def group_padding(images, width, height, pad_value=0):
     im_num = len(images)
     the_shape = (im_num, images[0].shape[0], height, width)
-    new_ims = images[0].new_zeros(the_shape)
+    #new_ims = images[0].new_zeros(the_shape)
+    new_ims = images[0].new_full(the_shape, pad_value)
     for img, pad_img in zip(images, new_ims):
         pad_img[: img.shape[0], : img.shape[1], : img.shape[2]].copy_(img)
     return new_ims
@@ -623,4 +624,16 @@ def hsv_color_jittering(im, h_range, s_range, v_range):
         return im
     else:
         raise NotImplementedError('have not implement other image type')
+
+def image_to_tensor(im):
+    if isinstance(im, Image.Image):
+        im = np.array(im).astype(np.float32)
+    elif isinstance(im, np.ndarray):
+        im = im.astype(torch.float32)
+    else:
+        raise NotImplementedError('Not support image type {}'.format(type(im)))
+    im = np.ascontiguousarray(im.transpose(2, 0, 1))
+    return torch.from_numpy(im)
+
+    
 

@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 from mmdet.models import build_detector
 from mmcv import Config
@@ -218,3 +219,28 @@ def load_mm_frcnn(model, mm_config, checkpoint_file, return_mm_model=False):
         return mm_model
     else:
         del mm_model
+
+def mm_result_to_my_result(mm_result):
+    result = {'boxes':[],'scores':[], 'labels':[]}
+    for result_img in mm_result:
+        boxes = []
+        scores = []
+        labels = []
+        for i,box_cate in enumerate(result_img):
+            label = i+1
+            for box in box_cate:
+                boxes.append(box[:4])
+                scores.append(box[4])
+                labels.append(label)
+        if len(boxes)>0:
+            scores = np.array(scores)
+            labels = np.array(labels)
+            boxes = np.stack(boxes, axis=0)
+            ind_sort = np.argsort(-scores)
+            scores = scores[ind_sort]
+            labels = labels[ind_sort]
+            boxes = boxes[ind_sort]
+            result['boxes'].append(boxes)
+            result['scores'].append(scores)
+            result['labels'].append(labels)
+    return result

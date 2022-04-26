@@ -1,7 +1,8 @@
-from ..transforms.transforms import ResizeAndPadding, ToTensor, Compose
+from ..transforms.transforms import ResizeAndPadding, ToTensor, Compose, ImageToTensor
 from ..transforms.transforms import GeneralRCNNTransformMMdet, GeneralRCNNTransformTV, GroupPaddingWithBBox, GeneralRCNNTransform
 import torch
 from torch.utils.data._utils.collate import default_collate
+from torchvision.transforms import PILToTensor
 import numpy as np
 
 from .build import COLLATE_REG
@@ -208,6 +209,22 @@ class CollateFnPadding(object):
         if ori_image is not None:
             inputs['ori_image'] = ori_image
         return inputs, targets
+
+@COLLATE_REG.register()
+class CollateYoloX(object):
+    def __init__(self):
+        self.transform = GroupPaddingWithBBox(normalize=False,normalize_to_one=False,pad_value=114)
+
+    def __call__(self, batch):
+        inputs, targets = [list(s) for s in zip(*batch)]
+        ori_image = None
+        if 'ori_image' in inputs[0]:
+            ori_image = [input['ori_image'] for input in inputs]
+        inputs, targets = self.transform(inputs, targets)
+        if ori_image is not None:
+            inputs['ori_image'] = ori_image
+        return inputs, targets
+
 
 def collate_fn_torchvision(batch):
     return tuple(zip(*batch))

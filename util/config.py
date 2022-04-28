@@ -5,6 +5,8 @@ import importlib
 from addict import Dict
 import functools
 import pathlib
+import git
+import datetime
 
 from yapf.yapflib.yapf_api import FormatCode
 
@@ -148,6 +150,11 @@ class Config:
         #    import_modules_from_strings(**cfg_dict['custom_imports'])
         return Config(cfg_dict, cfg_text=cfg_text, filename=filename)
 
+    def time_tag(self):
+        x = datetime.datetime.now()
+        tag = x.strftime("%Y%m%d_%H%M%S")
+        return tag
+
     def initialize_project( self, project_name, project_base_path, config_name=None, tag=None ):
         self._cfg_dict.project_name = project_name
         self._cfg_dict.project_base_path = project_base_path
@@ -181,7 +188,12 @@ class Config:
         path_config.log_dir = log_path
         path_config.log_path = os.path.join(log_path, tag+'.log')
         path_config.checkpoint_path = checkpoint_path
-        path_config.checkpoint_path_tmp = '{}/checkpoint_{}_{{}}.pth'.format(checkpoint_path, tag)
+        self.get_hash()
+        if tag:
+            checkpoint_name = tag + '_'+self.short_git_hash
+        else:
+            checkpoint_name = self.short_git_hash
+        path_config.checkpoint_path_tmp = '{}/checkpoint_{}_{{}}.pth'.format(checkpoint_path, checkpoint_name)
         self._cfg_dict.path_config=path_config
 
     def __init__(self, cfg_dict=None, cfg_text=None, filename=None):
@@ -355,4 +367,19 @@ class Config:
 
         return text
 
+    def get_hash(self, short=True):
+        sha_all = []
+        short_sha_all = []
+        repo = git.Repo(search_parent_directories=True)
+        sha = repo.head.object.hexsha
+        short_sha = repo.git.rev_parse(sha, short=4)
+        sha_all.append(sha)
+        short_sha_all.append(short_sha)
+        for m in repo.submodules:
+            sub_sha = repo.submodule(m.name).module().head.object.hexsha
+            short_sub_sha = repo.git.rev_parse(sub_sha, short=4)
+            sha_all.append(sub_sha)
+            short_sha_all.append(short_sub_sha)
+        self.short_git_hash = '_'.join(short_sha_all)
+        self.git_hash =  '_'.join(sha_all)
     

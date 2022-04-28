@@ -5,6 +5,7 @@ import copy
 import json
 import tqdm
 from datetime import datetime
+import git
 
 from collections import OrderedDict
 import torch.distributed as dist
@@ -439,3 +440,21 @@ class BaseTrainer :
         #self._optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         if to_print:
             print('Chekpoint has been loaded from {}'.format(path))
+    
+    def get_hash(self, short=True):
+        sha_all = []
+        short_sha_all = []
+        repo = git.Repo(search_parent_directories=True)
+        sha = repo.head.object.hexsha
+        short_sha = repo.git.rev_parse(sha, short=4)
+        sha_all.append(sha)
+        short_sha_all.append(short_sha)
+        for m in repo.submodules:
+            sub_sha = repo.submodule(m.name).module().head.object.hexsha
+            short_sub_sha = repo.git.rev_parse(sub_sha, short=4)
+            sha_all.append(sub_sha)
+            short_sha_all.append(short_sub_sha)
+        self.short_git_hash = '_'.join(short_sha_all)
+        self.git_hash =  '_'.join(sha_all)
+
+        

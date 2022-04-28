@@ -485,7 +485,7 @@ def group_padding(images, width, height, pad_value=0):
         pad_img[: img.shape[0], : img.shape[1], : img.shape[2]].copy_(img)
     return new_ims
 
-def random_crop(image, size):
+def random_crop(image, size, padding_value=0):
     width, height = image.size
     range_w = width - size[0] if width > size[0] else 0
     range_h = height - size[1] if height > size[1] else 0
@@ -493,9 +493,19 @@ def random_crop(image, size):
     y1 = random.randint(0, range_h)
     x2 = x1 + size[0]
     y2 = y1 + size[1]
+    x2 = min(x2, width)
+    y2 = min(y2, height)
 
     cropped_im = image.crop((x1, y1, x2, y2))
-    return cropped_im, (x1, y1, x2, y2)
+
+    if isinstance(padding_value, int):
+        color = (padding_value, padding_value, padding_value)
+    elif isinstance(padding_value, Iterable):
+        color=padding_value
+    result = Image.new(image.mode, size, color)
+    result.paste(cropped_im, (0, 0))
+
+    return result, (x1, y1, x2, y2)
 
 def random_crop_boxes(boxes, position):
     boxes[...,0] -= position[0]

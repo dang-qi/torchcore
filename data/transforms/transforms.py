@@ -512,8 +512,9 @@ class RandomCrop(object):
        other box_keys can be the additional boxes used in the process
        targets_other_key can be labels, etc
        After cropping, the invalid boxes and labels are deleted
+       padding_value: the value that pad if the image is bigger after cropping
     '''
-    def __init__(self, size, box_inside, target_box_main_key='boxes', inputs_box_keys=[], targets_box_keys=[], targets_other_key=['labels'], inputs_box_inside=False, targets_box_inside=False, mask_key=None):
+    def __init__(self, size, box_inside, target_box_main_key='boxes', inputs_box_keys=[], targets_box_keys=[], targets_other_key=['labels'], inputs_box_inside=False, targets_box_inside=False, mask_key=None, padding_value=0):
         if isinstance(size, Iterable):
             self.size = size
         else:
@@ -531,12 +532,13 @@ class RandomCrop(object):
         if target_box_main_key is not None:
             assert isinstance(target_box_main_key, str)
         self.mask_key = mask_key
+        self.padding_value = padding_value
 
 
     def __call__(self, inputs, targets):
         image = inputs['data']
         while True:
-            inputs['data'], position = F.random_crop(image, self.size)
+            inputs['data'], position = F.random_crop(image, self.size, self.padding_value)
             inputs['crop_position'] = position
 
             #if 'boxes' in targets:
@@ -1236,6 +1238,11 @@ class RandomAffine:
         height = img.shape[0] + self.border[0] * 2
         width = img.shape[1] + self.border[1] * 2
 
+        # Center
+        center_matrix = np.eye(3, dtype=np.float32)
+        center_matrix[0, 2] = -img.shape[1] / 2  # x translation (pixels)
+        center_matrix[1, 2] = -img.shape[0] / 2  # y translation (pixels)
+
         # Rotation
         rotation_degree = random.uniform(-self.max_rotate_degree,
                                          self.max_rotate_degree)
@@ -1254,14 +1261,15 @@ class RandomAffine:
         shear_matrix = self._get_shear_matrix(x_degree, y_degree)
 
         # Translation
-        trans_x = random.uniform(-self.max_translate_ratio,
-                                 self.max_translate_ratio) * width
-        trans_y = random.uniform(-self.max_translate_ratio,
-                                 self.max_translate_ratio) * height
+        trans_x = random.uniform(0.5-self.max_translate_ratio,
+                                 0.5+self.max_translate_ratio) * width
+        trans_y = random.uniform(0.5-self.max_translate_ratio,
+                                 0.5+self.max_translate_ratio) * height
         translate_matrix = self._get_translation_matrix(trans_x, trans_y)
 
         warp_matrix = (
-            translate_matrix @ shear_matrix @ rotation_matrix @ scaling_matrix)
+            translate_matrix @ shear_matrix @ rotation_matrix @ scaling_matrix
+            @ center_matrix)
 
         img = cv2.warpPerspective(
             img,

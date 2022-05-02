@@ -24,6 +24,8 @@ from ...data.datasets.build import build_dataloader
 
 from ..utils.ema import ModelEMA
 
+from torchcore.dnn.networks.tools.load_from_mmdetection import mm_result_to_my_result
+
 
 class BaseTrainer :
     def __init__( self, model, trainset, tag='', rank=0, world_size=1, log_print_iter=1000, log_save_iter=50, testset=None, optimizer=None, scheduler=None, clip_gradient=None, evaluator=None, accumulation_step=1, path_config=None, log_with_tensorboard=False, log_api_token=None, empty_cache_iter=None, log_memory=False, use_amp=False, ema_cfg=None ):
@@ -161,6 +163,58 @@ class BaseTrainer :
                 print('one process resturn')
                 return
         self._validate()
+
+    def validate_mm(self, mm_input=False):
+        self._model.eval()
+        if isinstance(self._model, DDP):
+            test_model = self._model.module
+        else:
+            test_model = self._model
+        print('start to validate with mm model')
+
+        results = []
+        with torch.no_grad() :
+            for idx,(data) in enumerate(tqdm.tqdm(self._testset, 'evaluating', dynamic_ncols=True)):
+            #for idx,(inputs, targets) in enumerate(self._testset):
+                if mm_input:
+                    mm_result = test_model(return_loss=False, **data )
+                    targets = [{'image_id':int(im_meta.data[0][0]['ori_filename'].split('.')[0]) for im_meta in data['img_metas']}]
+                else:
+                    inputs,targets = data
+                    inputs = self._set_device( inputs )
+                    img_meta = [{'img_shape':imsize,'scale_factor':imscale,'flip':False} for imsize,imscale in zip(inputs['image_sizes'],inputs['image_sizes'])]
+                    for meta in img_meta:
+                        meta['pad_shape'] = (inputs['data'].shape[2],inputs['data'].shape[3],inputs['data'].shape[1])
+                    #gt_boxes = [t['boxes'] for t in targets]
+                    #gt_labels = [t['labels']-1 for t in targets]
+                    #the losses of five layers
+                    mm_result=test_model([inputs['data']],[img_meta],return_loss=False)
+                output = mm_result_to_my_result(mm_result)
+                #output = test_model( inputs)
+                batch_size = len(output['boxes'])
+                #for i, im in enumerate(output):
+                for i in range(batch_size):
+                    if len(output['boxes'][i]) == 0:
+                        continue
+                    # convert to xywh
+                    output['boxes'][i][:,2] -= output['boxes'][i][:,0]
+                    output['boxes'][i][:,3] -= output['boxes'][i][:,1]
+                    for j in range(len(output['boxes'][i])):
+                        results.append({'image_id':int(targets[i]['image_id']), 
+                                        'category_id':output['labels'][i][j].tolist(), 
+                                        'bbox':output['boxes'][i][j].tolist(), 
+                                        'score':output['scores'][i][j].tolist()})
+                #if idx == 10:
+                #    break
+                #output = self._model['net']( inputs, just_embedding=True) # debug
+                #bench.update( targets, output )
+        if hasattr(self._testset.dataset, 'cast_result_id'):
+            self._testset.dataset.cast_result_id(results)
+        result_path = '{}temp_result.json'.format(self._tag)
+        with open(result_path,'w') as f:
+            json.dump(results,f)
+        #self.eval_result(dataset=self._dataset_name)
+        self.evaluator.evaluate(result_path)
 
     def _validate( self ):
         if self.use_ema:

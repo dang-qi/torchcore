@@ -98,6 +98,12 @@ class Dataset:
             self._images = [self._original_images[i] for i in im_indexs]
         self._set_aspect_ratio_flag()
 
+    def set_subset_by_image_id(self, image_ids):
+        if not hasattr(self, '_original_images'):
+            self._original_images = self._images
+        self._images =[ im for im in self._original_images if im['id'] in image_ids]
+
+
     def map_category_id_to_continous(self,start_id=1):
         id_set = set()
         for image in self._images:

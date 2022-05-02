@@ -35,6 +35,20 @@ def find_inside_bboxes(bboxes, img_h, img_w):
         & (bboxes[:, 1] < img_h) & (bboxes[:, 3] > 0)
     return inside_inds
 
+def _update_scale(inputs, scale):
+    if 'scale' not in inputs:
+        inputs['scale'] = scale
+    else:
+        if isinstance(scale, tuple) and isinstance(inputs['scale'], tuple):
+            inputs['scale'] = (scale[0]*inputs['scale'][0], scale[1]*inputs['scale'][1])
+        elif isinstance(scale, tuple) and isinstance(inputs['scale'], float):
+            inputs['scale'] = (scale[0]*inputs['scale'], scale[1]*inputs['scale'])
+        elif isinstance(scale, float) and isinstance(inputs['scale'], tuple):
+            inputs['scale'] = (scale*inputs['scale'][0], scale*inputs['scale'][1])
+        else:
+            inputs['scale'] = scale * inputs['scale']
+
+
 @TRANSFORM_REG.register(force=True)
 class Compose(object):
     def __init__(self, transforms):
@@ -84,6 +98,7 @@ class Resize(object):
     def __call__(self, inputs, targets=None):
         #if 'data' in inputs:
         inputs['data'], self.scale = F.resize(inputs['data'], self.size, self.interplotation, smaller_edge=self.smaller_edge)
+        _update_scale(inputs, self.scale)
 
         if targets is None:
             return inputs, targets
@@ -107,6 +122,7 @@ class ResizeMax(object):
     def __call__(self, inputs, targets=None):
         #if 'data' in inputs:
         inputs['data'], self.scale = F.resize_max(inputs['data'], self.max_size, self.interplotation)
+        _update_scale(inputs, self.scale)
 
         if targets is None:
             return inputs, targets
@@ -126,6 +142,8 @@ class ResizeAndPadding(object):
 
     def __call__(self, inputs, targets=None):
         inputs['data'], self.scale, self.padding = F.resize_and_pad(inputs['data'], self.size, self.interplotation)
+        _update_scale(inputs, self.scale)
+
         if targets is None:
             return inputs, targets
 
@@ -145,7 +163,8 @@ class ResizeMinMax(object):
 
     def __call__(self, inputs, targets=None):
         inputs['data'], self.scale = F.resize_min_max(inputs['data'], self.min_size, self.max_size)
-        inputs['scale'] = self.scale
+        #inputs['scale'] = self.scale
+        _update_scale(inputs, self.scale)
         
         if targets is not None:
             if 'boxes' in targets:
@@ -165,17 +184,18 @@ class ResizeMinMaxTV(object):
 
     def __call__(self, inputs, targets=None):
         inputs['data'], scale = F.resize_tensor_min_max(inputs['data'], self.min_size, self.max_size)
-        if 'scale' not in inputs:
-            inputs['scale'] = scale
-        else:
-            if isinstance(scale, tuple) and isinstance(inputs['scale'], tuple):
-                inputs['scale'] = (scale[0]*inputs['scale'][0], scale[1]*inputs['scale'][1])
-            elif isinstance(scale, tuple) and isinstance(inputs['scale'], float):
-                inputs['scale'] = (scale[0]*inputs['scale'], scale[1]*inputs['scale'])
-            elif isinstance(scale, float) and isinstance(inputs['scale'], tuple):
-                inputs['scale'] = (scale*inputs['scale'][0], scale*inputs['scale'][1])
-            else:
-                inputs['scale'] = scale * inputs['scale']
+        _update_scale(inputs, self.scale)
+        #if 'scale' not in inputs:
+        #    inputs['scale'] = scale
+        #else:
+        #    if isinstance(scale, tuple) and isinstance(inputs['scale'], tuple):
+        #        inputs['scale'] = (scale[0]*inputs['scale'][0], scale[1]*inputs['scale'][1])
+        #    elif isinstance(scale, tuple) and isinstance(inputs['scale'], float):
+        #        inputs['scale'] = (scale[0]*inputs['scale'], scale[1]*inputs['scale'])
+        #    elif isinstance(scale, float) and isinstance(inputs['scale'], tuple):
+        #        inputs['scale'] = (scale*inputs['scale'][0], scale*inputs['scale'][1])
+        #    else:
+        #        inputs['scale'] = scale * inputs['scale']
         #inputs['scale'] = self.scale
         
         if targets is not None:
@@ -865,7 +885,7 @@ class GroupPaddingWithBBox(object):
         images = []
         image_path = []
         dataset_label = []
-        scales = np.ones(len(inputs))
+        scales = []
         if targets is None:
             targets=[None]*len(inputs)
 
@@ -875,7 +895,7 @@ class GroupPaddingWithBBox(object):
             # set the tensor to device before normalize
             #ainput['data'].to(self.device)
             if 'scale' in ainput:
-                scales[i] = ainput['scale']
+                scales.append(ainput['scale'])
             if self.normalize_tensor:
                 ainput, target = self.normalize(ainput, target)
             images.append(ainput['data'])

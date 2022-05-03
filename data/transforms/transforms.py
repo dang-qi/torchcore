@@ -184,7 +184,7 @@ class ResizeMinMaxTV(object):
 
     def __call__(self, inputs, targets=None):
         inputs['data'], scale = F.resize_tensor_min_max(inputs['data'], self.min_size, self.max_size)
-        _update_scale(inputs, self.scale)
+        _update_scale(inputs, scale)
         #if 'scale' not in inputs:
         #    inputs['scale'] = scale
         #else:
@@ -651,10 +651,11 @@ class RandomScale(object):
         image = inputs['data']
         inputs['data'] = F.scale(image, scale)
         # in case scale already used in other operation
-        if 'scale' not in inputs:
-            inputs['scale'] = scale
-        else:
-            inputs['scale'] = scale * inputs['scale']
+        _update_scale(inputs, scale)
+        #if 'scale' not in inputs:
+        #    inputs['scale'] = scale
+        #else:
+        #    inputs['scale'] = scale * inputs['scale']
 
         for input_key in self.inputs_box_keys:
             inputs[input_key] = F.scale_box(inputs[input_key], scale)
@@ -686,10 +687,11 @@ class RandomAbsoluteScale(object):
         image = inputs['data']
         inputs['data'] = F.scale(image, scale)
         # in case scale already used in other operation
-        if 'scale' not in inputs:
-            inputs['scale'] = scale
-        else:
-            inputs['scale'] = scale * inputs['scale']
+        _update_scale(inputs, scale)
+        #if 'scale' not in inputs:
+        #    inputs['scale'] = scale
+        #else:
+        #    inputs['scale'] = scale * inputs['scale']
 
         for input_key in self.inputs_box_keys:
             inputs[input_key] = F.scale_box(inputs[input_key], scale)

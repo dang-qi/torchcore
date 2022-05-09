@@ -197,5 +197,9 @@ class StepBasedTrainer(BaseTrainer):
 
         if 'scaler' in checkpoint:
             self._scaler.load_state_dict(checkpoint['scaler'])
+
+        if self.use_ema:
+            self.ema.resume(self._model, self._step)
+
         if to_print:
             print('Chekpoint has been loaded from {}'.format(path))

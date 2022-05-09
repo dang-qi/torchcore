@@ -30,3 +30,9 @@ class ModelEMA():
                 if v.dtype.is_floating_point: 
                     v *=d
                     v += (1-d)*model_state_dict[k].detach()
+
+    def resume(self, model, step):
+        self.ema = copy.deepcopy(model.module if is_parallal_model(model) else model).eval()
+        self.num_updates = step
+        for p in self.ema.parameters():
+            p.requires_grad_(False)

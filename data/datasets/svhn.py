@@ -19,16 +19,16 @@ class SVHNDataset(COCODataset):
         super().__init__(root, anno, part, transforms, debug, xyxy, torchvision_format, add_mask, first_n_subset, subcategory, map_id_to_continuous, backend, RGB)
         self.zero_start_label_index = False
 
-    def __getitem__(self, idx):
-        inputs, targets = super().__getitem__(idx)
-        image = self._images[idx]
-        if self.add_attibutes:
-            attributes = []
-            for obj in image['objects']:
-                attributes.append(obj['attribute_ids'])
-        if self.add_attibutes:
-            targets['attributes'] = attributes
-        return inputs, targets
+    #def __getitem__(self, idx):
+    #    inputs, targets = super().__getitem__(idx)
+    #    image = self._images[idx]
+    #    if self.add_attibutes:
+    #        attributes = []
+    #        for obj in image['objects']:
+    #            attributes.append(obj['attribute_ids'])
+    #    if self.add_attibutes:
+    #        targets['attributes'] = attributes
+    #    return inputs, targets
 
     @property
     def category_id_name_dict(self):

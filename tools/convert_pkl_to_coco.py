@@ -46,7 +46,7 @@ def convert_pkl_to_coco_json(example_coco, pkl_path, json_path, part, info, cate
         single_im['width'] = im['width']
         single_im['id'] = im['id']
         images.append(single_im)
-        annotations.append(im['objects'])
+        annotations.extend(im['objects'])
     data['images'] = images
     data['annotations'] = annotations
     if licenses is not None:

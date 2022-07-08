@@ -173,7 +173,7 @@ def draw_single_image(image, boxes, scores, class_inds, colors, class_names, fon
             if scores is not None:
                 score = scores[i]
             else:
-                score = 1
+                score = None
             if type(box) == list:
                 return image
             if type(box) is not np.ndarray:
@@ -181,7 +181,10 @@ def draw_single_image(image, boxes, scores, class_inds, colors, class_names, fon
             box_rec = box[:4]
             box_rec = tuple(np.array(box_rec))
             draw.rectangle(box_rec, outline=colors[class_ind], width=box_line_width)
-            text = '{:.2f} {}'.format(score, class_names[class_ind])
+            if score is not None:
+                text = '{:.2f} {}'.format(score, class_names[class_ind])
+            else:
+                text = '{}'.format(class_names[class_ind])
             #draw.text((box[0], box[1]), text, font=font, fill=colors[class_ind] )
             if use_invert_text_color:
                 text_color = invert_colors[class_ind]
@@ -319,7 +322,7 @@ def draw_category_distribution_barh(stat_dict, sorted=False, title=None):
         ax.set_title(title)
     plt.show()
 
-def visulize_random_sample(dataset, category_ids, sample_num, category_names, category_num):
+def visulize_random_sample(dataset, category_ids, sample_num, category_names, category_num, font_size=26, box_line_width=3,box_opacity=0.5, text_opacity=0.5):
     colors = random_colors(category_num)
     dataset.set_category_subset(category_ids, ignore_other_category=True)
     dataset_len = len(dataset)
@@ -332,11 +335,11 @@ def visulize_random_sample(dataset, category_ids, sample_num, category_names, ca
         im = inputs['data']
         boxes = targets['boxes']
         labels = targets['labels']-1
-        draw_single_image(im, boxes, scores=None, class_inds=labels, colors=colors, class_names=category_names)
+        draw_single_image(im, boxes, scores=None, class_inds=labels, colors=colors, class_names=category_names, font_size=font_size, box_line_width=box_line_width,box_opacity=box_opacity,text_opacity=text_opacity)
         plt.figure(figsize=(8,8))
         plt.imshow(im)
 
-def visulize_coco_result(cocoEval, im_id, im_folder, category_num, cat_ids=[], names=None, thresh=0.5, with_gt=False, tag=None):
+def visulize_coco_result(cocoEval, im_id, im_folder, category_num, cat_ids=[], names=None, thresh=0.5, with_gt=False, tag=None, cat_id_zero_start=False, font_size=26, box_line_width=3,box_opacity=0.5, text_opacity=0.5, tag_font_size=26):
     '''cocoEval should be a COCOEval object'''
     def get_anno(anno_id, coco_obj, thresh=None,no_score=False):
         im_ids = [anno_id]
@@ -353,7 +356,7 @@ def visulize_coco_result(cocoEval, im_id, im_folder, category_num, cat_ids=[], n
             scores = np.ones(len(annos))
         else:
             scores = np.array([anno['score'] for anno in annos])
-        class_inds = np.array([anno['category_id'] for anno in annos])
+        class_inds = np.array([int(anno['category_id']) for anno in annos])
         return boxes, scores, class_inds
 
     im_ids = [im_id]
@@ -367,15 +370,20 @@ def visulize_coco_result(cocoEval, im_id, im_folder, category_num, cat_ids=[], n
     if boxes is None:
         put_text_on_the_leftup_corner(image, 'NO DETECTION', font_size=26, box_color=(0,0,0))
     if tag is not None:
-        put_text_on_the_leftup_corner(image, tag, font_size=26, box_color=(0,0,0))
+        put_text_on_the_leftup_corner(image, tag, font_size=tag_font_size, box_color=(0,0,0))
 
-    draw_single_image(image, boxes, scores, class_inds, colors, names, box_opacity=0.25, text_opacity=0.5)
+    if not cat_id_zero_start and class_inds is not None:
+        class_inds = class_inds - 1
+    draw_single_image(image, boxes, scores, class_inds, colors, names, font_size=font_size, box_line_width=box_line_width,box_opacity=box_opacity,text_opacity=text_opacity)
     image_gt = Image.open(img_path)
     if with_gt:
         if tag is not None:
-            put_text_on_the_leftup_corner(image_gt, 'ground truth', font_size=26, box_color=(0,0,0))
+            put_text_on_the_leftup_corner(image_gt, 'ground truth', font_size=tag_font_size, box_color=(0,0,0))
         boxes, scores, class_inds = get_anno(im_id, cocoEval.cocoGt, thresh=None, no_score=True)
-        draw_single_image(image_gt, boxes, scores, class_inds, colors, names, box_line_width=5,)
+        scores = None
+        if not cat_id_zero_start and class_inds is not None:
+            class_inds = class_inds - 1
+        draw_single_image(image_gt, boxes, scores, class_inds, colors, names, font_size=font_size, box_line_width=box_line_width,box_opacity=box_opacity,text_opacity=text_opacity)
         return image, image_gt
 
     return image

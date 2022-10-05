@@ -35,6 +35,7 @@ from .multi_mix_dataset import MultiMixDataset
 from .toy_dataset import ToyDataset
 from .multi_image_dataset import MultiImageDataset
 from .svhn import SVHNDataset
+from .hm_classification import HMClassificationDataset
 from .build import build_dataloader, build_dataset
 
 selector = {}

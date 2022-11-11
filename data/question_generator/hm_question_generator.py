@@ -12,6 +12,7 @@ class HMQuestionGenerator(QuestionGenerator):
         self.question_keywords_pool = self.generate_question_keywords_pool()
         self.templates = templates
         self.template_num = len(templates)
+        self.current_question_id = 1
         assert self.template_num >= max_question_number_per_item
 
         self.max_question_number_per_item = max_question_number_per_item
@@ -39,24 +40,33 @@ class HMQuestionGenerator(QuestionGenerator):
         out = [self.templates[i] for i in idxs]
         return out
 
-
     def generate(self):
+        train,val,test = self.split_dataset(self.converted_data)
+        train_set = self.generate_part(train)
+        val_set = self.generate_part(val)
+        test_set = self.generate_part(test)
+        return train_set,val_set,test_set
+
+    def generate_part(self, data_part, reset_question_id=False):
         out = []
-        question_id = 1
-        test_time = 3
+        if reset_question_id:
+            question_id = 1
+        else:
+            question_id = self.current_question_id
+        #test_time = 3
         i = 0
-        for item in self.converted_data:
+        for item in data_part:
             templates = self.sample_templates()
             for t in templates:
                 one_out = {}
                 one_out['image_path'] = item['path']
-                one_out['id'] = item['article_id']
+                one_out['article_id'] = item['article_id']
                 if t['question_type'] != 'binary':
                     key_dict = {k:item[k] for k in t['keywords']}
                     #one_out['question'] = t['question'].format({k:item[k] for k in t['keywords']})
                     one_out['question'] = t['question'].format(**key_dict)
                     #one_out['concept'] = t['answer'].format(**{k:item[k] for k in t['answer_keywords']})
-                    one_out['concept'] = t['keywords']
+                    one_out['concept'] = [w.replace('_', ' ') for w in t['answer_keywords']]
                     one_out['answer'] = t['answer'].format(**{k:item[k] for k in t['answer_keywords']})
                 else:
                     #yes question
@@ -68,17 +78,37 @@ class HMQuestionGenerator(QuestionGenerator):
                         # we need a pool for no question for each keyword and random pick one wrong answer
                         answers = [item[k] for k in t['keywords']]
                         wrong_answers = self.sample_wrong_answer_from_pool(t['keywords'], answers)
-                        print(wrong_answers)
                         one_out['question'] = t['question'].format(**{k:item[k] for k in wrong_answers})
                         one_out['answer'] = 'no'
 
-                    one_out['concept'] = t['keywords']
-                out.append(one_out)
+                    #one_out['concept'] = t['keywords']
+                    one_out['concept'] = [w.replace('_', ' ') for w in t['keywords']]
+                one_out['question_id'] = question_id
                 question_id += 1
+                out.append(one_out)
             i+=1
-            if i >=test_time:
-                break
+            #if i >=test_time:
+            #    break
+        self.current_question_id = question_id
         return out
+
+    def split_dataset(self, all_data,ratio=(0.8,0.1,0.1),seed=0):
+        assert sum(ratio)==1
+        np.random.seed(seed)
+        data_num = len(all_data)
+        inds = np.arange(len(all_data))
+        np.random.shuffle(inds)
+        ind_split_train = int(np.ceil(data_num*ratio[0]))
+        ind_split_val = int(np.ceil(data_num*(ratio[0]+ratio[1])))
+        train_inds = inds[0:ind_split_train]
+        val_inds = inds[ind_split_train:ind_split_val]
+        test_inds = inds[ind_split_val:]
+        train_set = [all_data[i] for i in train_inds]
+        val_set = [all_data[i] for i in val_inds]
+        test_set = [all_data[i] for i in test_inds]
+        return train_set, val_set, test_set
+
+
 
     def generate_question_keywords_pool(self):
         key_word_pool = {k:set() for k in self.data.keys()}
